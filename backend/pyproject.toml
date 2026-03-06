@@ -1,0 +1,18 @@
+[project]
+name = "goofyrider-backend"
+version = "0.1.0"
+description = "Backend API for GoofyRider"
+requires-python = ">=3.12"
+
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "sqlalchemy>=2.0",
+  "alembic",
+  "psycopg[binary]",
+  "pydantic>=2.0",
+  "python-dotenv"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
