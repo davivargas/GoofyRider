@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: goofyrider_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: goofyrider
+      POSTGRES_USER: goofyrider_user
+      POSTGRES_PASSWORD: goofyrider_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - goofyrider_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goofyrider_user -d goofyrider"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  goofyrider_postgres_data:
