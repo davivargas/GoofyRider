@@ -1,5 +1,15 @@
 from app.models.favorite_resort import FavoriteResort
+from app.models.ride_session import RideSession
+from app.models.ride_session import RideSessionStatus
 from app.models.resort import Resort
+from app.models.session_point import SessionPoint
 from app.models.user import User
 
-__all__ = ["User", "Resort", "FavoriteResort"]
+__all__ = [
+    "User",
+    "Resort",
+    "FavoriteResort",
+    "RideSession",
+    "RideSessionStatus",
+    "SessionPoint",
+]

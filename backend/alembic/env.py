@@ -7,6 +7,8 @@ from sqlalchemy import pool
 from app.core.config import get_database_url
 from app.core.database import Base
 from app.models import FavoriteResort
+from app.models import RideSession
+from app.models import SessionPoint
 from app.models import Resort
 from app.models import User
 
