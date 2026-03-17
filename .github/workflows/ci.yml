@@ -1,0 +1,72 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: goofyrider
+          POSTGRES_USER: goofyrider_user
+          POSTGRES_PASSWORD: goofyrider_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U goofyrider_user -d goofyrider"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+psycopg://goofyrider_user:goofyrider_password@localhost:5432/goofyrider
+      JWT_SECRET_KEY: ci-jwt-secret-key-at-least-32-characters
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install backend deps
+        working-directory: goofyrider/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run migrations
+        working-directory: goofyrider/backend
+        run: alembic upgrade head
+
+      - name: Run backend tests
+        working-directory: goofyrider/backend
+        run: pytest
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install mobile deps
+        working-directory: goofyrider/mobile
+        run: flutter pub get
+
+      - name: Analyze mobile
+        working-directory: goofyrider/mobile
+        run: flutter analyze
+
+      - name: Run mobile tests
+        working-directory: goofyrider/mobile
+        run: flutter test
