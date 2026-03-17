@@ -1,0 +1,181 @@
+import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import UTC
+from datetime import datetime
+from typing import Protocol
+
+from app.models.resort import Resort
+from app.models.ride_session import RideSession
+from app.models.ride_session import RideSessionStatus
+from app.models.session_point import SessionPoint
+from app.services.exceptions import ConflictError
+from app.services.exceptions import NotFoundError
+from app.services.exceptions import ValidationError
+
+
+@dataclass(frozen=True)
+class SessionCreateInput:
+    user_id: uuid.UUID
+    resort_id: uuid.UUID | None = None
+    started_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class SessionPointInputData:
+    t_offset_ms: int
+    latitude: float
+    longitude: float
+    accuracy_m: float | None = None
+    altitude_m: float | None = None
+    speed_mps: float | None = None
+    heading_deg: float | None = None
+
+
+@dataclass(frozen=True)
+class SessionCompletionInput:
+    ended_at: datetime | None = None
+    duration_s: int | None = None
+    distance_m: float | None = None
+    max_speed_mps: float | None = None
+    avg_speed_mps: float | None = None
+    elevation_gain_m: int | None = None
+    elevation_loss_m: int | None = None
+
+
+class ResortRepositoryProtocol(Protocol):
+    def get_by_id(self, resort_id: uuid.UUID) -> Resort | None:
+        ...
+
+
+class RideSessionRepositoryProtocol(Protocol):
+    def add(self, ride_session: RideSession) -> None:
+        ...
+
+    def get_owned_by_user(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession | None:
+        ...
+
+    def count_by_user(self, user_id: uuid.UUID) -> int:
+        ...
+
+    def list_by_user(self, user_id: uuid.UUID, page: int, page_size: int) -> list[RideSession]:
+        ...
+
+    def commit(self) -> None:
+        ...
+
+    def refresh(self, instance: object) -> None:
+        ...
+
+
+class SessionPointRepositoryProtocol(Protocol):
+    def add_batch(self, points: Sequence[SessionPoint]) -> None:
+        ...
+
+    def commit(self) -> None:
+        ...
+
+
+class SessionService:
+    def __init__(
+        self,
+        ride_session_repository: RideSessionRepositoryProtocol,
+        resort_repository: ResortRepositoryProtocol,
+        session_point_repository: SessionPointRepositoryProtocol,
+    ) -> None:
+        self._ride_session_repository = ride_session_repository
+        self._resort_repository = resort_repository
+        self._session_point_repository = session_point_repository
+
+    def create_session(self, request: SessionCreateInput) -> RideSession:
+        if request.resort_id is not None:
+            resort = self._resort_repository.get_by_id(request.resort_id)
+            if resort is None:
+                raise NotFoundError("Resort not found.")
+
+        ride_session = RideSession(
+            user_id=request.user_id,
+            resort_id=request.resort_id,
+            started_at=request.started_at or datetime.now(UTC),
+            status=RideSessionStatus.DRAFT,
+        )
+        self._ride_session_repository.add(ride_session)
+        self._ride_session_repository.commit()
+        self._ride_session_repository.refresh(ride_session)
+        return ride_session
+
+    def upload_points_batch(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        points: Sequence[SessionPointInputData],
+    ) -> int:
+        ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
+        if ride_session.status != RideSessionStatus.DRAFT:
+            raise ConflictError("Points can only be uploaded to draft sessions.")
+
+        models = [
+            SessionPoint(
+                session_id=ride_session.id,
+                t_offset_ms=point.t_offset_ms,
+                latitude=point.latitude,
+                longitude=point.longitude,
+                accuracy_m=point.accuracy_m,
+                altitude_m=point.altitude_m,
+                speed_mps=point.speed_mps,
+                heading_deg=point.heading_deg,
+            )
+            for point in points
+        ]
+        self._session_point_repository.add_batch(models)
+        self._session_point_repository.commit()
+        return len(models)
+
+    def complete_session(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        completion: SessionCompletionInput,
+    ) -> RideSession:
+        ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
+        if ride_session.status != RideSessionStatus.DRAFT:
+            raise ConflictError("Only draft sessions can be completed.")
+
+        ended_at = completion.ended_at or datetime.now(UTC)
+        if ended_at < ride_session.started_at:
+            raise ValidationError("ended_at cannot be earlier than started_at.")
+
+        duration_s = completion.duration_s
+        if duration_s is None:
+            duration_s = int((ended_at - ride_session.started_at).total_seconds())
+        if duration_s < 0:
+            raise ValidationError("duration_s must be non-negative.")
+
+        ride_session.ended_at = ended_at
+        ride_session.duration_s = duration_s
+        ride_session.distance_m = completion.distance_m
+        ride_session.max_speed_mps = completion.max_speed_mps
+        ride_session.avg_speed_mps = completion.avg_speed_mps
+        ride_session.elevation_gain_m = completion.elevation_gain_m
+        ride_session.elevation_loss_m = completion.elevation_loss_m
+        ride_session.status = RideSessionStatus.COMPLETED
+
+        self._ride_session_repository.commit()
+        self._ride_session_repository.refresh(ride_session)
+        return ride_session
+
+    def list_user_sessions(
+        self,
+        user_id: uuid.UUID,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[RideSession], int]:
+        total = self._ride_session_repository.count_by_user(user_id)
+        sessions = self._ride_session_repository.list_by_user(user_id, page, page_size)
+        return sessions, total
+
+    def _get_owned_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession:
+        ride_session = self._ride_session_repository.get_owned_by_user(session_id, user_id)
+        if ride_session is None:
+            raise NotFoundError("Session not found.")
+        return ride_session
