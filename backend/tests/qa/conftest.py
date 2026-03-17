@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from collections.abc import Callable
 from collections.abc import Generator
 
@@ -12,15 +12,14 @@ from app.core.dependencies import get_db
 from app.main import app
 from app.models.resort import Resort
 
-TRUNCATE_SQL = """
-TRUNCATE TABLE
-  session_points,
-  ride_sessions,
-  favorite_resorts,
-  resorts,
-  users
-RESTART IDENTITY CASCADE
-"""
+TABLES_TO_TRUNCATE = [
+    "session_points",
+    "weather_cache",
+    "ride_sessions",
+    "favorite_resorts",
+    "resorts",
+    "users",
+]
 
 
 @pytest.fixture
@@ -29,7 +28,22 @@ def db() -> Generator[Session, None, None]:
     try:
         yield session
     finally:
-        session.execute(text(TRUNCATE_SQL))
+        existing_tables = set(
+            session.execute(
+                text(
+                    """
+                    SELECT tablename
+                    FROM pg_tables
+                    WHERE schemaname = 'public'
+                    """
+                )
+            ).scalars()
+        )
+
+        for table in TABLES_TO_TRUNCATE:
+            if table in existing_tables:
+                session.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
+
         session.commit()
         session.close()
 

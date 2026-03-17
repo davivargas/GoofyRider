@@ -62,9 +62,19 @@ class FakeSessionPointRepository:
     def __init__(self) -> None:
         self.batches: list[list[object]] = []
         self.did_commit = False
+        self.offsets_by_session: dict[object, set[int]] = {}
 
     def add_batch(self, points):
         self.batches.append(list(points))
+        for point in points:
+            existing = self.offsets_by_session.setdefault(point.session_id, set())
+            existing.add(point.t_offset_ms)
+
+    def existing_offsets(self, session_id, offsets):
+        return set(self.offsets_by_session.get(session_id, set())).intersection(set(offsets))
+
+    def list_by_session(self, _session_id):
+        return []
 
     def commit(self):
         self.did_commit = True
@@ -154,3 +164,28 @@ def test_complete_session_sets_computed_duration_when_missing() -> None:
 
     assert completed.status == RideSessionStatus.COMPLETED
     assert completed.duration_s == 30
+
+
+def test_upload_points_batch_skips_existing_offsets() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    point_repo = FakeSessionPointRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+    point_repo.offsets_by_session[draft_session.id] = {0}
+
+    service = _build_service(
+        ride_session_repository=ride_sessions,
+        session_point_repository=point_repo,
+    )
+
+    inserted = service.upload_points_batch(
+        session_id=draft_session.id,
+        user_id=user_id,
+        points=[
+            SessionPointInputData(t_offset_ms=0, latitude=50.0, longitude=-122.0),
+            SessionPointInputData(t_offset_ms=1000, latitude=50.001, longitude=-122.001),
+        ],
+    )
+
+    assert inserted == 1

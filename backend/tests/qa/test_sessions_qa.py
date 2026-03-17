@@ -1,4 +1,4 @@
-from collections.abc import Callable
+﻿from collections.abc import Callable
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -74,6 +74,7 @@ def test_sessions_lifecycle_create_points_complete_list(
     assert payload["total"] == 1
     assert len(payload["items"]) == 1
     assert payload["items"][0]["id"] == session_id
+    assert payload["items"][0]["resort"]["id"] == str(resort.id)
 
 
 def test_sessions_upload_points_rejects_completed_session(
@@ -238,3 +239,101 @@ def test_sessions_complete_rejects_already_completed(
     )
     assert second_complete.status_code == 409
     assert second_complete.json()["detail"] == "Only draft sessions can be completed."
+
+
+def test_sessions_get_detail_and_points_endpoints(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Kicking Horse")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    upload = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={
+            "points": [
+                {
+                    "t_offset_ms": 0,
+                    "latitude": 51.3,
+                    "longitude": -117.0,
+                },
+                {
+                    "t_offset_ms": 2000,
+                    "latitude": 51.301,
+                    "longitude": -117.001,
+                },
+            ]
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 200
+
+    detail = client.get(f"/v1/sessions/{session_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["id"] == session_id
+    assert detail.json()["resort"]["id"] == str(resort.id)
+
+    points = client.get(f"/v1/sessions/{session_id}/points", headers=headers)
+    assert points.status_code == 200
+    points_payload = points.json()
+    assert points_payload["session_id"] == session_id
+    assert len(points_payload["items"]) == 2
+
+
+def test_sessions_points_batch_is_idempotent_on_duplicate_offsets(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Mt. Bachelor")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    payload = {
+        "points": [
+            {
+                "t_offset_ms": 0,
+                "latitude": 44.0,
+                "longitude": -121.0,
+            },
+            {
+                "t_offset_ms": 1000,
+                "latitude": 44.001,
+                "longitude": -121.001,
+            },
+        ]
+    }
+
+    first = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json=payload,
+        headers=headers,
+    )
+    assert first.status_code == 200
+    assert first.json()["inserted_count"] == 2
+
+    second = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json=payload,
+        headers=headers,
+    )
+    assert second.status_code == 200
+    assert second.json()["inserted_count"] == 0
