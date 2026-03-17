@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger
@@ -7,10 +7,11 @@ from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base
 
@@ -19,6 +20,11 @@ class SessionPoint(Base):
     __tablename__ = "session_points"
     __table_args__ = (
         Index("ix_session_points_session_id_t_offset_ms", "session_id", "t_offset_ms"),
+        UniqueConstraint(
+            "session_id",
+            "t_offset_ms",
+            name="uq_session_points_session_id_t_offset_ms",
+        ),
     )
 
     id: Mapped[int] = mapped_column(

@@ -1,4 +1,4 @@
-from logging.config import fileConfig
+﻿from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config
@@ -11,6 +11,7 @@ from app.models import RideSession
 from app.models import SessionPoint
 from app.models import Resort
 from app.models import User
+from app.models import WeatherCache
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -87,3 +88,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+

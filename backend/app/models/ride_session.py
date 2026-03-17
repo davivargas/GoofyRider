@@ -1,6 +1,7 @@
-import uuid
+﻿import uuid
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime
 from sqlalchemy import Enum as SqlEnum
@@ -13,8 +14,12 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.resort import Resort
 
 
 class RideSessionStatus(str, Enum):
@@ -90,3 +95,5 @@ class RideSession(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+    resort: Mapped["Resort | None"] = relationship("Resort", lazy="joined")
