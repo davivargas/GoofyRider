@@ -1,0 +1,156 @@
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
+from uuid import uuid4
+
+import pytest
+
+from app.models.ride_session import RideSession
+from app.models.ride_session import RideSessionStatus
+from app.services.exceptions import ConflictError
+from app.services.exceptions import NotFoundError
+from app.services.exceptions import ValidationError
+from app.services.session_service import SessionCompletionInput
+from app.services.session_service import SessionCreateInput
+from app.services.session_service import SessionPointInputData
+from app.services.session_service import SessionService
+
+
+class FakeResortRepository:
+    def __init__(self) -> None:
+        self.resort_ids: set[object] = set()
+
+    def get_by_id(self, resort_id):
+        if resort_id in self.resort_ids:
+            return object()
+        return None
+
+
+class FakeRideSessionRepository:
+    def __init__(self) -> None:
+        self.sessions: dict[object, RideSession] = {}
+        self.did_commit = False
+
+    def add(self, ride_session: RideSession) -> None:
+        if ride_session.id is None:
+            ride_session.id = uuid4()
+        self.sessions[ride_session.id] = ride_session
+
+    def get_owned_by_user(self, session_id, user_id):
+        session = self.sessions.get(session_id)
+        if session is None or session.user_id != user_id:
+            return None
+        return session
+
+    def count_by_user(self, user_id):
+        return sum(1 for session in self.sessions.values() if session.user_id == user_id)
+
+    def list_by_user(self, user_id, page, page_size):
+        owned = [session for session in self.sessions.values() if session.user_id == user_id]
+        start = (page - 1) * page_size
+        end = start + page_size
+        return owned[start:end]
+
+    def commit(self):
+        self.did_commit = True
+
+    def refresh(self, _instance: object):
+        return None
+
+
+class FakeSessionPointRepository:
+    def __init__(self) -> None:
+        self.batches: list[list[object]] = []
+        self.did_commit = False
+
+    def add_batch(self, points):
+        self.batches.append(list(points))
+
+    def commit(self):
+        self.did_commit = True
+
+
+def _build_service(
+    ride_session_repository: FakeRideSessionRepository | None = None,
+    resort_repository: FakeResortRepository | None = None,
+    session_point_repository: FakeSessionPointRepository | None = None,
+) -> SessionService:
+    return SessionService(
+        ride_session_repository=ride_session_repository or FakeRideSessionRepository(),
+        resort_repository=resort_repository or FakeResortRepository(),
+        session_point_repository=session_point_repository or FakeSessionPointRepository(),
+    )
+
+
+def _build_session(user_id, status: RideSessionStatus = RideSessionStatus.DRAFT) -> RideSession:
+    session = RideSession(
+        user_id=user_id,
+        resort_id=None,
+        started_at=datetime.now(UTC) - timedelta(minutes=10),
+        status=status,
+    )
+    session.id = uuid4()
+    return session
+
+
+def test_create_session_rejects_unknown_resort() -> None:
+    service = _build_service()
+
+    with pytest.raises(NotFoundError, match="Resort not found."):
+        service.create_session(
+            SessionCreateInput(
+                user_id=uuid4(),
+                resort_id=uuid4(),
+            )
+        )
+
+
+def test_upload_points_batch_rejects_non_draft_session() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    completed_session = _build_session(user_id=user_id, status=RideSessionStatus.COMPLETED)
+    ride_sessions.sessions[completed_session.id] = completed_session
+    service = _build_service(ride_session_repository=ride_sessions)
+
+    with pytest.raises(ConflictError, match="Points can only be uploaded to draft sessions."):
+        service.upload_points_batch(
+            session_id=completed_session.id,
+            user_id=user_id,
+            points=[
+                SessionPointInputData(t_offset_ms=0, latitude=50.0, longitude=-122.0),
+            ],
+        )
+
+
+def test_complete_session_rejects_end_before_start() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+    service = _build_service(ride_session_repository=ride_sessions)
+    ended_at = draft_session.started_at - timedelta(seconds=1)
+
+    with pytest.raises(ValidationError, match="ended_at cannot be earlier than started_at."):
+        service.complete_session(
+            session_id=draft_session.id,
+            user_id=user_id,
+            completion=SessionCompletionInput(ended_at=ended_at),
+        )
+
+
+def test_complete_session_sets_computed_duration_when_missing() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+    service = _build_service(ride_session_repository=ride_sessions)
+    ended_at = draft_session.started_at + timedelta(seconds=30)
+
+    completed = service.complete_session(
+        session_id=draft_session.id,
+        user_id=user_id,
+        completion=SessionCompletionInput(ended_at=ended_at),
+    )
+
+    assert completed.status == RideSessionStatus.COMPLETED
+    assert completed.duration_s == 30
