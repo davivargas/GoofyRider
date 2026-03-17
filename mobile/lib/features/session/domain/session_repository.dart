@@ -1,0 +1,28 @@
+﻿import 'session_models.dart';
+
+abstract class SessionRepository {
+  Future<LocalRideSession> startLocalSession({String? resortId});
+  Future<LocalRideSession> pauseLocalSession(int localSessionId);
+  Future<LocalRideSession> resumeLocalSession(int localSessionId);
+  Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point);
+  Future<LocalRideSession> finishLocalSession(int localSessionId);
+  Future<LocalRideSession?> recoverInProgressSession();
+  Future<SessionStats> computeSessionStats(int localSessionId);
+  Future<LocalRideSession> syncSession(int localSessionId);
+  Future<LocalRideSession> retryFailedSync(int localSessionId);
+  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory();
+  Future<SessionDetail> getSessionDetail(int localSessionId);
+  Future<int> unsyncedCount();
+}
+
+class SessionDetail {
+  const SessionDetail({
+    required this.session,
+    required this.points,
+    required this.acceptedPoints,
+  });
+
+  final LocalRideSession session;
+  final List<LocalSessionPoint> points;
+  final List<LocalSessionPoint> acceptedPoints;
+}
