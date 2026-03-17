@@ -1,146 +1,171 @@
-# GoofyRider
+﻿# GoofyRider
 
-GoofyRider is an Android-first snowboarding tracker that records runs,
-speed, vertical descent, and session statistics. The goal is to provide
-riders with a simple, reliable way to track their day on the mountain
-while learning modern mobile and backend architecture.
+GoofyRider is an Android-first, offline-first snowboarding tracker built for portfolio-quality engineering.
+It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 
-This project is also designed as a portfolio-grade full-stack system
-using a modern production-style architecture.
+## What is implemented
 
----
+### Backend (Phases 1-3 + weather/session extensions)
+- JWT auth (`register`, `login`, `refresh`, `logout`, `me`)
+- Resorts search/detail
+- Favorites add/remove/list
+- Session lifecycle:
+  - create draft
+  - upload points batch (idempotent by `t_offset_ms`)
+  - complete session
+  - get session detail
+  - get session points
+  - list user sessions (with resort summary)
+- Weather endpoint via Open-Meteo proxy + 60-minute cache:
+  - `GET /v1/weather/resorts/{resort_id}`
 
-# Tech Stack
+### Mobile (Phases 4-10 implementation baseline)
+- Riverpod app bootstrap
+- go_router shell with 5 tabs:
+  - Home
+  - Resorts
+  - Record
+  - History
+  - Profile
+- Auth flow with secure token storage and Dio refresh interceptor
+- Resorts list/search/detail + favorite toggle
+- Local-first recording flow:
+  - permission handling
+  - geolocator stream
+  - Android foreground notification config
+  - local session + point persistence (Drift-backed custom SQL store)
+  - point filtering + stats engine (Haversine, speed filters, elevation smoothing)
+- Sync flow:
+  - create draft
+  - batch upload accepted points
+  - complete session
+  - local sync state transitions
+- History and session detail with route replay
+- Weather cards from backend weather endpoint
+- Profile settings placeholders and cache clear
 
-## Mobile
+## Tech stack
 
-- Flutter (Dart)
-- Riverpod -- state management
-- go_router -- navigation
-- Dio -- API client
-- Drift (SQLite) -- local caching and offline support
+### Mobile
+- Flutter
+- Riverpod
+- go_router
+- Dio
+- Drift
+- geolocator
+- flutter_map
 
-## Backend
-
+### Backend
 - FastAPI
-- Pydantic v2
-- SQLAlchemy 2.0
-- Alembic -- database migrations
-
-## Database
-
+- SQLAlchemy 2.x
+- Alembic
 - PostgreSQL
+- Pydantic v2
 
-## DevOps
+## Project structure
 
-- Docker / Docker Compose -- local development
-- GitHub Actions -- CI
-- Render -- deployment
-
----
-
-# Architecture Overview
-
-Mobile App (Flutter) │ ▼ REST API (FastAPI) │ ▼ PostgreSQL
-
-Key design principles:
-
-- Mobile-first architecture
-- Offline-friendly design
-- Clean separation between frontend and backend
-- Simple deployable backend service
-- Production-style development workflow
-
----
-
-# Project Structure
-
+```text
 goofyrider/
+  backend/
+    app/
+      api/
+      core/
+      models/
+      repositories/
+      schemas/
+      services/
+    alembic/
+    tests/
+  mobile/
+    lib/
+      app/
+      core/
+      features/
+    test/
+    integration_test/
+  .github/workflows/ci.yml
+```
 
-├── backend/ \# FastAPI backend\
-│ ├── app/\
-│ └── alembic/
+## Local setup
 
-├── mobile/ \# Flutter mobile application\
-│ ├── lib/\
-│ └── test/
+### 1. Start PostgreSQL
 
-├── docker-compose.yml\
-├── .env.example\
-└── README.md
+From repo root:
 
----
-
-# Local Development
-
-## Requirements
-
-- Docker
-- Docker Compose
-- Python 3.12+
-- Flutter SDK
-
-## Start the database
-
+```bash
 docker compose up -d
+```
 
-Verify containers:
+### 2. Backend
 
-docker compose ps
+```bash
+cd goofyrider/backend
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
 
-Stop services:
+pip install -e .[dev]
+alembic upgrade head
+uvicorn app.main:app --reload
+```
 
-docker compose down
+API docs:
+- `http://127.0.0.1:8000/docs`
 
----
+### 3. Mobile
 
-# Environment Variables
+```bash
+cd goofyrider/mobile
+flutter pub get
+flutter run
+```
 
-Create a `.env` file based on `.env.example`.
+If running Android emulator against local backend, default base URL is configured for emulator loopback:
+- `http://10.0.2.2:8000/v1`
 
-Example:
+## Testing
 
-POSTGRES_DB=goofyrider POSTGRES_USER=goofyrider_user
-POSTGRES_PASSWORD=goofyrider_password POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+### Backend
 
-DATABASE_URL=postgresql+psycopg://goofyrider_user:goofyrider_password@localhost:5432/goofyrider
+```bash
+cd goofyrider/backend
+.venv\Scripts\python.exe -m pytest
+```
 
----
+### Mobile
 
-# Current Status
+```bash
+cd goofyrider/mobile
+flutter test
+```
 
-Phase 0 -- Project initialization
+## CI
 
-Completed:
+GitHub Actions workflow runs:
+- backend migrations + backend tests
+- flutter analyze + flutter test
 
-- Repository structure
-- Docker local development environment
-- PostgreSQL container
+File:
+- `.github/workflows/ci.yml`
 
-Next:
+## Screenshots
 
-- FastAPI skeleton
-- Database models
-- Authentication
-- Run tracking API
-- Flutter UI
+Add screenshots under `docs/screenshots/` (recommended):
+- login
+- resorts list/detail
+- record screen (recording state)
+- history list
+- session detail replay
 
----
+## Known limitations
 
-# Future Features
+- Mobile implementation was scaffolded in one pass and should be validated on a real Android device.
+- Kotlin native bridge for advanced background tracking is not implemented yet (Flutter geolocator path is active).
+- Remote-only session replay points are not persisted locally unless synced into local records.
+- UI polish/motion can be refined further after device QA.
 
-Planned functionality includes:
+## License
 
-- GPS run tracking
-- Speed and vertical descent statistics
-- Session summaries
-- Leaderboards
-- Offline ride recording
-- Resort statistics
-
----
-
-# License
-
-This project is for educational and portfolio purposes.
+Educational and portfolio use.
