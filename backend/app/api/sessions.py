@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -13,8 +13,10 @@ from app.schemas.session import RideSessionPublic
 from app.schemas.session import SessionCompleteRequest
 from app.schemas.session import SessionCreateRequest
 from app.schemas.session import SessionListResponse
+from app.schemas.session import SessionPointPublic
 from app.schemas.session import SessionPointsBatchRequest
 from app.schemas.session import SessionPointsBatchResponse
+from app.schemas.session import SessionPointsListResponse
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
@@ -126,6 +128,49 @@ def complete_session(
         ) from exc
 
     return RideSessionPublic.model_validate(ride_session)
+
+
+@router.get("/sessions/{session_id}", response_model=RideSessionPublic)
+def get_session_detail(
+    session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session_service: SessionService = Depends(get_session_service),
+) -> RideSessionPublic:
+    try:
+        session = session_service.get_session(
+            session_id=session_id,
+            user_id=current_user.id,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return RideSessionPublic.model_validate(session)
+
+
+@router.get("/sessions/{session_id}/points", response_model=SessionPointsListResponse)
+def list_session_points(
+    session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session_service: SessionService = Depends(get_session_service),
+) -> SessionPointsListResponse:
+    try:
+        points = session_service.list_session_points(
+            session_id=session_id,
+            user_id=current_user.id,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return SessionPointsListResponse(
+        session_id=session_id,
+        items=[SessionPointPublic.model_validate(point) for point in points],
+    )
 
 
 @router.get("/users/me/sessions", response_model=SessionListResponse)

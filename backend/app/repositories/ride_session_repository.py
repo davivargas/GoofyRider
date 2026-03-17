@@ -1,8 +1,9 @@
-import uuid
+﻿import uuid
 
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
 
 from app.models.ride_session import RideSession
 from app.repositories.base import SqlAlchemyRepository
@@ -16,9 +17,13 @@ class RideSessionRepository(SqlAlchemyRepository):
         self._db.add(ride_session)
 
     def get_owned_by_user(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession | None:
-        stmt = select(RideSession).where(
-            RideSession.id == session_id,
-            RideSession.user_id == user_id,
+        stmt = (
+            select(RideSession)
+            .options(joinedload(RideSession.resort))
+            .where(
+                RideSession.id == session_id,
+                RideSession.user_id == user_id,
+            )
         )
         return self._db.scalar(stmt)
 
@@ -29,6 +34,7 @@ class RideSessionRepository(SqlAlchemyRepository):
     def list_by_user(self, user_id: uuid.UUID, page: int, page_size: int) -> list[RideSession]:
         stmt = (
             select(RideSession)
+            .options(joinedload(RideSession.resort))
             .where(RideSession.user_id == user_id)
             .order_by(RideSession.started_at.desc())
             .offset((page - 1) * page_size)

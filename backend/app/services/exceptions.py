@@ -1,4 +1,4 @@
-class ServiceError(Exception):
+﻿class ServiceError(Exception):
     """Base class for application service errors."""
 
 
@@ -15,4 +15,8 @@ class NotFoundError(ServiceError):
 
 
 class ValidationError(ServiceError):
+    pass
+
+
+class ServiceUnavailableError(ServiceError):
     pass

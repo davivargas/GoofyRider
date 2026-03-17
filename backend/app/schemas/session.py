@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -29,7 +29,7 @@ class SessionPointsBatchRequest(BaseModel):
 
 class SessionPointsBatchResponse(BaseModel):
     session_id: UUID
-    inserted_count: int = Field(ge=1)
+    inserted_count: int = Field(ge=0)
 
 
 class SessionCompleteRequest(BaseModel):
@@ -50,10 +50,20 @@ class SessionCompleteRequest(BaseModel):
         return value
 
 
+class SessionResortSummary(BaseModel):
+    id: UUID
+    name: str
+    country: str
+    region: str
+
+    model_config = {"from_attributes": True}
+
+
 class RideSessionPublic(BaseModel):
     id: UUID
     user_id: UUID
     resort_id: UUID | None
+    resort: SessionResortSummary | None = None
     started_at: datetime
     ended_at: datetime | None
     duration_s: int | None
@@ -66,6 +76,25 @@ class RideSessionPublic(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SessionPointPublic(BaseModel):
+    id: int
+    t_offset_ms: int
+    latitude: float
+    longitude: float
+    accuracy_m: float | None
+    altitude_m: float | None
+    speed_mps: float | None
+    heading_deg: float | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SessionPointsListResponse(BaseModel):
+    session_id: UUID
+    items: list[SessionPointPublic]
 
 
 class SessionListResponse(BaseModel):

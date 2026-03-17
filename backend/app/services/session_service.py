@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
@@ -72,6 +72,12 @@ class SessionPointRepositoryProtocol(Protocol):
     def add_batch(self, points: Sequence[SessionPoint]) -> None:
         ...
 
+    def existing_offsets(self, session_id: uuid.UUID, offsets: Sequence[int]) -> set[int]:
+        ...
+
+    def list_by_session(self, session_id: uuid.UUID) -> list[SessionPoint]:
+        ...
+
     def commit(self) -> None:
         ...
 
@@ -114,6 +120,12 @@ class SessionService:
         if ride_session.status != RideSessionStatus.DRAFT:
             raise ConflictError("Points can only be uploaded to draft sessions.")
 
+        requested_offsets = [point.t_offset_ms for point in points]
+        existing_offsets = self._session_point_repository.existing_offsets(
+            session_id=ride_session.id,
+            offsets=requested_offsets,
+        )
+
         models = [
             SessionPoint(
                 session_id=ride_session.id,
@@ -126,9 +138,13 @@ class SessionService:
                 heading_deg=point.heading_deg,
             )
             for point in points
+            if point.t_offset_ms not in existing_offsets
         ]
-        self._session_point_repository.add_batch(models)
-        self._session_point_repository.commit()
+
+        if models:
+            self._session_point_repository.add_batch(models)
+            self._session_point_repository.commit()
+
         return len(models)
 
     def complete_session(
@@ -163,6 +179,13 @@ class SessionService:
         self._ride_session_repository.commit()
         self._ride_session_repository.refresh(ride_session)
         return ride_session
+
+    def get_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession:
+        return self._get_owned_session(session_id=session_id, user_id=user_id)
+
+    def list_session_points(self, session_id: uuid.UUID, user_id: uuid.UUID) -> list[SessionPoint]:
+        ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
+        return self._session_point_repository.list_by_session(ride_session.id)
 
     def list_user_sessions(
         self,
