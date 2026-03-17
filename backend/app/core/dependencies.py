@@ -1,4 +1,4 @@
-from collections.abc import Generator
+﻿from collections.abc import Generator
 
 from fastapi import Depends
 from fastapi import HTTPException
@@ -14,11 +14,14 @@ from app.repositories.resort_repository import ResortRepository
 from app.repositories.ride_session_repository import RideSessionRepository
 from app.repositories.session_point_repository import SessionPointRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.weather_cache_repository import WeatherCacheRepository
 from app.services.auth_service import AuthService
+from app.services.exceptions import AuthenticationError
 from app.services.favorites_service import FavoritesService
 from app.services.resort_service import ResortService
 from app.services.session_service import SessionService
-from app.services.exceptions import AuthenticationError
+from app.services.weather_service import OpenMeteoWeatherProvider
+from app.services.weather_service import WeatherService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -49,6 +52,10 @@ def get_ride_session_repository(db: Session = Depends(get_db)) -> RideSessionRep
 
 def get_session_point_repository(db: Session = Depends(get_db)) -> SessionPointRepository:
     return SessionPointRepository(db)
+
+
+def get_weather_cache_repository(db: Session = Depends(get_db)) -> WeatherCacheRepository:
+    return WeatherCacheRepository(db)
 
 
 def get_auth_service(
@@ -82,6 +89,22 @@ def get_session_service(
         ride_session_repository=ride_session_repository,
         resort_repository=resort_repository,
         session_point_repository=session_point_repository,
+    )
+
+
+def get_open_meteo_weather_provider() -> OpenMeteoWeatherProvider:
+    return OpenMeteoWeatherProvider()
+
+
+def get_weather_service(
+    resort_repository: ResortRepository = Depends(get_resort_repository),
+    weather_cache_repository: WeatherCacheRepository = Depends(get_weather_cache_repository),
+    weather_provider: OpenMeteoWeatherProvider = Depends(get_open_meteo_weather_provider),
+) -> WeatherService:
+    return WeatherService(
+        resort_repository=resort_repository,
+        weather_cache_repository=weather_cache_repository,
+        weather_provider=weather_provider,
     )
 
 
