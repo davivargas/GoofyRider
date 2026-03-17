@@ -1,0 +1,208 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../router/route_paths.dart';
+import '../../features/auth/presentation/auth_providers.dart';
+import '../../features/resorts/domain/resort_models.dart';
+import '../../features/resorts/presentation/resort_providers.dart';
+import '../../features/session/domain/session_models.dart';
+import '../../features/session/presentation/session_providers.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
+    final AsyncValue<List<ResortSummary>> favorites =
+        ref.watch(favoriteResortsProvider);
+    final AsyncValue<List<LocalRideSession>> history =
+        ref.watch(historyProvider);
+    final AsyncValue<int> unsyncedCount =
+        ref.watch(unsyncedSessionCountProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Home')),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref
+              .read(recordingControllerProvider.notifier)
+              .retryPendingSyncs();
+          ref.invalidate(favoriteResortsProvider);
+          ref.invalidate(historyProvider);
+          ref.invalidate(unsyncedSessionCountProvider);
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(12),
+          children: <Widget>[
+            Card(
+              child: ListTile(
+                title: Text(
+                    'Welcome back, ${authState.session?.user.displayName ?? 'Rider'}'),
+                subtitle: const Text('Ready for your next run?'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            unsyncedCount.when(
+              data: (int count) {
+                if (count <= 0) {
+                  return const SizedBox.shrink();
+                }
+                return Card(
+                  color: Colors.orange.withValues(alpha: 0.16),
+                  child: ListTile(
+                    leading: const Icon(Icons.sync_problem),
+                    title: Text('$count session(s) pending sync'),
+                    subtitle:
+                        const Text('Open History to retry any failed uploads.'),
+                  ),
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const Text('Quick action'),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: () => context.go(RoutePaths.record),
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Start recording'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text('Favorite resorts',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            favorites.when(
+              loading: () => const SizedBox(
+                height: 110,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (Object error, StackTrace _) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('Unable to load favorites: $error'),
+                ),
+              ),
+              data: (List<ResortSummary> resorts) {
+                if (resorts.isEmpty) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                          'No favorites yet. Add some from the Resorts tab.'),
+                    ),
+                  );
+                }
+
+                return SizedBox(
+                  height: 126,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: resorts.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (BuildContext context, int index) {
+                      final ResortSummary resort = resorts[index];
+                      return GestureDetector(
+                        onTap: () => context.go(
+                          RoutePaths.resortDetail
+                              .replaceAll(':resortId', resort.id),
+                        ),
+                        child: Container(
+                          width: 220,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF123048),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: <Widget>[
+                              Text(
+                                resort.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700),
+                              ),
+                              Text('${resort.region}, ${resort.country}'),
+                              Text(
+                                resort.cachedWeatherText == null
+                                    ? 'Conditions unavailable'
+                                    : '${resort.cachedWeatherText} • ${resort.cachedWeatherTempC?.toStringAsFixed(1) ?? '--'} C',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('Recent sessions',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            history.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (Object error, StackTrace _) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('Unable to load history: $error'),
+                ),
+              ),
+              data: (List<LocalRideSession> sessions) {
+                if (sessions.isEmpty) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('No sessions yet.'),
+                    ),
+                  );
+                }
+
+                final List<LocalRideSession> latest = sessions.take(3).toList();
+                return Column(
+                  children: latest.map((LocalRideSession session) {
+                    return Card(
+                      child: ListTile(
+                        title: Text(session.resortId ?? 'Unknown resort'),
+                        subtitle: Text(
+                          '${session.distanceM.toStringAsFixed(0)}m • ${session.activeDurationS}s',
+                        ),
+                        trailing: Text(session.state.wireValue),
+                        onTap: session.localId > 0
+                            ? () => context.go(
+                                  RoutePaths.sessionDetail.replaceAll(
+                                    ':sessionId',
+                                    session.localId.toString(),
+                                  ),
+                                )
+                            : null,
+                      ),
+                    );
+                  }).toList(growable: false),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
