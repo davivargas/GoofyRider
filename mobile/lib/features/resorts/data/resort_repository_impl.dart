@@ -1,0 +1,184 @@
+﻿import 'package:dio/dio.dart';
+
+import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_error.dart';
+import '../../../core/storage/drift_local_database.dart';
+import '../../weather/domain/weather_models.dart';
+import '../domain/resort_models.dart';
+import '../domain/resort_repository.dart';
+import 'resorts_api.dart';
+
+class ResortRepositoryImpl implements ResortRepository {
+  ResortRepositoryImpl({
+    required ResortsApi api,
+    required DriftLocalDatabase localDatabase,
+  })  : _api = api,
+        _localDatabase = localDatabase;
+
+  final ResortsApi _api;
+  final DriftLocalDatabase _localDatabase;
+
+  @override
+  Future<ResortListResult> searchResorts({
+    required String query,
+    String? region,
+  }) async {
+    try {
+      final Map<String, dynamic> payload = await _api.listResorts(
+        query: query,
+        region: region,
+      );
+
+      final List<ResortSummary> favorites = await listFavoriteResorts();
+      final Set<String> favoriteIds = favorites.map((ResortSummary it) => it.id).toSet();
+
+      final List<dynamic> items = payload['items'] as List<dynamic>;
+      final List<ResortSummary> resorts = items.map((dynamic raw) {
+        final Map<String, dynamic> resortJson = raw as Map<String, dynamic>;
+        return ResortSummary.fromJson(
+          resortJson,
+          isFavorite: favoriteIds.contains(resortJson['id']),
+        );
+      }).toList(growable: false);
+
+      for (final ResortSummary resort in resorts) {
+        await _localDatabase.upsertCachedResort(resort.id, resort.toJson());
+      }
+
+      return ResortListResult(
+        items: await _withCachedWeather(resorts),
+        total: payload['total'] as int? ?? resorts.length,
+        usedCache: false,
+        isStale: false,
+      );
+    } on DioException {
+      final List<Map<String, dynamic>> cached = await _localDatabase.readCachedResorts();
+      final List<ResortSummary> resorts = cached
+          .map((Map<String, dynamic> raw) => _fromCached(raw, isStale: true))
+          .where((ResortSummary resort) {
+            final bool queryMatch = query.trim().isEmpty ||
+                resort.name.toLowerCase().contains(query.trim().toLowerCase());
+            final bool regionMatch = region == null ||
+                region.trim().isEmpty ||
+                resort.region.toLowerCase() == region.trim().toLowerCase();
+            return queryMatch && regionMatch;
+          })
+          .toList(growable: false);
+
+      return ResortListResult(
+        items: resorts,
+        total: resorts.length,
+        usedCache: true,
+        isStale: true,
+      );
+    }
+  }
+
+  @override
+  Future<ResortSummary> getResortDetail(String resortId) async {
+    try {
+      final Map<String, dynamic> payload = await _api.getResortDetail(resortId);
+      final List<ResortSummary> favorites = await listFavoriteResorts();
+      final bool isFavorite = favorites.any((ResortSummary resort) => resort.id == resortId);
+
+      final ResortSummary resort = ResortSummary.fromJson(payload, isFavorite: isFavorite);
+      await _localDatabase.upsertCachedResort(resort.id, resort.toJson());
+      return (await _withCachedWeather(<ResortSummary>[resort])).first;
+    } on DioException catch (exception) {
+      final Map<String, dynamic>? cached = await _localDatabase.readCachedResort(resortId);
+      if (cached != null) {
+        return _fromCached(cached, isStale: true);
+      }
+      throw mapDioException(exception);
+    }
+  }
+
+  @override
+  Future<ResortSummary> toggleFavoriteResort(ResortSummary resort) async {
+    try {
+      if (resort.isFavorite) {
+        await _api.removeFavorite(resort.id);
+      } else {
+        await _api.addFavorite(resort.id);
+      }
+      return resort.copyWith(isFavorite: !resort.isFavorite);
+    } on DioException catch (exception) {
+      throw mapDioException(exception);
+    }
+  }
+
+  @override
+  Future<List<ResortSummary>> listFavoriteResorts() async {
+    try {
+      final List<Map<String, dynamic>> payload = await _api.listFavoriteResorts();
+      final List<ResortSummary> resorts = payload
+          .map((Map<String, dynamic> json) => ResortSummary.fromJson(json, isFavorite: true))
+          .toList(growable: false);
+
+      for (final ResortSummary resort in resorts) {
+        await _localDatabase.upsertCachedResort(resort.id, resort.toJson());
+      }
+
+      return await _withCachedWeather(resorts);
+    } on DioException {
+      final List<Map<String, dynamic>> cached = await _localDatabase.readCachedResorts();
+      return cached
+          .map((Map<String, dynamic> raw) => _fromCached(raw, isStale: true))
+          .where((ResortSummary resort) => resort.isFavorite)
+          .toList(growable: false);
+    }
+  }
+
+  Future<List<ResortSummary>> _withCachedWeather(List<ResortSummary> resorts) async {
+    final DateTime now = DateTime.now().toUtc();
+    final List<ResortSummary> enriched = <ResortSummary>[];
+
+    for (final ResortSummary resort in resorts) {
+      final Map<String, dynamic>? weatherRaw = await _localDatabase.readCachedWeather(resort.id);
+      if (weatherRaw == null) {
+        enriched.add(resort);
+        continue;
+      }
+
+      final DateTime fetchedAt = DateTime.parse(weatherRaw['cached_fetched_at'] as String).toUtc();
+      final bool stale = now.difference(fetchedAt) > AppConstants.weatherCacheTtl;
+      final ResortWeather weather = ResortWeather.fromJson(
+        weatherRaw,
+        fromCache: true,
+        stale: stale,
+      );
+
+      enriched.add(
+        resort.copyWith(
+          cachedWeatherText: weather.conditionsText,
+          cachedWeatherTempC: weather.tempC,
+          isStale: stale,
+        ),
+      );
+    }
+
+    return enriched;
+  }
+
+  ResortSummary _fromCached(
+    Map<String, dynamic> payload, {
+    required bool isStale,
+  }) {
+    return ResortSummary(
+      id: payload['id'] as String,
+      name: payload['name'] as String,
+      country: payload['country'] as String,
+      region: payload['region'] as String,
+      city: payload['city'] as String?,
+      latitude: (payload['latitude'] as num?)?.toDouble(),
+      longitude: (payload['longitude'] as num?)?.toDouble(),
+      elevationBaseM: payload['elevation_base_m'] as int?,
+      elevationTopM: payload['elevation_top_m'] as int?,
+      isFavorite: payload['is_favorite'] as bool? ?? false,
+      cachedWeatherText: payload['cached_weather_text'] as String?,
+      cachedWeatherTempC: (payload['cached_weather_temp_c'] as num?)?.toDouble(),
+      isStale: isStale,
+    );
+  }
+}
+
