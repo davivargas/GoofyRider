@@ -1,9 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/providers.dart';
+import '../../../core/utils/speed_unit.dart';
 import '../../auth/presentation/auth_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -12,6 +14,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
+    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -26,10 +29,34 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Card(
-            child: ListTile(
-              title: Text('Units preference'),
-              subtitle: Text('Metric (placeholder)'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text('Units preference'),
+                  const SizedBox(height: 10),
+                  SegmentedButton<SpeedUnit>(
+                    segments: const <ButtonSegment<SpeedUnit>>[
+                      ButtonSegment<SpeedUnit>(
+                        value: SpeedUnit.kilometersPerHour,
+                        label: Text('km/h'),
+                      ),
+                      ButtonSegment<SpeedUnit>(
+                        value: SpeedUnit.metersPerSecond,
+                        label: Text('m/s'),
+                      ),
+                    ],
+                    selected: <SpeedUnit>{speedUnit},
+                    onSelectionChanged: (Set<SpeedUnit> selection) {
+                      ref
+                          .read(speedUnitPreferenceProvider.notifier)
+                          .setSpeedUnit(selection.first);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           const Card(

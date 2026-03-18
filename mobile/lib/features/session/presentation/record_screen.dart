@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
-import '../domain/location_tracking_repository.dart';
+import '../../../core/utils/speed_unit.dart';
 import '../domain/session_models.dart';
 import 'recording_controller.dart';
 import 'session_providers.dart';
@@ -23,6 +24,13 @@ class RecordScreen extends ConsumerStatefulWidget {
 }
 
 class _RecordScreenState extends ConsumerState<RecordScreen> {
+  final MapController _mapController = MapController();
+  bool _isMapFollowing = true;
+  bool _recoveryPromptVisible = false;
+  bool _mapTileError = false;
+  double _mapZoom = 12;
+  int _lastRoutePointCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +44,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
   @override
   Widget build(BuildContext context) {
     final RecordingViewState state = ref.watch(recordingControllerProvider);
+    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
     final ThemeData theme = Theme.of(context);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -43,6 +52,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     });
 
     final List<LatLng> route = state.route;
+    _maybeFollowRider(state, route);
+
     final LatLng center =
         route.isNotEmpty ? route.last : const LatLng(50.1, -119.4);
 
@@ -68,9 +79,18 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
             child: Stack(
               children: <Widget>[
                 FlutterMap(
+                  mapController: _mapController,
                   options: MapOptions(
                     initialCenter: center,
-                    initialZoom: 12,
+                    initialZoom: _mapZoom,
+                    onPositionChanged: (MapCamera camera, bool hasGesture) {
+                      _mapZoom = camera.zoom;
+                      if (hasGesture && _isMapFollowing) {
+                        setState(() {
+                          _isMapFollowing = false;
+                        });
+                      }
+                    },
                   ),
                   children: <Widget>[
                     TileLayer(
@@ -79,6 +99,13 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                       subdomains:
                           MapTileProviderConfig.openStreetMap.subdomains,
                       userAgentPackageName: 'com.goofyrider.mobile',
+                      errorTileCallback: (_, __, ___) {
+                        if (mounted && !_mapTileError) {
+                          setState(() {
+                            _mapTileError = true;
+                          });
+                        }
+                      },
                     ),
                     if (route.isNotEmpty)
                       PolylineLayer(
@@ -107,26 +134,42 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                   top: 12,
                   left: 12,
                   right: 12,
-                  child: _statusBanner(state, theme),
+                  child: _statusBanner(state),
                 ),
+                if (!_isMapFollowing && route.isNotEmpty)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: FloatingActionButton.small(
+                      heroTag: 'recenter-record-map',
+                      onPressed: () => _recenterOnRider(route),
+                      child: const Icon(Icons.my_location),
+                    ),
+                  ),
               ],
             ),
           ),
-          _statsPanel(state, theme),
+          _statsPanel(state, speedUnit),
           _controlBar(state),
         ],
       ),
     );
   }
 
-  Widget _statusBanner(RecordingViewState state, ThemeData theme) {
+  Widget _statusBanner(RecordingViewState state) {
     final List<String> labels = <String>[
       'Phase: ${state.phase.name}',
       'Elapsed: ${state.elapsed.inMinutes.toString().padLeft(2, '0')}:${(state.elapsed.inSeconds % 60).toString().padLeft(2, '0')}',
       if (state.lowAccuracy) 'Low GPS accuracy',
-      if (state.permissionState != LocationPermissionState.granted)
-        'Location permission required',
+      if (!state.hasLocationPermission) 'Location permission required',
+      if (state.phase == RecordScreenPhase.recording &&
+          state.hasConfirmedBackgroundTracking)
+        'Background tracking active',
+      if (state.phase == RecordScreenPhase.recording &&
+          !state.hasConfirmedBackgroundTracking)
+        'Background tracking limited: allow "All the time".',
       if (state.preselectedResortId != null) 'Resort selected',
+      if (_mapTileError) 'Map tiles failing, check network signal.',
     ];
 
     return Card(
@@ -149,24 +192,28 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     );
   }
 
-  Widget _statsPanel(RecordingViewState state, ThemeData theme) {
+  Widget _statsPanel(RecordingViewState state, SpeedUnit speedUnit) {
     final SessionStats stats = state.liveStats;
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: <Widget>[
-          _statCard(
-              'Current', '${state.currentSpeedMps.toStringAsFixed(1)} m/s'),
-          _statCard('Max', '${stats.maxSpeedMps.toStringAsFixed(1)} m/s'),
-          _statCard('Distance', '${stats.distanceM.toStringAsFixed(0)} m'),
-          _statCard('Avg', '${stats.avgSpeedMps.toStringAsFixed(1)} m/s'),
-          _statCard('Points', '${state.route.length}'),
-          _statCard('Updated', DateTime.now().toTimeLabel()),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: <Widget>[
+            _statCard('Current',
+                speedUnit.formatFromMetersPerSecond(state.currentSpeedMps)),
+            _statCard(
+                'Max', speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps)),
+            _statCard('Distance', '${stats.distanceM.toStringAsFixed(0)} m'),
+            _statCard(
+                'Avg', speedUnit.formatFromMetersPerSecond(stats.avgSpeedMps)),
+            _statCard('Points', '${state.route.length}'),
+            _statCard('Updated', DateTime.now().toTimeLabel()),
+          ],
+        ),
       ),
     );
   }
@@ -238,11 +285,56 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     );
   }
 
-  Future<void> _handleRecoveryPrompt(RecordingViewState state) async {
-    if (!state.hasRecovery || !mounted) {
+  void _maybeFollowRider(RecordingViewState state, List<LatLng> route) {
+    if (route.isEmpty) {
+      _lastRoutePointCount = 0;
       return;
     }
 
+    if (!_isMapFollowing) {
+      _lastRoutePointCount = route.length;
+      return;
+    }
+
+    if (route.length == _lastRoutePointCount) {
+      return;
+    }
+
+    _lastRoutePointCount = route.length;
+
+    if (state.phase != RecordScreenPhase.recording &&
+        state.phase != RecordScreenPhase.paused) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isMapFollowing || route.isEmpty) {
+        return;
+      }
+      try {
+        _mapController.move(route.last, _mapZoom);
+      } catch (_) {}
+    });
+  }
+
+  void _recenterOnRider(List<LatLng> route) {
+    if (route.isEmpty) {
+      return;
+    }
+    try {
+      _mapController.move(route.last, _mapZoom);
+      setState(() {
+        _isMapFollowing = true;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _handleRecoveryPrompt(RecordingViewState state) async {
+    if (!state.hasRecovery || !mounted || _recoveryPromptVisible) {
+      return;
+    }
+
+    _recoveryPromptVisible = true;
     final RecordingController controller =
         ref.read(recordingControllerProvider.notifier);
 
@@ -279,5 +371,6 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     } else {
       await controller.discardRecovery();
     }
+    _recoveryPromptVisible = false;
   }
 }

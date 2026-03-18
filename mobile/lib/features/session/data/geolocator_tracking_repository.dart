@@ -27,6 +27,10 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
       return LocationPermissionState.deniedForever;
     }
 
+    if (permission == LocationPermission.whileInUse) {
+      return LocationPermissionState.grantedForegroundOnly;
+    }
+
     return LocationPermissionState.granted;
   }
 

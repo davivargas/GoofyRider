@@ -1,4 +1,4 @@
-﻿class LocationSample {
+class LocationSample {
   const LocationSample({
     required this.timestamp,
     required this.latitude,
@@ -20,6 +20,7 @@
 
 enum LocationPermissionState {
   granted,
+  grantedForegroundOnly,
   denied,
   deniedForever,
   serviceDisabled,

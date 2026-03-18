@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
 import '../domain/session_models.dart';
@@ -23,6 +25,7 @@ class SessionDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<SessionDetail> detail =
         ref.watch(sessionDetailProvider(localSessionId));
+    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Session detail')),
@@ -38,9 +41,9 @@ class SessionDetailScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: <Widget>[
-              _summaryCards(session),
+              _summaryCards(session, speedUnit),
               const SizedBox(height: 12),
-              _mapReplay(data.acceptedPoints),
+              _mapReplay(data.points),
               const SizedBox(height: 12),
               Card(
                 child: ListTile(
@@ -81,17 +84,17 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _summaryCards(LocalRideSession session) {
+  Widget _summaryCards(LocalRideSession session, SpeedUnit speedUnit) {
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
         _summaryCard('Duration', '${session.activeDurationS}s'),
         _summaryCard('Distance', '${session.distanceM.toStringAsFixed(0)}m'),
-        _summaryCard(
-            'Max speed', '${session.maxSpeedMps.toStringAsFixed(1)} m/s'),
-        _summaryCard(
-            'Avg speed', '${session.avgSpeedMps.toStringAsFixed(1)} m/s'),
+        _summaryCard('Max speed',
+            speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)),
+        _summaryCard('Avg speed',
+            speedUnit.formatFromMetersPerSecond(session.avgSpeedMps)),
       ],
     );
   }
@@ -142,6 +145,7 @@ class SessionDetailScreen extends ConsumerWidget {
             TileLayer(
               urlTemplate: MapTileProviderConfig.openStreetMap.urlTemplate,
               subdomains: MapTileProviderConfig.openStreetMap.subdomains,
+              userAgentPackageName: 'com.goofyrider.mobile',
             ),
             PolylineLayer(
               polylines: <Polyline>[
@@ -149,6 +153,16 @@ class SessionDetailScreen extends ConsumerWidget {
                   points: route,
                   strokeWidth: 4,
                   color: const Color(0xFF59C3FF),
+                ),
+              ],
+            ),
+            MarkerLayer(
+              markers: <Marker>[
+                Marker(
+                  point: route.last,
+                  width: 30,
+                  height: 30,
+                  child: const Icon(Icons.flag, size: 22),
                 ),
               ],
             ),

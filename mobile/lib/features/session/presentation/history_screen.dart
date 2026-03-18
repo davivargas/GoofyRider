@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_empty_view.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
@@ -16,6 +18,7 @@ class HistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<LocalRideSession>> history =
         ref.watch(historyProvider);
+    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('History')),
@@ -51,7 +54,9 @@ class HistoryScreen extends ConsumerWidget {
                     onTap: session.localId > 0
                         ? () => context.go(
                               RoutePaths.sessionDetail.replaceAll(
-                                  ':sessionId', session.localId.toString()),
+                                ':sessionId',
+                                session.localId.toString(),
+                              ),
                             )
                         : null,
                     title: Text(
@@ -60,8 +65,8 @@ class HistoryScreen extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      'Duration ${session.activeDurationS}s • Distance ${session.distanceM.toStringAsFixed(0)}m\n'
-                      'Max ${session.maxSpeedMps.toStringAsFixed(1)} m/s',
+                      'Duration ${session.activeDurationS}s | Distance ${session.distanceM.toStringAsFixed(0)}m\n'
+                      'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
                     ),
                     trailing: _SyncBadge(state: session.state),
                   ),
@@ -96,8 +101,10 @@ class _SyncBadge extends StatelessWidget {
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(text,
-          style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }

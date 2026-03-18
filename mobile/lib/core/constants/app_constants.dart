@@ -26,7 +26,8 @@ class MapTileProviderConfig {
   final List<String> subdomains;
 
   static const MapTileProviderConfig openStreetMap = MapTileProviderConfig(
-    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '© OpenStreetMap contributors',
+    subdomains: <String>[],
   );
 }
