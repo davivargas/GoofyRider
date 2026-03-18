@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   backend:
@@ -33,20 +34,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install backend deps
-        working-directory: goofyrider/backend
+        working-directory: backend
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
 
       - name: Run migrations
-        working-directory: goofyrider/backend
+        working-directory: backend
         run: alembic upgrade head
 
       - name: Run backend tests
-        working-directory: goofyrider/backend
+        working-directory: backend
         run: pytest
 
   mobile:
@@ -60,13 +61,13 @@ jobs:
           channel: stable
 
       - name: Install mobile deps
-        working-directory: goofyrider/mobile
+        working-directory: mobile
         run: flutter pub get
 
       - name: Analyze mobile
-        working-directory: goofyrider/mobile
+        working-directory: mobile
         run: flutter analyze
 
       - name: Run mobile tests
-        working-directory: goofyrider/mobile
+        working-directory: mobile
         run: flutter test
