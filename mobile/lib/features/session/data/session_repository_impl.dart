@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 
@@ -32,7 +32,8 @@ class SessionRepositoryImpl implements SessionRepository {
       startedAt: DateTime.now().toUtc(),
       resortId: resortId,
     );
-    final LocalRideSession? created = await _localDatabase.getSessionById(localId);
+    final LocalRideSession? created =
+        await _localDatabase.getSessionById(localId);
     if (created == null) {
       throw StateError('Local session was not created.');
     }
@@ -43,7 +44,8 @@ class SessionRepositoryImpl implements SessionRepository {
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
     final LocalRideSession session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.paused);
-    await _localDatabase.updateSessionState(localSessionId, LocalSessionState.paused);
+    await _localDatabase.updateSessionState(
+        localSessionId, LocalSessionState.paused);
     return (await _localDatabase.getSessionById(localSessionId))!;
   }
 
@@ -51,12 +53,14 @@ class SessionRepositoryImpl implements SessionRepository {
   Future<LocalRideSession> resumeLocalSession(int localSessionId) async {
     final LocalRideSession session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.recording);
-    await _localDatabase.updateSessionState(localSessionId, LocalSessionState.recording);
+    await _localDatabase.updateSessionState(
+        localSessionId, LocalSessionState.recording);
     return (await _localDatabase.getSessionById(localSessionId))!;
   }
 
   @override
-  Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point) async {
+  Future<void> appendLocationPoint(
+      int localSessionId, NewSessionPoint point) async {
     final LocalRideSession session = await _requireSession(localSessionId);
     if (session.state != LocalSessionState.recording) {
       return;
@@ -88,11 +92,15 @@ class SessionRepositoryImpl implements SessionRepository {
       acceptedForAnalytics: acceptance.acceptedForAnalytics,
     );
 
-    await _localDatabase.insertPoint(localSessionId: localSessionId, point: savedPoint);
+    await _localDatabase.insertPoint(
+        localSessionId: localSessionId, point: savedPoint);
   }
 
   @override
-  Future<LocalRideSession> finishLocalSession(int localSessionId) async {
+  Future<LocalRideSession> finishLocalSession(
+    int localSessionId, {
+    int? activeDurationS,
+  }) async {
     final LocalRideSession session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.locallyCompleted);
 
@@ -100,10 +108,11 @@ class SessionRepositoryImpl implements SessionRepository {
       localSessionId,
       onlyAccepted: true,
     );
-    final int activeDurationS = _computeActiveDurationSeconds(accepted);
+    final int effectiveDurationS =
+        activeDurationS ?? _computeActiveDurationSeconds(accepted);
     final SessionStats stats = _analyticsEngine.computeStats(
       acceptedPoints: accepted,
-      activeDurationS: activeDurationS,
+      activeDurationS: effectiveDurationS,
     );
 
     final DateTime endedAt = DateTime.now().toUtc();
@@ -114,7 +123,8 @@ class SessionRepositoryImpl implements SessionRepository {
       stats: stats,
     );
 
-    final LocalRideSession completed = (await _localDatabase.getSessionById(localSessionId))!;
+    final LocalRideSession completed =
+        (await _localDatabase.getSessionById(localSessionId))!;
     return completed;
   }
 
@@ -148,7 +158,8 @@ class SessionRepositoryImpl implements SessionRepository {
       );
       await _localDatabase.incrementSyncAttempt(localSessionId);
 
-      final LocalRideSession syncing = (await _localDatabase.getSessionById(localSessionId))!;
+      final LocalRideSession syncing =
+          (await _localDatabase.getSessionById(localSessionId))!;
 
       String? remoteId = syncing.remoteId;
       if (remoteId == null || remoteId.isEmpty) {
@@ -164,18 +175,24 @@ class SessionRepositoryImpl implements SessionRepository {
         );
       }
 
-      final List<LocalSessionPoint> acceptedPoints = await _localDatabase.listPoints(
+      final List<LocalSessionPoint> acceptedPoints =
+          await _localDatabase.listPoints(
         localSessionId,
         onlyAccepted: true,
       );
 
-      final Set<int> existingOffsets = await _fetchExistingRemoteOffsets(remoteId);
+      final Set<int> existingOffsets =
+          await _fetchExistingRemoteOffsets(remoteId);
       final List<LocalSessionPoint> uploadable = acceptedPoints
-          .where((LocalSessionPoint point) => !existingOffsets.contains(point.tOffsetMs))
+          .where((LocalSessionPoint point) =>
+              !existingOffsets.contains(point.tOffsetMs))
           .toList(growable: false);
 
-      for (int index = 0; index < uploadable.length; index += SessionConstants.uploadBatchSize) {
-        final int end = min(index + SessionConstants.uploadBatchSize, uploadable.length);
+      for (int index = 0;
+          index < uploadable.length;
+          index += SessionConstants.uploadBatchSize) {
+        final int end =
+            min(index + SessionConstants.uploadBatchSize, uploadable.length);
         final List<LocalSessionPoint> batch = uploadable.sublist(index, end);
 
         await _api.uploadPointBatch(
@@ -207,7 +224,8 @@ class SessionRepositoryImpl implements SessionRepository {
         elevationLossM: syncing.elevationLossM,
       );
 
-      await _localDatabase.updateSessionState(localSessionId, LocalSessionState.synced);
+      await _localDatabase.updateSessionState(
+          localSessionId, LocalSessionState.synced);
       return (await _localDatabase.getSessionById(localSessionId))!;
     } on DioException catch (exception) {
       final String message = mapDioException(exception).message;
@@ -253,20 +271,26 @@ class SessionRepositoryImpl implements SessionRepository {
         .map(_mapRemoteAsLocal)
         .toList(growable: false);
 
-    final List<LocalRideSession> merged = <LocalRideSession>[...local, ...remoteOnly];
-    merged.sort((LocalRideSession a, LocalRideSession b) => b.startedAt.compareTo(a.startedAt));
+    final List<LocalRideSession> merged = <LocalRideSession>[
+      ...local,
+      ...remoteOnly
+    ];
+    merged.sort((LocalRideSession a, LocalRideSession b) =>
+        b.startedAt.compareTo(a.startedAt));
     return merged;
   }
 
   @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
     final LocalRideSession session = await _requireSession(localSessionId);
-    final List<LocalSessionPoint> points = await _localDatabase.listPoints(localSessionId);
+    final List<LocalSessionPoint> points =
+        await _localDatabase.listPoints(localSessionId);
     final List<LocalSessionPoint> accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
 
-    return SessionDetail(session: session, points: points, acceptedPoints: accepted);
+    return SessionDetail(
+        session: session, points: points, acceptedPoints: accepted);
   }
 
   @override
@@ -275,7 +299,8 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<LocalRideSession> _requireSession(int localSessionId) async {
-    final LocalRideSession? session = await _localDatabase.getSessionById(localSessionId);
+    final LocalRideSession? session =
+        await _localDatabase.getSessionById(localSessionId);
     if (session == null) {
       throw StateError('Session not found: $localSessionId');
     }
@@ -293,7 +318,8 @@ class SessionRepositoryImpl implements SessionRepository {
           .recordedAt
           .difference(accepted[index - 1].recordedAt)
           .inSeconds;
-      if (delta >= SessionConstants.minDeltaSeconds && delta <= SessionConstants.maxDeltaSeconds) {
+      if (delta >= SessionConstants.minDeltaSeconds &&
+          delta <= SessionConstants.maxDeltaSeconds) {
         total += delta;
       }
     }
@@ -302,7 +328,8 @@ class SessionRepositoryImpl implements SessionRepository {
 
   Future<Set<int>> _fetchExistingRemoteOffsets(String remoteId) async {
     try {
-      final List<Map<String, dynamic>> remotePoints = await _api.getRemoteSessionPoints(remoteId);
+      final List<Map<String, dynamic>> remotePoints =
+          await _api.getRemoteSessionPoints(remoteId);
       return remotePoints
           .map((Map<String, dynamic> point) => point['t_offset_ms'] as int)
           .toSet();
@@ -313,7 +340,8 @@ class SessionRepositoryImpl implements SessionRepository {
 
   LocalRideSession _mapRemoteAsLocal(Map<String, dynamic> raw) {
     final String id = raw['id'] as String;
-    final Map<String, dynamic>? resortSummary = raw['resort'] as Map<String, dynamic>?;
+    final Map<String, dynamic>? resortSummary =
+        raw['resort'] as Map<String, dynamic>?;
 
     return LocalRideSession(
       localId: -id.hashCode.abs(),

@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import '../../../core/constants/session_constants.dart';
 
@@ -199,10 +199,11 @@ class SessionAnalyticsEngine {
     }
 
     final double? accuracy = point.accuracyM;
-    if (accuracy != null && accuracy > SessionConstants.softAccuracyThresholdMeters) {
+    if (accuracy != null &&
+        accuracy > SessionConstants.softAccuracyThresholdMeters) {
       return const PointAcceptanceResult(
         acceptedForAnalytics: false,
-        acceptedForReplay: false,
+        acceptedForReplay: true,
         reason: 'accuracy_too_low',
       );
     }
@@ -225,15 +226,14 @@ class SessionAnalyticsEngine {
       );
     }
 
-    final int deltaS = point.recordedAt
-        .difference(previousAcceptedPoint.recordedAt)
-        .inSeconds;
+    final int deltaS =
+        point.recordedAt.difference(previousAcceptedPoint.recordedAt).inSeconds;
 
     if (deltaS < SessionConstants.minDeltaSeconds ||
         deltaS > SessionConstants.maxDeltaSeconds) {
       return const PointAcceptanceResult(
         acceptedForAnalytics: false,
-        acceptedForReplay: false,
+        acceptedForReplay: true,
         reason: 'invalid_delta',
       );
     }
@@ -249,7 +249,7 @@ class SessionAnalyticsEngine {
     if (impliedSpeed > SessionConstants.maxSpeedMetersPerSecond) {
       return const PointAcceptanceResult(
         acceptedForAnalytics: false,
-        acceptedForReplay: false,
+        acceptedForReplay: true,
         reason: 'speed_outlier',
       );
     }
@@ -286,7 +286,8 @@ class SessionAnalyticsEngine {
     for (int index = 1; index < acceptedPoints.length; index++) {
       final LocalSessionPoint previous = acceptedPoints[index - 1];
       final LocalSessionPoint current = acceptedPoints[index];
-      final int deltaS = current.recordedAt.difference(previous.recordedAt).inSeconds;
+      final int deltaS =
+          current.recordedAt.difference(previous.recordedAt).inSeconds;
       if (deltaS <= 0) {
         continue;
       }
@@ -311,7 +312,8 @@ class SessionAnalyticsEngine {
       }
     }
 
-    final double avgSpeed = activeDurationS == 0 ? 0 : distance / activeDurationS;
+    final double avgSpeed =
+        activeDurationS == 0 ? 0 : distance / activeDurationS;
 
     final (int? gain, int? loss) = _computeElevation(acceptedPoints);
 
@@ -340,9 +342,11 @@ class SessionAnalyticsEngine {
     double? previousSmoothed;
 
     for (int index = 0; index < altitudes.length; index++) {
-      final int start = math.max(0, index - SessionConstants.elevationWindow + 1);
+      final int start =
+          math.max(0, index - SessionConstants.elevationWindow + 1);
       final List<double> window = altitudes.sublist(start, index + 1);
-      final double smoothed = window.reduce((double a, double b) => a + b) / window.length;
+      final double smoothed =
+          window.reduce((double a, double b) => a + b) / window.length;
 
       if (previousSmoothed != null) {
         final double delta = smoothed - previousSmoothed;
@@ -361,7 +365,10 @@ class SessionAnalyticsEngine {
   }
 
   bool _isValidCoordinate(double latitude, double longitude) {
-    return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+    return latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
   }
 }
 

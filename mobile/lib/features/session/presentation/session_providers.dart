@@ -1,4 +1,4 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../auth/presentation/auth_providers.dart';
@@ -33,7 +33,16 @@ final recordingControllerProvider =
 );
 
 final historyProvider = FutureProvider.autoDispose(
-  (ref) => ref.watch(sessionRepositoryProvider).listLocalAndRemoteSessionHistory(),
+  (ref) {
+    ref.watch(
+      recordingControllerProvider.select(
+        (RecordingViewState state) => state.historyRevision,
+      ),
+    );
+    return ref
+        .watch(sessionRepositoryProvider)
+        .listLocalAndRemoteSessionHistory();
+  },
 );
 
 final sessionDetailProvider = FutureProvider.family.autoDispose(
@@ -44,4 +53,3 @@ final sessionDetailProvider = FutureProvider.family.autoDispose(
 final unsyncedSessionCountProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(sessionRepositoryProvider).unsyncedCount(),
 );
-

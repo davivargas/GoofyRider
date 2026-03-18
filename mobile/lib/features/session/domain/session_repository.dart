@@ -1,11 +1,14 @@
-﻿import 'session_models.dart';
+import 'session_models.dart';
 
 abstract class SessionRepository {
   Future<LocalRideSession> startLocalSession({String? resortId});
   Future<LocalRideSession> pauseLocalSession(int localSessionId);
   Future<LocalRideSession> resumeLocalSession(int localSessionId);
   Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point);
-  Future<LocalRideSession> finishLocalSession(int localSessionId);
+  Future<LocalRideSession> finishLocalSession(
+    int localSessionId, {
+    int? activeDurationS,
+  });
   Future<LocalRideSession?> recoverInProgressSession();
   Future<SessionStats> computeSessionStats(int localSessionId);
   Future<LocalRideSession> syncSession(int localSessionId);
