@@ -62,6 +62,7 @@ class FakeSessionPointRepository:
     def __init__(self) -> None:
         self.batches: list[list[object]] = []
         self.did_commit = False
+        self.did_rollback = False
         self.offsets_by_session: dict[object, set[int]] = {}
 
     def add_batch(self, points):
@@ -78,6 +79,9 @@ class FakeSessionPointRepository:
 
     def commit(self):
         self.did_commit = True
+
+    def rollback(self):
+        self.did_rollback = True
 
 
 def _build_service(
@@ -189,3 +193,31 @@ def test_upload_points_batch_skips_existing_offsets() -> None:
     )
 
     assert inserted == 1
+
+
+def test_upload_points_batch_dedupes_duplicate_offsets_in_single_request() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    point_repo = FakeSessionPointRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+
+    service = _build_service(
+        ride_session_repository=ride_sessions,
+        session_point_repository=point_repo,
+    )
+
+    inserted = service.upload_points_batch(
+        session_id=draft_session.id,
+        user_id=user_id,
+        points=[
+            SessionPointInputData(t_offset_ms=0, latitude=50.0, longitude=-122.0),
+            SessionPointInputData(t_offset_ms=0, latitude=50.1, longitude=-122.1),
+            SessionPointInputData(t_offset_ms=1000, latitude=50.001, longitude=-122.001),
+        ],
+    )
+
+    assert inserted == 2
+    assert len(point_repo.batches) == 1
+    inserted_offsets = {point.t_offset_ms for point in point_repo.batches[0]}
+    assert inserted_offsets == {0, 1000}

@@ -5,6 +5,8 @@ from datetime import UTC
 from datetime import datetime
 from typing import Protocol
 
+from sqlalchemy.exc import IntegrityError
+
 from app.models.resort import Resort
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
@@ -81,6 +83,9 @@ class SessionPointRepositoryProtocol(Protocol):
     def commit(self) -> None:
         ...
 
+    def rollback(self) -> None:
+        ...
+
 
 class SessionService:
     def __init__(
@@ -120,32 +125,18 @@ class SessionService:
         if ride_session.status != RideSessionStatus.DRAFT:
             raise ConflictError("Points can only be uploaded to draft sessions.")
 
-        requested_offsets = [point.t_offset_ms for point in points]
+        deduped_points = self._dedupe_points_by_offset(points)
+        requested_offsets = [point.t_offset_ms for point in deduped_points]
         existing_offsets = self._session_point_repository.existing_offsets(
             session_id=ride_session.id,
             offsets=requested_offsets,
         )
 
-        models = [
-            SessionPoint(
-                session_id=ride_session.id,
-                t_offset_ms=point.t_offset_ms,
-                latitude=point.latitude,
-                longitude=point.longitude,
-                accuracy_m=point.accuracy_m,
-                altitude_m=point.altitude_m,
-                speed_mps=point.speed_mps,
-                heading_deg=point.heading_deg,
-            )
-            for point in points
-            if point.t_offset_ms not in existing_offsets
-        ]
-
-        if models:
-            self._session_point_repository.add_batch(models)
-            self._session_point_repository.commit()
-
-        return len(models)
+        return self._insert_new_points_with_idempotency(
+            session_id=ride_session.id,
+            points=deduped_points,
+            existing_offsets=existing_offsets,
+        )
 
     def complete_session(
         self,
@@ -202,3 +193,80 @@ class SessionService:
         if ride_session is None:
             raise NotFoundError("Session not found.")
         return ride_session
+
+    def _dedupe_points_by_offset(
+        self,
+        points: Sequence[SessionPointInputData],
+    ) -> list[SessionPointInputData]:
+        deduped: list[SessionPointInputData] = []
+        seen_offsets: set[int] = set()
+        for point in points:
+            if point.t_offset_ms in seen_offsets:
+                continue
+            seen_offsets.add(point.t_offset_ms)
+            deduped.append(point)
+        return deduped
+
+    def _insert_new_points_with_idempotency(
+        self,
+        session_id: uuid.UUID,
+        points: Sequence[SessionPointInputData],
+        existing_offsets: set[int],
+    ) -> int:
+        models = self._build_models(
+            session_id=session_id,
+            points=points,
+            existing_offsets=existing_offsets,
+        )
+        if not models:
+            return 0
+
+        try:
+            self._session_point_repository.add_batch(models)
+            self._session_point_repository.commit()
+            return len(models)
+        except IntegrityError:
+            self._session_point_repository.rollback()
+
+        latest_existing_offsets = self._session_point_repository.existing_offsets(
+            session_id=session_id,
+            offsets=[point.t_offset_ms for point in points],
+        )
+        retry_models = self._build_models(
+            session_id=session_id,
+            points=points,
+            existing_offsets=latest_existing_offsets,
+        )
+        if not retry_models:
+            return 0
+
+        try:
+            self._session_point_repository.add_batch(retry_models)
+            self._session_point_repository.commit()
+            return len(retry_models)
+        except IntegrityError as exc:
+            self._session_point_repository.rollback()
+            raise ConflictError(
+                "Duplicate point offsets detected while uploading points."
+            ) from exc
+
+    def _build_models(
+        self,
+        session_id: uuid.UUID,
+        points: Sequence[SessionPointInputData],
+        existing_offsets: set[int],
+    ) -> list[SessionPoint]:
+        return [
+            SessionPoint(
+                session_id=session_id,
+                t_offset_ms=point.t_offset_ms,
+                latitude=point.latitude,
+                longitude=point.longitude,
+                accuracy_m=point.accuracy_m,
+                altitude_m=point.altitude_m,
+                speed_mps=point.speed_mps,
+                heading_deg=point.heading_deg,
+            )
+            for point in points
+            if point.t_offset_ms not in existing_offsets
+        ]
