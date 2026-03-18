@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,11 +22,13 @@ class FakeAuthRepository implements AuthRepository {
   Future<String?> currentRefreshToken() async => 'refresh';
 
   @override
-  Future<AuthSession> login({required String email, required String password}) async {
+  Future<AuthSession> login(
+      {required String email, required String password}) async {
     return const AuthSession(
       accessToken: 'token',
       refreshToken: 'refresh',
-      user: UserProfile(id: '1', email: 'test@example.com', displayName: 'Tester'),
+      user: UserProfile(
+          id: '1', email: 'test@example.com', displayName: 'Tester'),
     );
   }
 
@@ -51,7 +53,8 @@ class FakeAuthRepository implements AuthRepository {
 
 class FakeLocationRepository implements LocationTrackingRepository {
   @override
-  Future<LocationPermissionState> ensurePermissions() async => LocationPermissionState.granted;
+  Future<LocationPermissionState> ensurePermissions() async =>
+      LocationPermissionState.granted;
 
   @override
   Future<bool> isServiceEnabled() async => true;
@@ -85,13 +88,18 @@ class FakeSessionRepository implements SessionRepository {
   bool syncCalled = false;
 
   @override
-  Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point) async {}
+  Future<void> appendLocationPoint(
+      int localSessionId, NewSessionPoint point) async {}
 
   @override
-  Future<SessionStats> computeSessionStats(int localSessionId) async => SessionStats.zero;
+  Future<SessionStats> computeSessionStats(int localSessionId) async =>
+      SessionStats.zero;
 
   @override
-  Future<LocalRideSession> finishLocalSession(int localSessionId) async {
+  Future<LocalRideSession> finishLocalSession(
+    int localSessionId, {
+    int? activeDurationS,
+  }) async {
     return _session(LocalSessionState.syncPending);
   }
 
@@ -101,22 +109,27 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async => <LocalRideSession>[];
+  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async =>
+      <LocalRideSession>[];
 
   @override
-  Future<LocalRideSession> pauseLocalSession(int localSessionId) async => _session(LocalSessionState.paused);
+  Future<LocalRideSession> pauseLocalSession(int localSessionId) async =>
+      _session(LocalSessionState.paused);
 
   @override
   Future<LocalRideSession?> recoverInProgressSession() async => null;
 
   @override
-  Future<LocalRideSession> resumeLocalSession(int localSessionId) async => _session(LocalSessionState.recording);
+  Future<LocalRideSession> resumeLocalSession(int localSessionId) async =>
+      _session(LocalSessionState.recording);
 
   @override
-  Future<LocalRideSession> retryFailedSync(int localSessionId) async => _session(LocalSessionState.synced);
+  Future<LocalRideSession> retryFailedSync(int localSessionId) async =>
+      _session(LocalSessionState.synced);
 
   @override
-  Future<LocalRideSession> startLocalSession({String? resortId}) async => _session(LocalSessionState.recording);
+  Future<LocalRideSession> startLocalSession({String? resortId}) async =>
+      _session(LocalSessionState.recording);
 
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
@@ -154,14 +167,16 @@ class FakeSessionRepository implements SessionRepository {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('login -> record -> finish -> sync flow', (WidgetTester tester) async {
+  testWidgets('login -> record -> finish -> sync flow',
+      (WidgetTester tester) async {
     final FakeSessionRepository fakeSessionRepository = FakeSessionRepository();
 
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
         authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
         sessionRepositoryProvider.overrideWithValue(fakeSessionRepository),
-        locationTrackingRepositoryProvider.overrideWithValue(FakeLocationRepository()),
+        locationTrackingRepositoryProvider
+            .overrideWithValue(FakeLocationRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -173,12 +188,14 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byType(TextFormField).at(0), 'test@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'test@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
     await tester.tap(find.text('Log In'));
     await tester.pumpAndSettle();
 
-    expect(container.read(authControllerProvider).status, AuthStatus.authenticated);
+    expect(container.read(authControllerProvider).status,
+        AuthStatus.authenticated);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(

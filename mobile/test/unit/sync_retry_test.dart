@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
@@ -30,7 +30,8 @@ class FakeSessionRepository implements SessionRepository {
   final List<int> syncedIds = <int>[];
 
   @override
-  Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point) async {}
+  Future<void> appendLocationPoint(
+      int localSessionId, NewSessionPoint point) async {}
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
@@ -38,7 +39,10 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<LocalRideSession> finishLocalSession(int localSessionId) async {
+  Future<LocalRideSession> finishLocalSession(
+    int localSessionId, {
+    int? activeDurationS,
+  }) async {
     throw UnimplementedError();
   }
 
@@ -80,7 +84,8 @@ class FakeSessionRepository implements SessionRepository {
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
     syncedIds.add(localSessionId);
-    return sessions.firstWhere((LocalRideSession it) => it.localId == localSessionId);
+    return sessions
+        .firstWhere((LocalRideSession it) => it.localId == localSessionId);
   }
 
   @override

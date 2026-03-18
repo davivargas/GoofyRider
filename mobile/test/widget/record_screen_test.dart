@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,20 +19,26 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<bool> isServiceEnabled() async => true;
 
   @override
-  Stream<LocationSample> watchPosition() => const Stream<LocationSample>.empty();
+  Stream<LocationSample> watchPosition() =>
+      const Stream<LocationSample>.empty();
 }
 
 class FakeSessionRepository implements SessionRepository {
   LocalRideSession? session;
 
   @override
-  Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point) async {}
+  Future<void> appendLocationPoint(
+      int localSessionId, NewSessionPoint point) async {}
 
   @override
-  Future<SessionStats> computeSessionStats(int localSessionId) async => SessionStats.zero;
+  Future<SessionStats> computeSessionStats(int localSessionId) async =>
+      SessionStats.zero;
 
   @override
-  Future<LocalRideSession> finishLocalSession(int localSessionId) async {
+  Future<LocalRideSession> finishLocalSession(
+    int localSessionId, {
+    int? activeDurationS,
+  }) async {
     session = _buildSession(LocalSessionState.syncPending);
     return session!;
   }
@@ -43,7 +49,8 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async => <LocalRideSession>[];
+  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async =>
+      <LocalRideSession>[];
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
@@ -106,14 +113,16 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 void main() {
-  testWidgets('record screen toggles from start to finish flow', (WidgetTester tester) async {
+  testWidgets('record screen toggles from start to finish flow',
+      (WidgetTester tester) async {
     final FakeSessionRepository fakeRepository = FakeSessionRepository();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
           sessionRepositoryProvider.overrideWithValue(fakeRepository),
-          locationTrackingRepositoryProvider.overrideWithValue(FakeLocationRepository()),
+          locationTrackingRepositoryProvider
+              .overrideWithValue(FakeLocationRepository()),
         ],
         child: const MaterialApp(home: RecordScreen()),
       ),
@@ -126,5 +135,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Finish'), findsOneWidget);
+
+    await tester.tap(find.text('Finish'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start Recording'), findsOneWidget);
   });
 }
