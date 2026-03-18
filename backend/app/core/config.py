@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
@@ -7,11 +8,10 @@ load_dotenv()
 
 def get_database_url() -> str:
     database_url = os.getenv("DATABASE_URL")
+    if database_url is not None and database_url.strip():
+        return database_url.strip()
 
-    if not database_url:
-        raise ValueError("DATABASE_URL is not set.")
-
-    return database_url
+    return _build_database_url_from_postgres_env()
 
 
 def get_jwt_secret_key() -> str:
@@ -53,6 +53,29 @@ def get_sqlalchemy_echo() -> bool:
         return False
 
     raise ValueError("SQLALCHEMY_ECHO must be a boolean value.")
+
+
+def _build_database_url_from_postgres_env() -> str:
+    user = _get_required_env("POSTGRES_USER")
+    password = _get_required_env("POSTGRES_PASSWORD")
+    host = _get_required_env("POSTGRES_HOST")
+    db_name = _get_required_env("POSTGRES_DB")
+
+    if not all([user, password, host, db_name]):
+        raise ValueError("DATABASE_URL is not set.")
+
+    port = _get_positive_int("POSTGRES_PORT", default=5432)
+    encoded_password = quote_plus(password)
+    return f"postgresql+psycopg://{user}:{encoded_password}@{host}:{port}/{db_name}"
+
+
+def _get_required_env(env_name: str) -> str:
+    raw_value = os.getenv(env_name)
+    if raw_value is None:
+        return ""
+
+    normalized = raw_value.strip()
+    return normalized
 
 
 def _get_positive_int(env_name: str, default: int) -> int:

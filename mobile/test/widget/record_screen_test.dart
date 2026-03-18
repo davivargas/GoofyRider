@@ -11,12 +11,23 @@ import 'package:goofyrider_mobile/features/session/presentation/session_provider
 
 class FakeLocationRepository implements LocationTrackingRepository {
   @override
+  Future<LocationPermissionState> checkPermissions() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
   Future<LocationPermissionState> ensurePermissions() async {
     return LocationPermissionState.granted;
   }
 
   @override
   Future<bool> isServiceEnabled() async => true;
+
+  @override
+  Future<bool> openAppSettings() async => true;
+
+  @override
+  Future<bool> openLocationSettings() async => true;
 
   @override
   Stream<LocationSample> watchPosition() =>

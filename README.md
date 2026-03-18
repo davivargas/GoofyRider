@@ -67,6 +67,8 @@ It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 ```text
 goofyrider/
   backend/
+    Dockerfile
+    .dockerignore
     app/
       api/
       core/
@@ -98,8 +100,23 @@ docker compose up -d
 
 ### 2. Backend
 
+Containerized (recommended for parity):
+
 ```bash
-cd goofyrider/backend
+docker compose up --build backend
+```
+
+This starts:
+- `db` (PostgreSQL)
+- `backend` (FastAPI + Alembic migration on startup)
+
+API docs:
+- `http://127.0.0.1:8000/docs`
+
+Local Python workflow (optional):
+
+```bash
+cd backend
 python -m venv .venv
 # Windows
 .venv\Scripts\activate
@@ -111,13 +128,10 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-API docs:
-- `http://127.0.0.1:8000/docs`
-
 ### 3. Mobile
 
 ```bash
-cd goofyrider/mobile
+cd mobile
 flutter pub get
 flutter run
 ```
@@ -129,15 +143,23 @@ If running Android emulator against local backend, default base URL is configure
 
 ### Backend
 
+Containerized smoke check:
+
 ```bash
-cd goofyrider/backend
+docker compose up --build -d backend
+```
+
+Local Python tests:
+
+```bash
+cd backend
 .venv\Scripts\python.exe -m pytest
 ```
 
 ### Mobile
 
 ```bash
-cd goofyrider/mobile
+cd mobile
 flutter test
 ```
 

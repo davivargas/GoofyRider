@@ -27,7 +27,10 @@ enum LocationPermissionState {
 }
 
 abstract class LocationTrackingRepository {
+  Future<LocationPermissionState> checkPermissions();
   Future<LocationPermissionState> ensurePermissions();
   Future<bool> isServiceEnabled();
+  Future<bool> openAppSettings();
+  Future<bool> openLocationSettings();
   Stream<LocationSample> watchPosition();
 }

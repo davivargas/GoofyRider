@@ -53,11 +53,21 @@ class FakeAuthRepository implements AuthRepository {
 
 class FakeLocationRepository implements LocationTrackingRepository {
   @override
+  Future<LocationPermissionState> checkPermissions() async =>
+      LocationPermissionState.granted;
+
+  @override
   Future<LocationPermissionState> ensurePermissions() async =>
       LocationPermissionState.granted;
 
   @override
   Future<bool> isServiceEnabled() async => true;
+
+  @override
+  Future<bool> openAppSettings() async => true;
+
+  @override
+  Future<bool> openLocationSettings() async => true;
 
   @override
   Stream<LocationSample> watchPosition() {

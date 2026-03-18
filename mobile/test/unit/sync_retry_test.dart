@@ -8,12 +8,27 @@ import 'package:goofyrider_mobile/features/session/presentation/recording_contro
 
 class FakeLocationRepository implements LocationTrackingRepository {
   @override
+  Future<LocationPermissionState> checkPermissions() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
   Future<LocationPermissionState> ensurePermissions() async {
     return LocationPermissionState.granted;
   }
 
   @override
   Future<bool> isServiceEnabled() async {
+    return true;
+  }
+
+  @override
+  Future<bool> openAppSettings() async {
+    return true;
+  }
+
+  @override
+  Future<bool> openLocationSettings() async {
     return true;
   }
 

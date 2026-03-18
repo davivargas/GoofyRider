@@ -337,3 +337,56 @@ def test_sessions_points_batch_is_idempotent_on_duplicate_offsets(
     )
     assert second.status_code == 200
     assert second.json()["inserted_count"] == 0
+
+
+def test_sessions_points_batch_dedupes_offsets_within_single_payload(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Cypress Mountain")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    payload = {
+        "points": [
+            {
+                "t_offset_ms": 0,
+                "latitude": 49.3,
+                "longitude": -123.2,
+            },
+            {
+                "t_offset_ms": 0,
+                "latitude": 49.3005,
+                "longitude": -123.2005,
+            },
+            {
+                "t_offset_ms": 1000,
+                "latitude": 49.301,
+                "longitude": -123.201,
+            },
+        ]
+    }
+
+    response = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json=payload,
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["inserted_count"] == 2
+
+    points = client.get(f"/v1/sessions/{session_id}/points", headers=headers)
+    assert points.status_code == 200
+    items = points.json()["items"]
+    assert len(items) == 2
+    offsets = {item["t_offset_ms"] for item in items}
+    assert offsets == {0, 1000}

@@ -9,8 +9,43 @@ from app.core.config import get_sqlalchemy_echo
 
 def test_get_database_url_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("POSTGRES_USER", raising=False)
+    monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
+    monkeypatch.delenv("POSTGRES_HOST", raising=False)
+    monkeypatch.delenv("POSTGRES_PORT", raising=False)
+    monkeypatch.delenv("POSTGRES_DB", raising=False)
 
     with pytest.raises(ValueError, match="DATABASE_URL is not set."):
+        get_database_url()
+
+
+def test_get_database_url_builds_from_postgres_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("POSTGRES_USER", "app_user")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "pass?with:special@chars")
+    monkeypatch.setenv("POSTGRES_HOST", "db")
+    monkeypatch.setenv("POSTGRES_PORT", "5432")
+    monkeypatch.setenv("POSTGRES_DB", "goofyrider")
+
+    assert (
+        get_database_url()
+        == "postgresql+psycopg://app_user:pass%3Fwith%3Aspecial%40chars@db:5432/goofyrider"
+    )
+
+
+def test_get_database_url_rejects_invalid_postgres_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("POSTGRES_USER", "app_user")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "secret")
+    monkeypatch.setenv("POSTGRES_HOST", "db")
+    monkeypatch.setenv("POSTGRES_PORT", "invalid")
+    monkeypatch.setenv("POSTGRES_DB", "goofyrider")
+
+    with pytest.raises(ValueError, match="POSTGRES_PORT must be an integer."):
         get_database_url()
 
 
