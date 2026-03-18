@@ -2,10 +2,22 @@ import 'dart:async';
 
 import 'package:geolocator/geolocator.dart';
 
+import '../../../core/constants/session_constants.dart';
 import '../domain/location_tracking_repository.dart';
 
 class GeolocatorTrackingRepository implements LocationTrackingRepository {
   GeolocatorTrackingRepository();
+
+  @override
+  Future<LocationPermissionState> checkPermissions() async {
+    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return LocationPermissionState.serviceDisabled;
+    }
+
+    final LocationPermission permission = await Geolocator.checkPermission();
+    return _toPermissionState(permission);
+  }
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
@@ -19,19 +31,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
       permission = await Geolocator.requestPermission();
     }
 
-    if (permission == LocationPermission.denied) {
-      return LocationPermissionState.denied;
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      return LocationPermissionState.deniedForever;
-    }
-
-    if (permission == LocationPermission.whileInUse) {
-      return LocationPermissionState.grantedForegroundOnly;
-    }
-
-    return LocationPermissionState.granted;
+    return _toPermissionState(permission);
   }
 
   @override
@@ -40,15 +40,26 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<bool> openAppSettings() {
+    return Geolocator.openAppSettings();
+  }
+
+  @override
+  Future<bool> openLocationSettings() {
+    return Geolocator.openLocationSettings();
+  }
+
+  @override
   Stream<LocationSample> watchPosition() {
     final LocationSettings locationSettings = AndroidSettings(
-      accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 5,
-      intervalDuration: const Duration(seconds: 2),
+      accuracy: LocationAccuracy.high,
+      distanceFilter: SessionConstants.distanceFilterMeters.round(),
+      intervalDuration:
+          const Duration(seconds: SessionConstants.targetIntervalSeconds),
       foregroundNotificationConfig: const ForegroundNotificationConfig(
         notificationTitle: 'GoofyRider is recording your session',
         notificationText: 'Tracking route in the background',
-        enableWakeLock: true,
+        enableWakeLock: false,
       ),
     );
 
@@ -65,5 +76,21 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
         );
       },
     );
+  }
+
+  LocationPermissionState _toPermissionState(LocationPermission permission) {
+    if (permission == LocationPermission.denied) {
+      return LocationPermissionState.denied;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return LocationPermissionState.deniedForever;
+    }
+
+    if (permission == LocationPermission.whileInUse) {
+      return LocationPermissionState.grantedForegroundOnly;
+    }
+
+    return LocationPermissionState.granted;
   }
 }

@@ -18,6 +18,20 @@ enum RecordScreenPhase {
   syncPending,
 }
 
+const String _allTimePermissionMessage =
+    'Location is set to "Allow only while using the app". '
+    'Choose "Allow all the time" so tracking keeps working when the phone is locked.';
+const String _locationPermissionMessage =
+    'Location permission is required before recording.';
+const String _locationDeniedForeverMessage =
+    'Location permission is permanently denied. Open app settings to enable it.';
+const String _locationServiceDisabledMessage =
+    'Location services are turned off. Turn on GPS to record your session.';
+const String _openSettingsFailedMessage =
+    'Could not open app settings. Please open settings manually.';
+const String _openLocationSettingsFailedMessage =
+    'Could not open location settings. Please open settings manually.';
+
 class RecordingViewState {
   const RecordingViewState({
     required this.phase,
@@ -68,7 +82,7 @@ class RecordingViewState {
       permissionState == LocationPermissionState.grantedForegroundOnly;
 
   bool get canStart =>
-      hasLocationPermission &&
+      hasConfirmedBackgroundTracking &&
       phase != RecordScreenPhase.requestingPermissions &&
       phase != RecordScreenPhase.recording &&
       phase != RecordScreenPhase.paused &&
@@ -78,6 +92,9 @@ class RecordingViewState {
 
   bool get hasConfirmedBackgroundTracking =>
       permissionState == LocationPermissionState.granted;
+
+  bool get needsAlwaysOnPermission =>
+      permissionState == LocationPermissionState.grantedForegroundOnly;
 
   RecordingViewState copyWith({
     RecordScreenPhase? phase,
@@ -147,7 +164,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       state = state.copyWith(
         permissionState: permission,
         preselectedResortId: preselectedResortId,
-        clearError: true,
+        clearError: permission == LocationPermissionState.granted,
+        errorMessage: _permissionMessage(permission),
       );
       return;
     }
@@ -173,7 +191,63 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       phase: phase,
       permissionState: permission,
       recoveryCandidate: recovery,
+      clearError: permission == LocationPermissionState.granted,
+      errorMessage: _permissionMessage(permission),
     );
+  }
+
+  Future<void> refreshPermissionState() async {
+    final LocationPermissionState permission =
+        await _locationTrackingRepository.checkPermissions();
+    state = state.copyWith(
+      permissionState: permission,
+      clearError: permission == LocationPermissionState.granted,
+      errorMessage: _permissionMessage(permission),
+    );
+  }
+
+  Future<void> requestRequiredLocationPermissions() async {
+    final RecordScreenPhase previousPhase = state.phase;
+    state = state.copyWith(
+      phase: RecordScreenPhase.requestingPermissions,
+      clearError: true,
+    );
+
+    final LocationPermissionState permission =
+        await _locationTrackingRepository.ensurePermissions();
+
+    final RecordScreenPhase nextPhase;
+    if (previousPhase == RecordScreenPhase.preRecord ||
+        previousPhase == RecordScreenPhase.requestingPermissions) {
+      nextPhase = RecordScreenPhase.ready;
+    } else if (previousPhase == RecordScreenPhase.recording &&
+        permission != LocationPermissionState.granted) {
+      nextPhase = RecordScreenPhase.paused;
+    } else {
+      nextPhase = previousPhase;
+    }
+
+    state = state.copyWith(
+      phase: nextPhase,
+      permissionState: permission,
+      clearError: permission == LocationPermissionState.granted,
+      errorMessage: _permissionMessage(permission),
+    );
+  }
+
+  Future<void> openLocationPermissionSettings() async {
+    final bool opened = await _locationTrackingRepository.openAppSettings();
+    if (!opened) {
+      state = state.copyWith(errorMessage: _openSettingsFailedMessage);
+    }
+  }
+
+  Future<void> openLocationServiceSettings() async {
+    final bool opened =
+        await _locationTrackingRepository.openLocationSettings();
+    if (!opened) {
+      state = state.copyWith(errorMessage: _openLocationSettingsFailedMessage);
+    }
   }
 
   Future<void> resumeRecoveredSession() async {
@@ -182,26 +256,39 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       return;
     }
 
+    final LocationPermissionState permission =
+        await _locationTrackingRepository.checkPermissions();
+    LocalRideSession effectiveRecovery = recovery;
+    if (recovery.state == LocalSessionState.recording &&
+        permission != LocationPermissionState.granted) {
+      effectiveRecovery = await _sessionRepository.pauseLocalSession(
+        recovery.localId,
+      );
+    }
+
     state = state.copyWith(
-      session: recovery,
+      session: effectiveRecovery,
       clearRecovery: true,
-      phase: recovery.state == LocalSessionState.paused
+      phase: effectiveRecovery.state == LocalSessionState.paused
           ? RecordScreenPhase.paused
           : RecordScreenPhase.recording,
+      permissionState: permission,
+      clearError: permission == LocationPermissionState.granted,
+      errorMessage: _permissionMessage(permission),
     );
 
     final SessionDetail detail =
-        await _sessionRepository.getSessionDetail(recovery.localId);
+        await _sessionRepository.getSessionDetail(effectiveRecovery.localId);
     _acceptedPoints
       ..clear()
       ..addAll(detail.acceptedPoints);
 
     final SessionStats stats =
-        await _sessionRepository.computeSessionStats(recovery.localId);
+        await _sessionRepository.computeSessionStats(effectiveRecovery.localId);
     _elapsedBeforeActive = Duration(seconds: stats.durationS);
     _activeSegmentStartedAtUtc = null;
 
-    if (recovery.state == LocalSessionState.recording) {
+    if (effectiveRecovery.state == LocalSessionState.recording) {
       _startActiveElapsedClock();
     } else {
       _stopElapsedTicker();
@@ -217,7 +304,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       maxSpeedMps: stats.maxSpeedMps,
     );
 
-    if (state.phase == RecordScreenPhase.recording) {
+    if (state.phase == RecordScreenPhase.recording &&
+        permission == LocationPermissionState.granted) {
       await _startLocationStream();
     }
   }
@@ -227,9 +315,13 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   }
 
   Future<void> startRecording() async {
-    if (!state.hasLocationPermission) {
+    final LocationPermissionState permission =
+        await _locationTrackingRepository.ensurePermissions();
+    if (permission != LocationPermissionState.granted) {
       state = state.copyWith(
-        errorMessage: 'Location permission is required before recording.',
+        permissionState: permission,
+        clearError: false,
+        errorMessage: _permissionMessage(permission),
       );
       return;
     }
@@ -257,6 +349,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       currentSpeedMps: hasInProgressSession ? state.currentSpeedMps : 0,
       maxSpeedMps: hasInProgressSession ? state.maxSpeedMps : 0,
       elapsed: _currentElapsedDuration(),
+      permissionState: permission,
       clearError: true,
       clearSyncMessage: true,
     );
@@ -288,12 +381,25 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       return;
     }
 
+    final LocationPermissionState permission =
+        await _locationTrackingRepository.ensurePermissions();
+    if (permission != LocationPermissionState.granted) {
+      state = state.copyWith(
+        permissionState: permission,
+        clearError: false,
+        errorMessage: _permissionMessage(permission),
+      );
+      return;
+    }
+
     _startActiveElapsedClock();
     final LocalRideSession updated =
         await _sessionRepository.resumeLocalSession(session.localId);
     state = state.copyWith(
       session: updated,
       phase: RecordScreenPhase.recording,
+      permissionState: permission,
+      clearError: true,
     );
 
     await _startLocationStream();
@@ -467,10 +573,11 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
     await _sessionRepository.appendLocationPoint(session.localId, persisted);
 
-    final List<LatLng> updatedRoute = List<LatLng>.from(state.route);
-    if (acceptance.acceptedForReplay) {
-      updatedRoute.add(LatLng(sample.latitude, sample.longitude));
-    }
+    final List<LatLng> updatedRoute = _buildUpdatedRoute(
+      currentRoute: state.route,
+      acceptance: acceptance,
+      sample: sample,
+    );
 
     if (acceptance.acceptedForAnalytics) {
       _acceptedPoints.add(
@@ -491,10 +598,14 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     }
 
     final int activeDurationS = _currentElapsedDuration().inSeconds;
-    final SessionStats stats = _analyticsEngine.computeStats(
-      acceptedPoints: _acceptedPoints,
-      activeDurationS: activeDurationS,
-    );
+    final SessionStats stats = acceptance.acceptedForAnalytics
+        ? _analyticsEngine.computeStats(
+            acceptedPoints: _acceptedPoints,
+            activeDurationS: activeDurationS,
+          )
+        : _deriveStatsWithoutNewAcceptedPoint(
+            activeDurationS: activeDurationS,
+          );
 
     state = state.copyWith(
       route: updatedRoute,
@@ -504,6 +615,41 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       elapsed: _currentElapsedDuration(),
       lowAccuracy: (sample.accuracyM ?? 0) >
           SessionConstants.analyticsAccuracyThresholdMeters,
+    );
+  }
+
+  List<LatLng> _buildUpdatedRoute({
+    required List<LatLng> currentRoute,
+    required PointAcceptanceResult acceptance,
+    required LocationSample sample,
+  }) {
+    if (!acceptance.acceptedForReplay) {
+      return currentRoute;
+    }
+
+    final List<LatLng> updatedRoute = List<LatLng>.from(currentRoute)
+      ..add(LatLng(sample.latitude, sample.longitude));
+    final int overflow =
+        updatedRoute.length - SessionConstants.maxLiveRoutePoints;
+    if (overflow > 0) {
+      updatedRoute.removeRange(0, overflow);
+    }
+    return updatedRoute;
+  }
+
+  SessionStats _deriveStatsWithoutNewAcceptedPoint({
+    required int activeDurationS,
+  }) {
+    final SessionStats existing = state.liveStats;
+    final double avgSpeed =
+        activeDurationS == 0 ? 0 : existing.distanceM / activeDurationS;
+    return SessionStats(
+      durationS: activeDurationS,
+      distanceM: existing.distanceM,
+      maxSpeedMps: existing.maxSpeedMps,
+      avgSpeedMps: avgSpeed,
+      elevationGainM: existing.elevationGainM,
+      elevationLossM: existing.elevationLossM,
     );
   }
 
@@ -613,6 +759,21 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     }
 
     state = state.copyWith(historyRevision: state.historyRevision + 1);
+  }
+
+  String? _permissionMessage(LocationPermissionState permission) {
+    switch (permission) {
+      case LocationPermissionState.granted:
+        return null;
+      case LocationPermissionState.grantedForegroundOnly:
+        return _allTimePermissionMessage;
+      case LocationPermissionState.denied:
+        return _locationPermissionMessage;
+      case LocationPermissionState.deniedForever:
+        return _locationDeniedForeverMessage;
+      case LocationPermissionState.serviceDisabled:
+        return _locationServiceDisabledMessage;
+    }
   }
 
   @override

@@ -1,8 +1,9 @@
 ﻿class SessionConstants {
   SessionConstants._();
 
-  static const int targetIntervalSeconds = 2;
+  static const int targetIntervalSeconds = 3;
   static const double distanceFilterMeters = 5;
+  static const int maxLiveRoutePoints = 3000;
   static const double analyticsAccuracyThresholdMeters = 35;
   static const double softAccuracyThresholdMeters = 60;
   static const double maxSpeedMetersPerSecond = 40;

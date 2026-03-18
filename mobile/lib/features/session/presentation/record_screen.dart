@@ -7,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../domain/location_tracking_repository.dart';
 import '../domain/session_models.dart';
 import 'recording_controller.dart';
 import 'session_providers.dart';
@@ -23,22 +24,38 @@ class RecordScreen extends ConsumerStatefulWidget {
   ConsumerState<RecordScreen> createState() => _RecordScreenState();
 }
 
-class _RecordScreenState extends ConsumerState<RecordScreen> {
+class _RecordScreenState extends ConsumerState<RecordScreen>
+    with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   bool _isMapFollowing = true;
   bool _recoveryPromptVisible = false;
   bool _mapTileError = false;
   double _mapZoom = 12;
   int _lastRoutePointCount = 0;
+  String? _lastShownErrorMessage;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future<void>.microtask(() {
       ref
           .read(recordingControllerProvider.notifier)
           .bootstrap(preselectedResortId: widget.preselectedResortId);
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(recordingControllerProvider.notifier).refreshPermissionState();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -49,6 +66,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRecoveryPrompt(state);
+      _handleErrorAlert(state);
     });
 
     final List<LatLng> route = state.route;
@@ -157,6 +175,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
   }
 
   Widget _statusBanner(RecordingViewState state) {
+    final RecordingController controller =
+        ref.read(recordingControllerProvider.notifier);
     final List<String> labels = <String>[
       'Phase: ${state.phase.name}',
       'Elapsed: ${state.elapsed.inMinutes.toString().padLeft(2, '0')}:${(state.elapsed.inSeconds % 60).toString().padLeft(2, '0')}',
@@ -172,23 +192,72 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
       if (_mapTileError) 'Map tiles failing, check network signal.',
     ];
 
-    return Card(
-      color: Colors.black54,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: labels
-              .map(
-                (String text) => Chip(
-                  label: Text(text),
-                  visualDensity: VisualDensity.compact,
-                ),
-              )
-              .toList(growable: false),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Card(
+          color: Colors.black54,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: labels
+                  .map(
+                    (String text) => Chip(
+                      label: Text(text),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
         ),
-      ),
+        if (state.needsAlwaysOnPermission)
+          Card(
+            color: Colors.black54,
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  const Text(
+                    'Enable "Allow all the time" to keep tracking when your phone is locked.',
+                  ),
+                  FilledButton.tonal(
+                    onPressed: controller.requestRequiredLocationPermissions,
+                    child: const Text('Retry permission'),
+                  ),
+                  OutlinedButton(
+                    onPressed: controller.openLocationPermissionSettings,
+                    child: const Text('Open location settings'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (state.permissionState == LocationPermissionState.serviceDisabled)
+          Card(
+            color: Colors.black54,
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  const Text('Turn GPS on to keep recording accurately.'),
+                  OutlinedButton(
+                    onPressed: controller.openLocationServiceSettings,
+                    child: const Text('Open GPS settings'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -327,6 +396,59 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
         _isMapFollowing = true;
       });
     } catch (_) {}
+  }
+
+  void _handleErrorAlert(RecordingViewState state) {
+    final String? error = state.errorMessage;
+    if (!mounted) {
+      return;
+    }
+
+    if (error == null) {
+      _lastShownErrorMessage = null;
+      return;
+    }
+
+    if (_lastShownErrorMessage == error) {
+      return;
+    }
+    _lastShownErrorMessage = error;
+
+    final RecordingController controller =
+        ref.read(recordingControllerProvider.notifier);
+    final bool canOpenPermissionSettings = state.permissionState ==
+            LocationPermissionState.grantedForegroundOnly ||
+        state.permissionState == LocationPermissionState.deniedForever;
+    final bool canOpenLocationSettings =
+        state.permissionState == LocationPermissionState.serviceDisabled;
+
+    final SnackBarAction? action;
+    if (canOpenPermissionSettings) {
+      action = SnackBarAction(
+        label: 'Open settings',
+        onPressed: () {
+          controller.openLocationPermissionSettings();
+        },
+      );
+    } else if (canOpenLocationSettings) {
+      action = SnackBarAction(
+        label: 'Open GPS settings',
+        onPressed: () {
+          controller.openLocationServiceSettings();
+        },
+      );
+    } else {
+      action = null;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(error),
+          action: action,
+        ),
+      );
   }
 
   Future<void> _handleRecoveryPrompt(RecordingViewState state) async {
