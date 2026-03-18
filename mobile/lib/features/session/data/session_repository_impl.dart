@@ -66,14 +66,8 @@ class SessionRepositoryImpl implements SessionRepository {
       return;
     }
 
-    LocalSessionPoint? previousAccepted;
-    final List<LocalSessionPoint> accepted = await _localDatabase.listPoints(
-      localSessionId,
-      onlyAccepted: true,
-    );
-    if (accepted.isNotEmpty) {
-      previousAccepted = accepted.last;
-    }
+    final LocalSessionPoint? previousAccepted =
+        await _localDatabase.latestAcceptedPoint(localSessionId);
 
     final PointAcceptanceResult acceptance = _analyticsEngine.evaluate(
       previousAccepted,
@@ -187,13 +181,15 @@ class SessionRepositoryImpl implements SessionRepository {
           .where((LocalSessionPoint point) =>
               !existingOffsets.contains(point.tOffsetMs))
           .toList(growable: false);
+      final List<LocalSessionPoint> dedupedUploadable =
+          _dedupeByOffset(uploadable);
 
       for (int index = 0;
-          index < uploadable.length;
+          index < dedupedUploadable.length;
           index += SessionConstants.uploadBatchSize) {
         final int end =
-            min(index + SessionConstants.uploadBatchSize, uploadable.length);
-        final List<LocalSessionPoint> batch = uploadable.sublist(index, end);
+            min(index + SessionConstants.uploadBatchSize, dedupedUploadable.length);
+        final List<LocalSessionPoint> batch = dedupedUploadable.sublist(index, end);
 
         await _api.uploadPointBatch(
           remoteSessionId: remoteId,
@@ -336,6 +332,20 @@ class SessionRepositoryImpl implements SessionRepository {
     } on DioException {
       return <int>{};
     }
+  }
+
+  List<LocalSessionPoint> _dedupeByOffset(List<LocalSessionPoint> points) {
+    final Set<int> seenOffsets = <int>{};
+    final List<LocalSessionPoint> uniquePoints = <LocalSessionPoint>[];
+
+    for (final LocalSessionPoint point in points) {
+      if (seenOffsets.contains(point.tOffsetMs)) {
+        continue;
+      }
+      seenOffsets.add(point.tOffsetMs);
+      uniquePoints.add(point);
+    }
+    return uniquePoints;
   }
 
   LocalRideSession _mapRemoteAsLocal(Map<String, dynamic> raw) {

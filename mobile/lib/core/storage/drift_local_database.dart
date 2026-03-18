@@ -331,6 +331,27 @@ class DriftLocalDatabase extends GeneratedDatabase {
     return rows.map(_mapPoint).toList(growable: false);
   }
 
+  Future<LocalSessionPoint?> latestAcceptedPoint(int localSessionId) async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT *
+      FROM local_session_points
+      WHERE local_session_id = ?
+      AND accepted_for_analytics = 1
+      ORDER BY recorded_at DESC
+      LIMIT 1
+      ''',
+      variables: <Variable>[
+        Variable<int>(localSessionId),
+      ],
+    ).get();
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _mapPoint(rows.first);
+  }
+
   Future<void> upsertCachedResort(
     String resortId,
     Map<String, dynamic> payload,
