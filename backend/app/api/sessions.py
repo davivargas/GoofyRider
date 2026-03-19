@@ -34,11 +34,7 @@ def create_session(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
-    request = SessionCreateInput(
-        user_id=current_user.id,
-        resort_id=payload.resort_id,
-        started_at=payload.started_at,
-    )
+    request = SessionCreateInput(user_id=current_user.id, **payload.model_dump())
     try:
         ride_session = session_service.create_session(request)
     except NotFoundError as exc:
@@ -57,34 +53,7 @@ def upload_session_points_batch(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> SessionPointsBatchResponse:
-    points = [
-        SessionPointInputData(
-            t_offset_ms=point.t_offset_ms,
-            latitude=point.latitude,
-            longitude=point.longitude,
-            accuracy_m=point.accuracy_m,
-            elapsed_realtime_ns=point.elapsed_realtime_ns,
-            altitude_m=point.altitude_m,
-            vertical_accuracy_m=point.vertical_accuracy_m,
-            speed_mps=point.speed_mps,
-            speed_accuracy_mps=point.speed_accuracy_mps,
-            heading_deg=point.heading_deg,
-            bearing_accuracy_deg=point.bearing_accuracy_deg,
-            provider=point.provider,
-            is_mocked=point.is_mocked,
-            quality_class=point.quality_class,
-            quality_score=point.quality_score,
-            quality_reason=point.quality_reason,
-            filtered_latitude=point.filtered_latitude,
-            filtered_longitude=point.filtered_longitude,
-            filtered_altitude_m=point.filtered_altitude_m,
-            fused_speed_mps=point.fused_speed_mps,
-            derived_speed_mps=point.derived_speed_mps,
-            distance_delta_m=point.distance_delta_m,
-            motion_state=point.motion_state,
-        )
-        for point in payload.points
-    ]
+    points = [SessionPointInputData(**point.model_dump()) for point in payload.points]
     try:
         inserted_count = session_service.upload_points_batch(
             session_id=session_id,
@@ -112,15 +81,7 @@ def complete_session(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
-    completion = SessionCompletionInput(
-        ended_at=payload.ended_at,
-        duration_s=payload.duration_s,
-        distance_m=payload.distance_m,
-        max_speed_mps=payload.max_speed_mps,
-        avg_speed_mps=payload.avg_speed_mps,
-        elevation_gain_m=payload.elevation_gain_m,
-        elevation_loss_m=payload.elevation_loss_m,
-    )
+    completion = SessionCompletionInput(**payload.model_dump())
     try:
         ride_session = session_service.complete_session(
             session_id=session_id,
