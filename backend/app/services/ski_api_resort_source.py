@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 import re
+from collections.abc import Mapping
 from typing import Any
 from typing import Protocol
+from typing import cast
 
 import httpx
 
@@ -98,7 +100,7 @@ class ExternalResortSourceProtocol(Protocol):
 
 
 class SkiApiPageFetcherProtocol(Protocol):
-    def __call__(self, page: int, page_size: int) -> dict[str, Any]:
+    def __call__(self, page: int, page_size: int) -> object:
         ...
 
 
@@ -133,9 +135,7 @@ class SkiApiResortSource:
     def _fetch_page(self, page: int) -> dict[str, Any]:
         if self._page_fetcher is not None:
             payload = self._page_fetcher(page, self._page_size)
-            if not isinstance(payload, dict):
-                raise ValidationError("Ski API resorts payload must be an object.")
-            return payload
+            return _require_object_payload(payload)
 
         headers = _build_ski_api_headers(
             api_key=self._api_key,
@@ -156,21 +156,21 @@ class SkiApiResortSource:
         except ValueError as exc:
             raise ValidationError("Ski API returned invalid JSON.") from exc
 
-        if not isinstance(payload, dict):
-            raise ValidationError("Ski API resorts payload must be an object.")
-
-        return payload
+        return _require_object_payload(payload)
 
 
 def map_ski_api_resorts_page(payload: dict[str, Any]) -> list[ExternalResortRecord]:
     raw_records = payload.get("data")
     if not isinstance(raw_records, list):
         raise ValidationError("Ski API resorts payload must include a data list.")
+    raw_record_items = cast(list[object], raw_records)
 
     mapped_records: list[ExternalResortRecord] = []
-    for raw_record in raw_records:
-        if not isinstance(raw_record, dict):
-            raise ValidationError("Ski API resort entries must be objects.")
+    for raw_record_obj in raw_record_items:
+        raw_record = _require_object_payload(
+            raw_record_obj,
+            error_message="Ski API resort entries must be objects.",
+        )
         mapped_records.append(map_ski_api_resort(raw_record))
 
     return mapped_records
@@ -229,20 +229,22 @@ def _parse_next_page(value: Any) -> int | None:
 
 
 def _parse_location(value: Any) -> tuple[float | None, float | None]:
-    if not isinstance(value, dict):
+    location = _optional_object_payload(value)
+    if location is None:
         return None, None
 
     return (
-        _optional_float(value.get("latitude")),
-        _optional_float(value.get("longitude")),
+        _optional_float(location.get("latitude")),
+        _optional_float(location.get("longitude")),
     )
 
 
 def _parse_elevation_range(value: Any) -> tuple[int | None, int | None]:
-    if isinstance(value, dict):
+    elevation = _optional_object_payload(value)
+    if elevation is not None:
         return (
-            _optional_int(value.get("base_m")),
-            _optional_int(value.get("top_m")),
+            _optional_int(elevation.get("base_m")),
+            _optional_int(elevation.get("top_m")),
         )
 
     text = _optional_text(value)
@@ -303,3 +305,26 @@ def _optional_int(value: Any) -> int | None:
     if parsed is None:
         return None
     return int(round(parsed))
+
+
+def _require_object_payload(
+    value: object,
+    *,
+    error_message: str = "Ski API resorts payload must be an object.",
+) -> dict[str, Any]:
+    payload = _optional_object_payload(value)
+    if payload is None:
+        raise ValidationError(error_message)
+    return payload
+
+
+def _optional_object_payload(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    mapping_value = cast(Mapping[object, object], value)
+
+    payload: dict[str, Any] = {}
+    for key, item in mapping_value.items():
+        if isinstance(key, str):
+            payload[key] = item
+    return payload
