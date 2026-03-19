@@ -1,7 +1,5 @@
 import 'dart:math' as math;
 
-import '../../../core/constants/session_constants.dart';
-
 enum LocalSessionState {
   idle,
   recording,
@@ -105,6 +103,22 @@ class LocalSessionPoint {
     required this.speedMps,
     required this.headingDeg,
     required this.acceptedForAnalytics,
+    this.elapsedRealtimeNs,
+    this.verticalAccuracyM,
+    this.speedAccuracyMps,
+    this.bearingAccuracyDeg,
+    this.provider,
+    this.isMocked,
+    this.qualityClass,
+    this.qualityScore,
+    this.qualityReason,
+    this.filteredLatitude,
+    this.filteredLongitude,
+    this.filteredAltitudeM,
+    this.fusedSpeedMps,
+    this.derivedSpeedMps,
+    this.distanceDeltaM,
+    this.motionState,
   });
 
   final int id;
@@ -118,6 +132,22 @@ class LocalSessionPoint {
   final double? speedMps;
   final double? headingDeg;
   final bool acceptedForAnalytics;
+  final int? elapsedRealtimeNs;
+  final double? verticalAccuracyM;
+  final double? speedAccuracyMps;
+  final double? bearingAccuracyDeg;
+  final String? provider;
+  final bool? isMocked;
+  final String? qualityClass;
+  final double? qualityScore;
+  final String? qualityReason;
+  final double? filteredLatitude;
+  final double? filteredLongitude;
+  final double? filteredAltitudeM;
+  final double? fusedSpeedMps;
+  final double? derivedSpeedMps;
+  final double? distanceDeltaM;
+  final String? motionState;
 }
 
 class NewSessionPoint {
@@ -131,6 +161,22 @@ class NewSessionPoint {
     required this.speedMps,
     required this.headingDeg,
     required this.acceptedForAnalytics,
+    this.elapsedRealtimeNs,
+    this.verticalAccuracyM,
+    this.speedAccuracyMps,
+    this.bearingAccuracyDeg,
+    this.provider,
+    this.isMocked,
+    this.qualityClass,
+    this.qualityScore,
+    this.qualityReason,
+    this.filteredLatitude,
+    this.filteredLongitude,
+    this.filteredAltitudeM,
+    this.fusedSpeedMps,
+    this.derivedSpeedMps,
+    this.distanceDeltaM,
+    this.motionState,
   });
 
   final DateTime recordedAt;
@@ -142,6 +188,22 @@ class NewSessionPoint {
   final double? speedMps;
   final double? headingDeg;
   final bool acceptedForAnalytics;
+  final int? elapsedRealtimeNs;
+  final double? verticalAccuracyM;
+  final double? speedAccuracyMps;
+  final double? bearingAccuracyDeg;
+  final String? provider;
+  final bool? isMocked;
+  final String? qualityClass;
+  final double? qualityScore;
+  final String? qualityReason;
+  final double? filteredLatitude;
+  final double? filteredLongitude;
+  final double? filteredAltitudeM;
+  final double? fusedSpeedMps;
+  final double? derivedSpeedMps;
+  final double? distanceDeltaM;
+  final String? motionState;
 }
 
 class SessionStats {
@@ -169,207 +231,6 @@ class SessionStats {
     elevationGainM: null,
     elevationLossM: null,
   );
-}
-
-class PointAcceptanceResult {
-  const PointAcceptanceResult({
-    required this.acceptedForAnalytics,
-    required this.acceptedForReplay,
-    required this.reason,
-  });
-
-  final bool acceptedForAnalytics;
-  final bool acceptedForReplay;
-  final String reason;
-}
-
-class SessionAnalyticsEngine {
-  const SessionAnalyticsEngine();
-
-  PointAcceptanceResult evaluate(
-    LocalSessionPoint? previousAcceptedPoint,
-    NewSessionPoint point,
-  ) {
-    if (!_isValidCoordinate(point.latitude, point.longitude)) {
-      return const PointAcceptanceResult(
-        acceptedForAnalytics: false,
-        acceptedForReplay: false,
-        reason: 'invalid_coordinate',
-      );
-    }
-
-    final double? accuracy = point.accuracyM;
-    if (accuracy != null &&
-        accuracy > SessionConstants.softAccuracyThresholdMeters) {
-      return const PointAcceptanceResult(
-        acceptedForAnalytics: false,
-        acceptedForReplay: true,
-        reason: 'accuracy_too_low',
-      );
-    }
-
-    if (previousAcceptedPoint == null) {
-      final bool analyticsOkay = accuracy == null ||
-          accuracy <= SessionConstants.analyticsAccuracyThresholdMeters;
-      return PointAcceptanceResult(
-        acceptedForAnalytics: analyticsOkay,
-        acceptedForReplay: true,
-        reason: analyticsOkay ? 'accepted' : 'soft_accuracy_only',
-      );
-    }
-
-    if (!point.recordedAt.isAfter(previousAcceptedPoint.recordedAt)) {
-      return const PointAcceptanceResult(
-        acceptedForAnalytics: false,
-        acceptedForReplay: false,
-        reason: 'timestamp_not_increasing',
-      );
-    }
-
-    final int deltaS =
-        point.recordedAt.difference(previousAcceptedPoint.recordedAt).inSeconds;
-
-    if (deltaS < SessionConstants.minDeltaSeconds ||
-        deltaS > SessionConstants.maxDeltaSeconds) {
-      return const PointAcceptanceResult(
-        acceptedForAnalytics: false,
-        acceptedForReplay: true,
-        reason: 'invalid_delta',
-      );
-    }
-
-    final double segmentDistance = haversineDistanceMeters(
-      previousAcceptedPoint.latitude,
-      previousAcceptedPoint.longitude,
-      point.latitude,
-      point.longitude,
-    );
-
-    final double impliedSpeed = segmentDistance / deltaS;
-    if (impliedSpeed > SessionConstants.maxSpeedMetersPerSecond) {
-      return const PointAcceptanceResult(
-        acceptedForAnalytics: false,
-        acceptedForReplay: true,
-        reason: 'speed_outlier',
-      );
-    }
-
-    final bool analyticsOkay = accuracy == null ||
-        accuracy <= SessionConstants.analyticsAccuracyThresholdMeters;
-
-    return PointAcceptanceResult(
-      acceptedForAnalytics: analyticsOkay,
-      acceptedForReplay: true,
-      reason: analyticsOkay ? 'accepted' : 'soft_accuracy_only',
-    );
-  }
-
-  SessionStats computeStats({
-    required List<LocalSessionPoint> acceptedPoints,
-    required int activeDurationS,
-  }) {
-    if (acceptedPoints.length < 2) {
-      return SessionStats(
-        durationS: activeDurationS,
-        distanceM: 0,
-        maxSpeedMps: 0,
-        avgSpeedMps: activeDurationS == 0 ? 0 : 0,
-        elevationGainM: null,
-        elevationLossM: null,
-      );
-    }
-
-    double distance = 0;
-    double maxSpeed = 0;
-    final List<double> altitudeSamples = <double>[];
-
-    for (int index = 1; index < acceptedPoints.length; index++) {
-      final LocalSessionPoint previous = acceptedPoints[index - 1];
-      final LocalSessionPoint current = acceptedPoints[index];
-      final int deltaS =
-          current.recordedAt.difference(previous.recordedAt).inSeconds;
-      if (deltaS <= 0) {
-        continue;
-      }
-
-      final double segmentDistance = haversineDistanceMeters(
-        previous.latitude,
-        previous.longitude,
-        current.latitude,
-        current.longitude,
-      );
-
-      final double speed = segmentDistance / deltaS;
-      if (speed > SessionConstants.maxSpeedMetersPerSecond) {
-        continue;
-      }
-
-      distance += segmentDistance;
-      maxSpeed = math.max(maxSpeed, speed);
-
-      if (current.altitudeM != null) {
-        altitudeSamples.add(current.altitudeM!);
-      }
-    }
-
-    final double avgSpeed =
-        activeDurationS == 0 ? 0 : distance / activeDurationS;
-
-    final (int? gain, int? loss) = _computeElevation(acceptedPoints);
-
-    return SessionStats(
-      durationS: activeDurationS,
-      distanceM: distance,
-      maxSpeedMps: maxSpeed,
-      avgSpeedMps: avgSpeed,
-      elevationGainM: gain,
-      elevationLossM: loss,
-    );
-  }
-
-  (int?, int?) _computeElevation(List<LocalSessionPoint> points) {
-    final List<double> altitudes = points
-        .map((LocalSessionPoint point) => point.altitudeM)
-        .whereType<double>()
-        .toList(growable: false);
-
-    if (altitudes.length < SessionConstants.elevationWindow) {
-      return (null, null);
-    }
-
-    int gain = 0;
-    int loss = 0;
-    double? previousSmoothed;
-
-    for (int index = 0; index < altitudes.length; index++) {
-      final int start =
-          math.max(0, index - SessionConstants.elevationWindow + 1);
-      final List<double> window = altitudes.sublist(start, index + 1);
-      final double smoothed =
-          window.reduce((double a, double b) => a + b) / window.length;
-
-      if (previousSmoothed != null) {
-        final double delta = smoothed - previousSmoothed;
-        if (delta.abs() >= SessionConstants.minElevationDeltaMeters) {
-          if (delta > 0) {
-            gain += delta.round();
-          } else {
-            loss += delta.abs().round();
-          }
-        }
-      }
-      previousSmoothed = smoothed;
-    }
-
-    return (gain == 0 ? null : gain, loss == 0 ? null : loss);
-  }
-
-  bool _isValidCoordinate(double latitude, double longitude) {
-    return latitude >= -90 &&
-        latitude <= 90 &&
-        longitude >= -180 &&
-        longitude <= 180;
-  }
 }
 
 double haversineDistanceMeters(

@@ -7,6 +7,12 @@ class LocationSample {
     required this.altitudeM,
     required this.speedMps,
     required this.headingDeg,
+    this.elapsedRealtimeNs,
+    this.verticalAccuracyM,
+    this.speedAccuracyMps,
+    this.bearingAccuracyDeg,
+    this.provider,
+    this.isMocked,
   });
 
   final DateTime timestamp;
@@ -16,6 +22,12 @@ class LocationSample {
   final double? altitudeM;
   final double? speedMps;
   final double? headingDeg;
+  final int? elapsedRealtimeNs;
+  final double? verticalAccuracyM;
+  final double? speedAccuracyMps;
+  final double? bearingAccuracyDeg;
+  final String? provider;
+  final bool? isMocked;
 }
 
 enum LocationPermissionState {
@@ -26,6 +38,31 @@ enum LocationPermissionState {
   serviceDisabled,
 }
 
+enum TrackingMode {
+  initializingFix,
+  activeDescent,
+  liftUphill,
+  stoppedIdle,
+  lowConfidenceRecovery,
+}
+
+extension TrackingModeWire on TrackingMode {
+  String get wireValue {
+    switch (this) {
+      case TrackingMode.initializingFix:
+        return 'initializing_fix';
+      case TrackingMode.activeDescent:
+        return 'active_descent';
+      case TrackingMode.liftUphill:
+        return 'lift_uphill';
+      case TrackingMode.stoppedIdle:
+        return 'stopped_idle';
+      case TrackingMode.lowConfidenceRecovery:
+        return 'low_confidence_recovery';
+    }
+  }
+}
+
 abstract class LocationTrackingRepository {
   Future<LocationPermissionState> checkPermissions();
   Future<LocationPermissionState> ensurePermissions();
@@ -33,4 +70,5 @@ abstract class LocationTrackingRepository {
   Future<bool> openAppSettings();
   Future<bool> openLocationSettings();
   Stream<LocationSample> watchPosition();
+  Future<void> setTrackingMode(TrackingMode mode);
 }

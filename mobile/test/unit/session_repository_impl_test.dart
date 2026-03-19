@@ -19,6 +19,8 @@ LocalRideSession _buildSession({
   required int localId,
   required LocalSessionState state,
   String? remoteId,
+  double maxSpeedMps = 10,
+  double avgSpeedMps = 8,
 }) {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
@@ -29,8 +31,8 @@ LocalRideSession _buildSession({
     endedAt: now,
     activeDurationS: 120,
     distanceM: 1000,
-    maxSpeedMps: 10,
-    avgSpeedMps: 8,
+    maxSpeedMps: maxSpeedMps,
+    avgSpeedMps: avgSpeedMps,
     elevationGainM: 10,
     elevationLossM: 100,
     state: state,
@@ -80,9 +82,14 @@ void main() {
   test('syncSession dedupes duplicate offsets before upload batches', () async {
     final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
       <LocalRideSession?>[
-        _buildSession(localId: 1, state: LocalSessionState.syncPending, remoteId: 'remote-1'),
-        _buildSession(localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
-        _buildSession(localId: 1, state: LocalSessionState.synced, remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncPending,
+            remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1, state: LocalSessionState.synced, remoteId: 'remote-1'),
       ],
     );
 
@@ -96,10 +103,10 @@ void main() {
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(), error: any(named: 'error')))
-        .thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(), onlyAccepted: any(named: 'onlyAccepted')))
-        .thenAnswer(
+    when(() => localDatabase.incrementSyncAttempt(any(),
+        error: any(named: 'error'))).thenAnswer((_) async {});
+    when(() => localDatabase.listPoints(any(),
+        onlyAccepted: any(named: 'onlyAccepted'))).thenAnswer(
       (_) async => <LocalSessionPoint>[
         _buildPoint(offsetMs: 0),
         _buildPoint(offsetMs: 0),
@@ -145,9 +152,16 @@ void main() {
   test('syncSession marks session as syncFailed when upload fails', () async {
     final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
       <LocalRideSession?>[
-        _buildSession(localId: 1, state: LocalSessionState.syncPending, remoteId: 'remote-1'),
-        _buildSession(localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
-        _buildSession(localId: 1, state: LocalSessionState.syncFailed, remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncPending,
+            remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncFailed,
+            remoteId: 'remote-1'),
       ],
     );
     final DioException syncFailure = DioException(
@@ -166,9 +180,10 @@ void main() {
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(), error: any(named: 'error')))
-        .thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(), onlyAccepted: any(named: 'onlyAccepted')))
+    when(() => localDatabase.incrementSyncAttempt(any(),
+        error: any(named: 'error'))).thenAnswer((_) async {});
+    when(() => localDatabase.listPoints(any(),
+            onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
     when(() => api.getRemoteSessionPoints(any()))
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
@@ -193,9 +208,16 @@ void main() {
       () async {
     final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
       <LocalRideSession?>[
-        _buildSession(localId: 1, state: LocalSessionState.syncPending, remoteId: 'remote-1'),
-        _buildSession(localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
-        _buildSession(localId: 1, state: LocalSessionState.syncFailed, remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncPending,
+            remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncFailed,
+            remoteId: 'remote-1'),
       ],
     );
     final RequestOptions requestOptions =
@@ -220,9 +242,10 @@ void main() {
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(), error: any(named: 'error')))
-        .thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(), onlyAccepted: any(named: 'onlyAccepted')))
+    when(() => localDatabase.incrementSyncAttempt(any(),
+        error: any(named: 'error'))).thenAnswer((_) async {});
+    when(() => localDatabase.listPoints(any(),
+            onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
     when(() => api.getRemoteSessionPoints(any()))
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
@@ -243,7 +266,7 @@ void main() {
     ).called(1);
   });
 
-  test('appendLocationPoint queries only latest accepted point', () async {
+  test('appendLocationPoint persists enriched point payload as-is', () async {
     final LocalRideSession recordingSession =
         _buildSession(localId: 1, state: LocalSessionState.recording);
     final NewSessionPoint point = NewSessionPoint(
@@ -256,12 +279,17 @@ void main() {
       speedMps: 8,
       headingDeg: 90,
       acceptedForAnalytics: true,
+      qualityClass: 'accept',
+      qualityReason: 'accepted',
+      qualityScore: 0.9,
+      fusedSpeedMps: 8,
+      derivedSpeedMps: 7.8,
+      distanceDeltaM: 22,
+      motionState: 'active_descent',
     );
 
     when(() => localDatabase.getSessionById(1))
         .thenAnswer((_) async => recordingSession);
-    when(() => localDatabase.latestAcceptedPoint(1))
-        .thenAnswer((_) async => null);
     when(
       () => localDatabase.insertPoint(
         localSessionId: any(named: 'localSessionId'),
@@ -271,7 +299,115 @@ void main() {
 
     await repository.appendLocationPoint(1, point);
 
-    verify(() => localDatabase.latestAcceptedPoint(1)).called(1);
-    verifyNever(() => localDatabase.listPoints(any(), onlyAccepted: true));
+    verify(
+      () => localDatabase.insertPoint(
+        localSessionId: 1,
+        point: point,
+      ),
+    ).called(1);
+  });
+
+  test('computeSessionStats preserves duration from sub-second accepted points',
+      () async {
+    when(() => localDatabase.listPoints(1)).thenAnswer(
+      (_) async => <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0),
+        _buildPoint(offsetMs: 200),
+        _buildPoint(offsetMs: 400),
+        _buildPoint(offsetMs: 600),
+        _buildPoint(offsetMs: 800),
+        _buildPoint(offsetMs: 1000),
+        _buildPoint(offsetMs: 1200),
+        _buildPoint(offsetMs: 1400),
+        _buildPoint(offsetMs: 1600),
+        _buildPoint(offsetMs: 1800),
+      ],
+    );
+
+    final SessionStats stats = await repository.computeSessionStats(1);
+
+    expect(stats.durationS, 2);
+    expect(stats.maxSpeedMps, greaterThan(0));
+  });
+
+  test('syncSession clamps completion max speed to be at least average speed',
+      () async {
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncPending,
+          remoteId: 'remote-1',
+          maxSpeedMps: 0,
+          avgSpeedMps: 9,
+        ),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncing,
+          remoteId: 'remote-1',
+          maxSpeedMps: 0,
+          avgSpeedMps: 9,
+        ),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.synced,
+          remoteId: 'remote-1',
+          maxSpeedMps: 0,
+          avgSpeedMps: 9,
+        ),
+      ],
+    );
+
+    when(() => localDatabase.getSessionById(1))
+        .thenAnswer((_) async => sessions.removeFirst());
+    when(
+      () => localDatabase.updateSessionState(
+        any(),
+        any(),
+        remoteId: any(named: 'remoteId'),
+        lastSyncError: any(named: 'lastSyncError'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => localDatabase.incrementSyncAttempt(any(),
+        error: any(named: 'error'))).thenAnswer((_) async {});
+    when(() => localDatabase.listPoints(any(),
+            onlyAccepted: any(named: 'onlyAccepted')))
+        .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
+    when(() => api.getRemoteSessionPoints(any()))
+        .thenAnswer((_) async => <Map<String, dynamic>>[]);
+    when(() => api.uploadPointBatch(
+          remoteSessionId: any(named: 'remoteSessionId'),
+          points: any(named: 'points'),
+        )).thenAnswer((_) async {});
+    when(() => api.completeRemoteSession(
+          remoteSessionId: any(named: 'remoteSessionId'),
+          endedAt: any(named: 'endedAt'),
+          durationS: any(named: 'durationS'),
+          distanceM: any(named: 'distanceM'),
+          maxSpeedMps: any(named: 'maxSpeedMps'),
+          avgSpeedMps: any(named: 'avgSpeedMps'),
+          elevationGainM: any(named: 'elevationGainM'),
+          elevationLossM: any(named: 'elevationLossM'),
+        )).thenAnswer((_) async => <String, dynamic>{'id': 'remote-1'});
+
+    await repository.syncSession(1);
+
+    final List<dynamic> completeCaptured = verify(
+      () => api.completeRemoteSession(
+        remoteSessionId: 'remote-1',
+        endedAt: any(named: 'endedAt'),
+        durationS: any(named: 'durationS'),
+        distanceM: any(named: 'distanceM'),
+        maxSpeedMps: captureAny(named: 'maxSpeedMps'),
+        avgSpeedMps: captureAny(named: 'avgSpeedMps'),
+        elevationGainM: any(named: 'elevationGainM'),
+        elevationLossM: any(named: 'elevationLossM'),
+      ),
+    ).captured;
+
+    final double capturedMaxSpeed = completeCaptured[0] as double;
+    final double capturedAvgSpeed = completeCaptured[1] as double;
+    expect(capturedMaxSpeed, greaterThanOrEqualTo(capturedAvgSpeed));
+    expect(capturedAvgSpeed, 9);
   });
 }

@@ -7,6 +7,7 @@ import '../../../core/constants/session_constants.dart';
 import '../domain/location_tracking_repository.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
+import '../domain/tracking_pipeline.dart';
 
 enum RecordScreenPhase {
   preRecord,
@@ -142,20 +143,20 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     required LocationTrackingRepository locationTrackingRepository,
   })  : _sessionRepository = sessionRepository,
         _locationTrackingRepository = locationTrackingRepository,
-        _analyticsEngine = const SessionAnalyticsEngine(),
+        _trackingPipeline = TrackingPipelineEngine(),
         super(RecordingViewState.initial());
 
   final SessionRepository _sessionRepository;
   final LocationTrackingRepository _locationTrackingRepository;
-  final SessionAnalyticsEngine _analyticsEngine;
+  final TrackingPipelineEngine _trackingPipeline;
 
-  StreamSubscription<LocationSample>? _locationSubscription;
+  StreamSubscription<void>? _locationSubscription;
   Timer? _elapsedTicker;
-  final List<LocalSessionPoint> _acceptedPoints = <LocalSessionPoint>[];
   Duration _elapsedBeforeActive = Duration.zero;
   DateTime? _activeSegmentStartedAtUtc;
   bool _locationStreamStopping = false;
   bool _locationStreamRestartQueued = false;
+  TrackingMode _activeTrackingMode = TrackingMode.initializingFix;
 
   Future<void> bootstrap({String? preselectedResortId}) async {
     if (state.session?.isInProgress ?? false) {
@@ -279,12 +280,14 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
     final SessionDetail detail =
         await _sessionRepository.getSessionDetail(effectiveRecovery.localId);
-    _acceptedPoints
-      ..clear()
-      ..addAll(detail.acceptedPoints);
 
     final SessionStats stats =
         await _sessionRepository.computeSessionStats(effectiveRecovery.localId);
+    _trackingPipeline.seedFromPersistedPoints(
+      points: detail.points,
+      stats: stats,
+    );
+    _activeTrackingMode = TrackingMode.initializingFix;
     _elapsedBeforeActive = Duration(seconds: stats.durationS);
     _activeSegmentStartedAtUtc = null;
 
@@ -297,8 +300,13 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     state = state.copyWith(
       liveStats: stats,
       route: detail.points
-          .map((LocalSessionPoint point) =>
-              LatLng(point.latitude, point.longitude))
+          .where((LocalSessionPoint point) => point.acceptedForAnalytics)
+          .map(
+            (LocalSessionPoint point) => LatLng(
+              point.filteredLatitude ?? point.latitude,
+              point.filteredLongitude ?? point.longitude,
+            ),
+          )
           .toList(growable: false),
       elapsed: _currentElapsedDuration(),
       maxSpeedMps: stats.maxSpeedMps,
@@ -336,9 +344,10 @@ class RecordingController extends StateNotifier<RecordingViewState> {
           );
 
     if (!hasInProgressSession) {
-      _acceptedPoints.clear();
+      _trackingPipeline.reset();
       _elapsedBeforeActive = Duration.zero;
     }
+    _activeTrackingMode = TrackingMode.initializingFix;
     _startActiveElapsedClock();
 
     state = state.copyWith(
@@ -476,19 +485,20 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     await _stopLocationStream();
     _locationStreamStopping = false;
     _locationStreamRestartQueued = false;
-    _locationSubscription = _locationTrackingRepository.watchPosition().listen(
-      (LocationSample sample) {
-        unawaited(_onLocation(sample));
-      },
-      onError: _onLocationStreamError,
-      onDone: _onLocationStreamDone,
-      cancelOnError: false,
-    );
+    await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
+    _locationSubscription = _locationTrackingRepository
+        .watchPosition()
+        .asyncMap(_onLocation)
+        .listen(
+          (_) {},
+          onError: _onLocationStreamError,
+          onDone: _onLocationStreamDone,
+          cancelOnError: false,
+        );
   }
 
   Future<void> _stopLocationStream() async {
-    final StreamSubscription<LocationSample>? subscription =
-        _locationSubscription;
+    final StreamSubscription<void>? subscription = _locationSubscription;
     if (subscription == null) {
       return;
     }
@@ -535,146 +545,52 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       return;
     }
 
-    final int tOffsetMs = sample.timestamp
-        .toUtc()
-        .difference(session.startedAt.toUtc())
-        .inMilliseconds;
-
-    final NewSessionPoint incomingPoint = NewSessionPoint(
-      recordedAt: sample.timestamp.toUtc(),
-      tOffsetMs: tOffsetMs,
-      latitude: sample.latitude,
-      longitude: sample.longitude,
-      accuracyM: sample.accuracyM,
-      altitudeM: sample.altitudeM,
-      speedMps: sample.speedMps,
-      headingDeg: sample.headingDeg,
-      acceptedForAnalytics: false,
-    );
-
-    final LocalSessionPoint? previousAccepted =
-        _acceptedPoints.isEmpty ? null : _acceptedPoints.last;
-    final PointAcceptanceResult acceptance = _analyticsEngine.evaluate(
-      previousAccepted,
-      incomingPoint,
-    );
-
-    final NewSessionPoint persisted = NewSessionPoint(
-      recordedAt: incomingPoint.recordedAt,
-      tOffsetMs: incomingPoint.tOffsetMs,
-      latitude: incomingPoint.latitude,
-      longitude: incomingPoint.longitude,
-      accuracyM: incomingPoint.accuracyM,
-      altitudeM: incomingPoint.altitudeM,
-      speedMps: incomingPoint.speedMps,
-      headingDeg: incomingPoint.headingDeg,
-      acceptedForAnalytics: acceptance.acceptedForAnalytics,
-    );
-
-    await _sessionRepository.appendLocationPoint(session.localId, persisted);
-
-    final List<LatLng> updatedRoute = _buildUpdatedRoute(
-      currentRoute: state.route,
-      acceptance: acceptance,
+    final TrackingProcessResult result = _trackingPipeline.processSample(
       sample: sample,
+      sessionStartedAtUtc: session.startedAt,
+      activeDurationS: _currentElapsedDuration().inSeconds,
     );
 
-    if (acceptance.acceptedForAnalytics) {
-      _acceptedPoints.add(
-        LocalSessionPoint(
-          id: 0,
-          localSessionId: session.localId,
-          recordedAt: incomingPoint.recordedAt,
-          tOffsetMs: incomingPoint.tOffsetMs,
-          latitude: incomingPoint.latitude,
-          longitude: incomingPoint.longitude,
-          accuracyM: incomingPoint.accuracyM,
-          altitudeM: incomingPoint.altitudeM,
-          speedMps: incomingPoint.speedMps,
-          headingDeg: incomingPoint.headingDeg,
-          acceptedForAnalytics: true,
-        ),
-      );
-    }
+    await _sessionRepository.appendLocationPoint(session.localId, result.point);
 
-    final int activeDurationS = _currentElapsedDuration().inSeconds;
-    final SessionStats stats = acceptance.acceptedForAnalytics
-        ? _analyticsEngine.computeStats(
-            acceptedPoints: _acceptedPoints,
-            activeDurationS: activeDurationS,
-          )
-        : _deriveStatsWithoutNewAcceptedPoint(
-            activeDurationS: activeDurationS,
-          );
+    final List<LatLng> updatedRoute = _buildUpdatedRouteFromResult(
+      currentRoute: state.route,
+      result: result,
+    );
+
+    if (_activeTrackingMode != result.trackingMode) {
+      _activeTrackingMode = result.trackingMode;
+      await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
+    }
 
     state = state.copyWith(
       route: updatedRoute,
-      liveStats: stats,
-      currentSpeedMps: sample.speedMps ?? _estimateCurrentSpeed(),
-      maxSpeedMps: stats.maxSpeedMps,
+      liveStats: result.stats,
+      currentSpeedMps: result.liveSpeedMps,
+      maxSpeedMps: result.stats.maxSpeedMps,
       elapsed: _currentElapsedDuration(),
-      lowAccuracy: (sample.accuracyM ?? 0) >
-          SessionConstants.analyticsAccuracyThresholdMeters,
+      lowAccuracy: result.lowAccuracy,
     );
   }
 
-  List<LatLng> _buildUpdatedRoute({
+  List<LatLng> _buildUpdatedRouteFromResult({
     required List<LatLng> currentRoute,
-    required PointAcceptanceResult acceptance,
-    required LocationSample sample,
+    required TrackingProcessResult result,
   }) {
-    if (!acceptance.acceptedForReplay) {
+    if (!result.acceptedForReplay ||
+        result.routeLatitude == null ||
+        result.routeLongitude == null) {
       return currentRoute;
     }
 
     final List<LatLng> updatedRoute = List<LatLng>.from(currentRoute)
-      ..add(LatLng(sample.latitude, sample.longitude));
+      ..add(LatLng(result.routeLatitude!, result.routeLongitude!));
     final int overflow =
         updatedRoute.length - SessionConstants.maxLiveRoutePoints;
     if (overflow > 0) {
       updatedRoute.removeRange(0, overflow);
     }
     return updatedRoute;
-  }
-
-  SessionStats _deriveStatsWithoutNewAcceptedPoint({
-    required int activeDurationS,
-  }) {
-    final SessionStats existing = state.liveStats;
-    final double avgSpeed =
-        activeDurationS == 0 ? 0 : existing.distanceM / activeDurationS;
-    return SessionStats(
-      durationS: activeDurationS,
-      distanceM: existing.distanceM,
-      maxSpeedMps: existing.maxSpeedMps,
-      avgSpeedMps: avgSpeed,
-      elevationGainM: existing.elevationGainM,
-      elevationLossM: existing.elevationLossM,
-    );
-  }
-
-  double _estimateCurrentSpeed() {
-    if (_acceptedPoints.length < 2) {
-      return 0;
-    }
-
-    final LocalSessionPoint previous =
-        _acceptedPoints[_acceptedPoints.length - 2];
-    final LocalSessionPoint current = _acceptedPoints.last;
-
-    final int delta =
-        current.recordedAt.difference(previous.recordedAt).inSeconds;
-    if (delta <= 0) {
-      return 0;
-    }
-
-    final double distance = haversineDistanceMeters(
-      previous.latitude,
-      previous.longitude,
-      current.latitude,
-      current.longitude,
-    );
-    return distance / delta;
   }
 
   SessionStats _toSessionStats(LocalRideSession session) {

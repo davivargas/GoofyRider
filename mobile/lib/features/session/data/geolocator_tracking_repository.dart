@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:geolocator/geolocator.dart';
 
-import '../../../core/constants/session_constants.dart';
 import '../domain/location_tracking_repository.dart';
+import '../domain/tracking_mode_profiles.dart';
 
 class GeolocatorTrackingRepository implements LocationTrackingRepository {
   GeolocatorTrackingRepository();
+
+  TrackingMode _trackingMode = TrackingMode.initializingFix;
+  StreamController<LocationSample>? _controller;
+  StreamSubscription<Position>? _positionSubscription;
 
   @override
   Future<LocationPermissionState> checkPermissions() async {
@@ -51,31 +55,169 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
 
   @override
   Stream<LocationSample> watchPosition() {
-    final LocationSettings locationSettings = AndroidSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: SessionConstants.distanceFilterMeters.round(),
-      intervalDuration:
-          const Duration(seconds: SessionConstants.targetIntervalSeconds),
+    _controller ??= StreamController<LocationSample>.broadcast(
+      onListen: _startOrRestartPositionStream,
+      onCancel: () async {
+        if (!(_controller?.hasListener ?? false)) {
+          await _stopPositionStream();
+        }
+      },
+    );
+
+    return _controller!.stream;
+  }
+
+  @override
+  Future<void> setTrackingMode(TrackingMode mode) async {
+    if (_trackingMode == mode) {
+      return;
+    }
+    _trackingMode = mode;
+    if (_controller?.hasListener ?? false) {
+      await _startOrRestartPositionStream();
+    }
+  }
+
+  Future<void> _startOrRestartPositionStream() async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: _locationSettingsForMode(_trackingMode),
+    ).listen(
+      (Position position) {
+        _controller?.add(_toLocationSample(position));
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _controller?.addError(error, stackTrace);
+      },
+    );
+  }
+
+  Future<void> _stopPositionStream() async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
+  }
+
+  LocationSettings _locationSettingsForMode(TrackingMode mode) {
+    final TrackingModeProfile profile = TrackingModeProfiles.forMode(mode);
+    return _androidSettings(
+      accuracy: _mapAccuracy(mode, profile.priority),
+      distanceFilter: profile.minDistanceM.round(),
+      intervalMs: profile.intervalMs,
+    );
+  }
+
+  LocationAccuracy _mapAccuracy(
+    TrackingMode mode,
+    TrackingModePriority priority,
+  ) {
+    if (mode == TrackingMode.activeDescent) {
+      return LocationAccuracy.bestForNavigation;
+    }
+    switch (priority) {
+      case TrackingModePriority.highAccuracy:
+        return LocationAccuracy.best;
+      case TrackingModePriority.balancedPower:
+        return LocationAccuracy.high;
+    }
+  }
+
+  AndroidSettings _androidSettings({
+    required LocationAccuracy accuracy,
+    required int distanceFilter,
+    required int intervalMs,
+  }) {
+    return AndroidSettings(
+      accuracy: accuracy,
+      distanceFilter: distanceFilter,
+      intervalDuration: Duration(milliseconds: intervalMs),
       foregroundNotificationConfig: const ForegroundNotificationConfig(
         notificationTitle: 'GoofyRider is recording your session',
         notificationText: 'Tracking route in the background',
         enableWakeLock: false,
       ),
     );
+  }
 
-    return Geolocator.getPositionStream(locationSettings: locationSettings).map(
-      (Position position) {
-        return LocationSample(
-          timestamp: position.timestamp.toUtc(),
-          latitude: position.latitude,
-          longitude: position.longitude,
-          accuracyM: position.accuracy,
-          altitudeM: position.altitude,
-          speedMps: position.speed,
-          headingDeg: position.heading,
-        );
-      },
+  LocationSample _toLocationSample(Position position) {
+    return LocationSample(
+      timestamp: position.timestamp.toUtc(),
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracyM: position.accuracy,
+      altitudeM: position.altitude,
+      speedMps: position.speed,
+      headingDeg: position.heading,
+      verticalAccuracyM: _readVerticalAccuracy(position),
+      speedAccuracyMps: _readSpeedAccuracy(position),
+      bearingAccuracyDeg: _readBearingAccuracy(position),
+      provider: _readProvider(position),
+      isMocked: _readIsMocked(position),
     );
+  }
+
+  double? _readVerticalAccuracy(Position position) {
+    final dynamic dynamicPosition = position;
+    try {
+      final dynamic value = dynamicPosition.altitudeAccuracy;
+      if (value is num) {
+        return value.toDouble();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double? _readSpeedAccuracy(Position position) {
+    final dynamic dynamicPosition = position;
+    try {
+      final dynamic value = dynamicPosition.speedAccuracy;
+      if (value is num) {
+        return value.toDouble();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double? _readBearingAccuracy(Position position) {
+    final dynamic dynamicPosition = position;
+    try {
+      final dynamic value = dynamicPosition.headingAccuracy;
+      if (value is num) {
+        return value.toDouble();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _readProvider(Position position) {
+    final dynamic dynamicPosition = position;
+    try {
+      final dynamic value = dynamicPosition.provider;
+      if (value is String) {
+        return value;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool? _readIsMocked(Position position) {
+    final dynamic dynamicPosition = position;
+    try {
+      final dynamic value = dynamicPosition.isMocked;
+      if (value is bool) {
+        return value;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   LocationPermissionState _toPermissionState(LocationPermission permission) {

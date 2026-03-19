@@ -12,7 +12,13 @@ class DriftLocalDatabase extends GeneratedDatabase {
   DriftLocalDatabase._(super.connection) : super.connect();
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (Migrator migrator) async {},
+        onUpgrade: (Migrator migrator, int from, int to) async {},
+      );
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables =>
@@ -68,9 +74,25 @@ class DriftLocalDatabase extends GeneratedDatabase {
         latitude REAL NOT NULL,
         longitude REAL NOT NULL,
         accuracy_m REAL,
+        elapsed_realtime_ns INTEGER,
         altitude_m REAL,
+        vertical_accuracy_m REAL,
         speed_mps REAL,
+        speed_accuracy_mps REAL,
         heading_deg REAL,
+        bearing_accuracy_deg REAL,
+        provider TEXT,
+        is_mocked INTEGER,
+        quality_class TEXT,
+        quality_score REAL,
+        quality_reason TEXT,
+        filtered_latitude REAL,
+        filtered_longitude REAL,
+        filtered_altitude_m REAL,
+        fused_speed_mps REAL,
+        derived_speed_mps REAL,
+        distance_delta_m REAL,
+        motion_state TEXT,
         accepted_for_analytics INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         FOREIGN KEY(local_session_id) REFERENCES local_ride_sessions(local_id)
@@ -81,6 +103,8 @@ class DriftLocalDatabase extends GeneratedDatabase {
       CREATE INDEX IF NOT EXISTS ix_local_session_points_session_offset
       ON local_session_points(local_session_id, t_offset_ms)
     ''');
+
+    await _migrateToV2();
 
     await customStatement('''
       CREATE TABLE IF NOT EXISTS cached_resorts (
@@ -221,12 +245,28 @@ class DriftLocalDatabase extends GeneratedDatabase {
         latitude,
         longitude,
         accuracy_m,
+        elapsed_realtime_ns,
         altitude_m,
+        vertical_accuracy_m,
         speed_mps,
+        speed_accuracy_mps,
         heading_deg,
+        bearing_accuracy_deg,
+        provider,
+        is_mocked,
+        quality_class,
+        quality_score,
+        quality_reason,
+        filtered_latitude,
+        filtered_longitude,
+        filtered_altitude_m,
+        fused_speed_mps,
+        derived_speed_mps,
+        distance_delta_m,
+        motion_state,
         accepted_for_analytics,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       variables: <Variable>[
         Variable<int>(localSessionId),
@@ -235,9 +275,25 @@ class DriftLocalDatabase extends GeneratedDatabase {
         Variable<double>(point.latitude),
         Variable<double>(point.longitude),
         Variable<double>(point.accuracyM),
+        Variable<int>(point.elapsedRealtimeNs),
         Variable<double>(point.altitudeM),
+        Variable<double>(point.verticalAccuracyM),
         Variable<double>(point.speedMps),
+        Variable<double>(point.speedAccuracyMps),
         Variable<double>(point.headingDeg),
+        Variable<double>(point.bearingAccuracyDeg),
+        Variable<String>(point.provider),
+        Variable<int>(point.isMocked == null ? null : (point.isMocked! ? 1 : 0)),
+        Variable<String>(point.qualityClass),
+        Variable<double>(point.qualityScore),
+        Variable<String>(point.qualityReason),
+        Variable<double>(point.filteredLatitude),
+        Variable<double>(point.filteredLongitude),
+        Variable<double>(point.filteredAltitudeM),
+        Variable<double>(point.fusedSpeedMps),
+        Variable<double>(point.derivedSpeedMps),
+        Variable<double>(point.distanceDeltaM),
+        Variable<String>(point.motionState),
         Variable<int>(point.acceptedForAnalytics ? 1 : 0),
         Variable<String>(now.toIso8601String()),
       ],
@@ -329,6 +385,38 @@ class DriftLocalDatabase extends GeneratedDatabase {
     ).get();
 
     return rows.map(_mapPoint).toList(growable: false);
+  }
+
+  Future<void> _migrateToV2() async {
+    await _addColumnIfMissing('local_session_points', 'elapsed_realtime_ns INTEGER');
+    await _addColumnIfMissing('local_session_points', 'vertical_accuracy_m REAL');
+    await _addColumnIfMissing('local_session_points', 'speed_accuracy_mps REAL');
+    await _addColumnIfMissing('local_session_points', 'bearing_accuracy_deg REAL');
+    await _addColumnIfMissing('local_session_points', 'provider TEXT');
+    await _addColumnIfMissing('local_session_points', 'is_mocked INTEGER');
+    await _addColumnIfMissing('local_session_points', 'quality_class TEXT');
+    await _addColumnIfMissing('local_session_points', 'quality_score REAL');
+    await _addColumnIfMissing('local_session_points', 'quality_reason TEXT');
+    await _addColumnIfMissing('local_session_points', 'filtered_latitude REAL');
+    await _addColumnIfMissing('local_session_points', 'filtered_longitude REAL');
+    await _addColumnIfMissing('local_session_points', 'filtered_altitude_m REAL');
+    await _addColumnIfMissing('local_session_points', 'fused_speed_mps REAL');
+    await _addColumnIfMissing('local_session_points', 'derived_speed_mps REAL');
+    await _addColumnIfMissing('local_session_points', 'distance_delta_m REAL');
+    await _addColumnIfMissing('local_session_points', 'motion_state TEXT');
+  }
+
+  Future<void> _addColumnIfMissing(String table, String columnDef) async {
+    final String columnName = columnDef.split(' ').first;
+    final List<QueryRow> rows =
+        await customSelect('PRAGMA table_info($table)').get();
+    final bool exists = rows.any(
+      (QueryRow row) => row.data['name']?.toString() == columnName,
+    );
+    if (exists) {
+      return;
+    }
+    await customStatement('ALTER TABLE $table ADD COLUMN $columnDef');
   }
 
   Future<LocalSessionPoint?> latestAcceptedPoint(int localSessionId) async {
@@ -493,6 +581,22 @@ class DriftLocalDatabase extends GeneratedDatabase {
       speedMps: _asNullableDouble(data['speed_mps']),
       headingDeg: _asNullableDouble(data['heading_deg']),
       acceptedForAnalytics: _asInt(data['accepted_for_analytics']) == 1,
+      elapsedRealtimeNs: _asNullableInt(data['elapsed_realtime_ns']),
+      verticalAccuracyM: _asNullableDouble(data['vertical_accuracy_m']),
+      speedAccuracyMps: _asNullableDouble(data['speed_accuracy_mps']),
+      bearingAccuracyDeg: _asNullableDouble(data['bearing_accuracy_deg']),
+      provider: data['provider'] as String?,
+      isMocked: _asNullableBool(data['is_mocked']),
+      qualityClass: data['quality_class'] as String?,
+      qualityScore: _asNullableDouble(data['quality_score']),
+      qualityReason: data['quality_reason'] as String?,
+      filteredLatitude: _asNullableDouble(data['filtered_latitude']),
+      filteredLongitude: _asNullableDouble(data['filtered_longitude']),
+      filteredAltitudeM: _asNullableDouble(data['filtered_altitude_m']),
+      fusedSpeedMps: _asNullableDouble(data['fused_speed_mps']),
+      derivedSpeedMps: _asNullableDouble(data['derived_speed_mps']),
+      distanceDeltaM: _asNullableDouble(data['distance_delta_m']),
+      motionState: data['motion_state'] as String?,
     );
   }
 
@@ -527,5 +631,26 @@ class DriftLocalDatabase extends GeneratedDatabase {
       return value.toDouble();
     }
     return double.tryParse(value.toString());
+  }
+
+  int? _asNullableInt(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value.toString());
+  }
+
+  bool? _asNullableBool(Object? value) {
+    final int? integerValue = _asNullableInt(value);
+    if (integerValue == null) {
+      return null;
+    }
+    return integerValue == 1;
   }
 }
