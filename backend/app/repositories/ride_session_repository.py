@@ -2,7 +2,6 @@
 
 from sqlalchemy import func
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.orm import joinedload
 
 from app.models.ride_session import RideSession
@@ -10,9 +9,6 @@ from app.repositories.base import SqlAlchemyRepository
 
 
 class RideSessionRepository(SqlAlchemyRepository):
-    def __init__(self, db: Session) -> None:
-        super().__init__(db)
-
     def add(self, ride_session: RideSession) -> None:
         self._db.add(ride_session)
 
