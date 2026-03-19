@@ -108,7 +108,7 @@ docker compose up --build backend
 
 This starts:
 - `db` (PostgreSQL)
-- `backend` (FastAPI + Alembic migration on startup)
+- `backend` (FastAPI + Alembic migration + resort seed on startup)
 
 API docs:
 - `http://127.0.0.1:8000/docs`
@@ -125,6 +125,7 @@ source .venv/bin/activate
 
 pip install -e .[dev]
 alembic upgrade head
+python -m app.scripts.seed_resorts
 uvicorn app.main:app --reload
 ```
 
