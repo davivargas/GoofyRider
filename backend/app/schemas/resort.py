@@ -1,11 +1,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
 from pydantic import Field
 
+from app.schemas.base import ORMBaseModel
 
-class ResortPublic(BaseModel):
+
+class ResortPublic(ORMBaseModel):
     id: UUID
     name: str
     country: str
@@ -17,10 +18,8 @@ class ResortPublic(BaseModel):
     elevation_top_m: int | None
     created_at: datetime
 
-    model_config = {"from_attributes": True}
 
-
-class ResortListResponse(BaseModel):
+class ResortListResponse(ORMBaseModel):
     items: list[ResortPublic]
     page: int = Field(ge=1)
     page_size: int = Field(ge=1)
