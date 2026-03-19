@@ -2,6 +2,8 @@ import uuid
 from typing import Protocol
 from typing import TypedDict
 
+from pydantic import TypeAdapter
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.exc import IntegrityError
 
 from app.core.security import TOKEN_TYPE_ACCESS
@@ -42,6 +44,7 @@ class UserRepositoryProtocol(Protocol):
     def refresh(self, instance: object) -> None:
         ...
 
+SUBJECT_UUID_ADAPTER = TypeAdapter(uuid.UUID)
 
 class AuthService:
     def __init__(self, user_repository: UserRepositoryProtocol) -> None:
@@ -102,8 +105,8 @@ class AuthService:
             raise AuthenticationError("Invalid token subject.")
 
         try:
-            return uuid.UUID(subject)
-        except ValueError as exc:
+            return SUBJECT_UUID_ADAPTER.validate_python(subject)
+        except PydanticValidationError as exc:
             raise AuthenticationError("Invalid token subject.") from exc
 
     def _issue_token_pair(self, user_id: uuid.UUID) -> TokenPairPayload:
