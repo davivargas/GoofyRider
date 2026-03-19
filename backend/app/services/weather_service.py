@@ -1,9 +1,11 @@
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from typing import Protocol
+from typing import cast
 
 import httpx
 
@@ -57,7 +59,7 @@ class OpenMeteoWeatherProvider:
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
     def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData:
-        params = {
+        params: dict[str, str | int | float] = {
             "latitude": latitude,
             "longitude": longitude,
             "current": "temperature_2m,wind_speed_10m,weather_code",
@@ -75,18 +77,23 @@ class OpenMeteoWeatherProvider:
         daily = payload.get("daily", {})
 
         observed_raw = current.get("time")
-        observed_at = datetime.fromisoformat(observed_raw).replace(tzinfo=UTC)
+        if not isinstance(observed_raw, str):
+            raise ValueError("Weather provider response is missing current.time.")
+        observed_text = observed_raw.strip()
+        if not observed_text:
+            raise ValueError("Weather provider response is missing current.time.")
+        observed_at = datetime.fromisoformat(observed_text).replace(tzinfo=UTC)
 
         temp_c = _to_optional_float(current.get("temperature_2m"))
         wind_kph = _to_optional_float(current.get("wind_speed_10m"))
 
-        snowfall_daily = daily.get("snowfall_sum") or []
+        snowfall_daily = _as_object_sequence(daily.get("snowfall_sum"))
         snowfall_today = _to_optional_float(snowfall_daily[0]) if len(snowfall_daily) > 0 else None
         snowfall_next = _to_optional_float(snowfall_daily[1]) if len(snowfall_daily) > 1 else snowfall_today
 
-        weather_codes = daily.get("weather_code") or []
-        today_code = int(weather_codes[0]) if len(weather_codes) > 0 else None
-        weather_code_text = weather_code_to_text(today_code)
+        weather_codes = _as_object_sequence(daily.get("weather_code"))
+        today_code_raw = weather_codes[0] if len(weather_codes) > 0 else None
+        weather_code_text = weather_code_to_text(today_code_raw)
 
         return WeatherSnapshotData(
             observed_at=observed_at,
@@ -170,12 +177,17 @@ class WeatherService:
 def _to_optional_float(value: object) -> float | None:
     if value is None:
         return None
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        raise ValueError("Weather numeric fields must be numbers.")
     return float(value)
 
 
 def weather_code_to_text(raw_code: object) -> str | None:
     if raw_code is None:
         return None
+
+    if not isinstance(raw_code, (int, float, str, bytes, bytearray)):
+        raise ValueError("Weather weather_code must be numeric.")
 
     code = int(raw_code)
     if code == 0:
@@ -193,3 +205,10 @@ def weather_code_to_text(raw_code: object) -> str | None:
     if code in {95, 96, 99}:
         return "Thunderstorm"
     return "Mixed"
+
+
+def _as_object_sequence(value: object) -> Sequence[object]:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        sequence_value = cast(Sequence[object], value)
+        return tuple(sequence_value)
+    return ()
