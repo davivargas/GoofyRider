@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../auth/presentation/auth_providers.dart';
 import '../data/geolocator_tracking_repository.dart';
+import '../data/native_android_tracking_repository.dart';
 import '../data/session_api.dart';
 import '../data/session_repository_impl.dart';
 import '../domain/location_tracking_repository.dart';
@@ -14,7 +18,12 @@ final sessionApiProvider = Provider<SessionApi>(
 );
 
 final locationTrackingRepositoryProvider = Provider<LocationTrackingRepository>(
-  (ref) => GeolocatorTrackingRepository(),
+  (ref) {
+    if (!kIsWeb && Platform.isAndroid) {
+      return NativeAndroidTrackingRepository();
+    }
+    return GeolocatorTrackingRepository();
+  },
 );
 
 final sessionRepositoryProvider = Provider<SessionRepository>(
