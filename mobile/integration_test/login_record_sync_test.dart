@@ -92,6 +92,9 @@ class FakeLocationRepository implements LocationTrackingRepository {
       ),
     ]);
   }
+
+  @override
+  Future<void> setTrackingMode(TrackingMode mode) async {}
 }
 
 class FakeSessionRepository implements SessionRepository {

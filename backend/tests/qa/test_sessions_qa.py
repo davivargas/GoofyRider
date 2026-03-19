@@ -77,6 +77,82 @@ def test_sessions_lifecycle_create_points_complete_list(
     assert payload["items"][0]["resort"]["id"] == str(resort.id)
 
 
+def test_sessions_points_batch_accepts_and_returns_richer_fields(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Sun Peaks")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    payload = {
+        "points": [
+            {
+                "t_offset_ms": 0,
+                "latitude": 50.878,
+                "longitude": -119.885,
+                "accuracy_m": 3.0,
+                "elapsed_realtime_ns": 123456789,
+                "altitude_m": 1780.5,
+                "vertical_accuracy_m": 4.5,
+                "speed_mps": 8.4,
+                "speed_accuracy_mps": 0.7,
+                "heading_deg": 74.0,
+                "bearing_accuracy_deg": 5.0,
+                "provider": "fused",
+                "is_mocked": False,
+                "quality_class": "good",
+                "quality_score": 0.92,
+                "quality_reason": "high_confidence",
+                "filtered_latitude": 50.8781,
+                "filtered_longitude": -119.8851,
+                "filtered_altitude_m": 1779.9,
+                "fused_speed_mps": 8.2,
+                "derived_speed_mps": 8.1,
+                "distance_delta_m": 1.4,
+                "motion_state": "moving",
+            }
+        ]
+    }
+
+    upload = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json=payload,
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    assert upload.json()["inserted_count"] == 1
+
+    points = client.get(f"/v1/sessions/{session_id}/points", headers=headers)
+    assert points.status_code == 200
+    item = points.json()["items"][0]
+    assert item["elapsed_realtime_ns"] == 123456789
+    assert item["vertical_accuracy_m"] == 4.5
+    assert item["speed_accuracy_mps"] == 0.7
+    assert item["bearing_accuracy_deg"] == 5.0
+    assert item["provider"] == "fused"
+    assert item["is_mocked"] is False
+    assert item["quality_class"] == "good"
+    assert item["quality_score"] == 0.92
+    assert item["quality_reason"] == "high_confidence"
+    assert item["filtered_latitude"] == 50.8781
+    assert item["filtered_longitude"] == -119.8851
+    assert item["filtered_altitude_m"] == 1779.9
+    assert item["fused_speed_mps"] == 8.2
+    assert item["derived_speed_mps"] == 8.1
+    assert item["distance_delta_m"] == 1.4
+    assert item["motion_state"] == "moving"
+
+
 def test_sessions_upload_points_rejects_completed_session(
     client: TestClient,
     create_resort: Callable[..., Resort],
@@ -288,6 +364,80 @@ def test_sessions_get_detail_and_points_endpoints(
     points_payload = points.json()
     assert points_payload["session_id"] == session_id
     assert len(points_payload["items"]) == 2
+
+
+def test_sessions_points_batch_preserves_enriched_fields(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Sun Peaks")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    enriched_point = {
+        "t_offset_ms": 0,
+        "latitude": 50.95,
+        "longitude": -118.16,
+        "accuracy_m": 3.2,
+        "elapsed_realtime_ns": 123456789,
+        "altitude_m": 1450.5,
+        "vertical_accuracy_m": 4.1,
+        "speed_mps": 6.4,
+        "speed_accuracy_mps": 0.4,
+        "heading_deg": 182.0,
+        "bearing_accuracy_deg": 7.5,
+        "provider": "gps",
+        "is_mocked": False,
+        "quality_class": "good",
+        "quality_score": 0.91,
+        "quality_reason": "stable_fix",
+        "filtered_latitude": 50.9501,
+        "filtered_longitude": -118.1601,
+        "filtered_altitude_m": 1449.8,
+        "fused_speed_mps": 6.1,
+        "derived_speed_mps": 6.2,
+        "distance_delta_m": 4.7,
+        "motion_state": "moving",
+    }
+
+    upload = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={"points": [enriched_point]},
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    assert upload.json()["inserted_count"] == 1
+
+    points = client.get(f"/v1/sessions/{session_id}/points", headers=headers)
+    assert points.status_code == 200
+    items = points.json()["items"]
+    assert len(items) == 1
+    item = items[0]
+    assert item["elapsed_realtime_ns"] == 123456789
+    assert item["vertical_accuracy_m"] == 4.1
+    assert item["speed_accuracy_mps"] == 0.4
+    assert item["bearing_accuracy_deg"] == 7.5
+    assert item["provider"] == "gps"
+    assert item["is_mocked"] is False
+    assert item["quality_class"] == "good"
+    assert item["quality_score"] == 0.91
+    assert item["quality_reason"] == "stable_fix"
+    assert item["filtered_latitude"] == 50.9501
+    assert item["filtered_longitude"] == -118.1601
+    assert item["filtered_altitude_m"] == 1449.8
+    assert item["fused_speed_mps"] == 6.1
+    assert item["derived_speed_mps"] == 6.2
+    assert item["distance_delta_m"] == 4.7
+    assert item["motion_state"] == "moving"
 
 
 def test_sessions_points_batch_is_idempotent_on_duplicate_offsets(

@@ -5,6 +5,7 @@ import 'package:goofyrider_mobile/core/constants/session_constants.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
+import 'package:goofyrider_mobile/features/session/domain/tracking_mode_profiles.dart';
 import 'package:goofyrider_mobile/features/session/presentation/recording_controller.dart';
 
 class ControlledLocationRepository implements LocationTrackingRepository {
@@ -50,6 +51,9 @@ class ControlledLocationRepository implements LocationTrackingRepository {
     return _controller.stream;
   }
 
+  @override
+  Future<void> setTrackingMode(TrackingMode mode) async {}
+
   void emit(LocationSample sample) {
     _controller.add(sample);
   }
@@ -80,9 +84,10 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
+    final int activeDescentIntervalS =
+        (TrackingModeProfiles.activeDescent.intervalMs / 1000).round();
     return SessionStats(
-      durationS: _recoveryAcceptedPoints.length *
-          SessionConstants.targetIntervalSeconds,
+      durationS: _recoveryAcceptedPoints.length * activeDescentIntervalS,
       distanceM: 1200,
       maxSpeedMps: 14,
       avgSpeedMps: 8,
@@ -274,9 +279,11 @@ void main() {
     for (int i = 0; i < sampleCount; i++) {
       locationRepository.emit(
         LocationSample(
-          timestamp: start.add(Duration(
-            seconds: i * SessionConstants.targetIntervalSeconds,
-          )),
+          timestamp: start.add(
+            Duration(
+              milliseconds: i * TrackingModeProfiles.activeDescent.intervalMs,
+            ),
+          ),
           latitude: 49.0 + (i / 100000),
           longitude: -123.0 - (i / 100000),
           accuracyM: 5,

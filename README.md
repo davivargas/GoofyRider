@@ -106,9 +106,15 @@ Containerized (recommended for parity):
 docker compose up --build backend
 ```
 
+Before first run, set `SKI_API_KEY` (and optionally `SKI_API_HOST`) in `.env`.
+
 This starts:
 - `db` (PostgreSQL)
-- `backend` (FastAPI + Alembic migration on startup)
+- `backend` (FastAPI + Alembic migration + SkiAPI resort import on startup + weekly resort sync)
+
+Optional sync controls:
+- `RESORT_SYNC_ENABLED` (default: `true`)
+- `RESORT_SYNC_INTERVAL_DAYS` (default: `7`)
 
 API docs:
 - `http://127.0.0.1:8000/docs`
@@ -125,6 +131,7 @@ source .venv/bin/activate
 
 pip install -e .[dev]
 alembic upgrade head
+python -m app.scripts.import_resorts
 uvicorn app.main:app --reload
 ```
 

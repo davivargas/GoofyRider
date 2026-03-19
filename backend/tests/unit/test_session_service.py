@@ -221,3 +221,131 @@ def test_upload_points_batch_dedupes_duplicate_offsets_in_single_request() -> No
     assert len(point_repo.batches) == 1
     inserted_offsets = {point.t_offset_ms for point in point_repo.batches[0]}
     assert inserted_offsets == {0, 1000}
+
+
+def test_upload_points_batch_preserves_enriched_point_fields() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    point_repo = FakeSessionPointRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+
+    service = _build_service(
+        ride_session_repository=ride_sessions,
+        session_point_repository=point_repo,
+    )
+
+    inserted = service.upload_points_batch(
+        session_id=draft_session.id,
+        user_id=user_id,
+        points=[
+            SessionPointInputData(
+                t_offset_ms=0,
+                latitude=50.95,
+                longitude=-118.16,
+                accuracy_m=3.2,
+                elapsed_realtime_ns=123456789,
+                altitude_m=1450.5,
+                vertical_accuracy_m=4.1,
+                speed_mps=6.4,
+                speed_accuracy_mps=0.4,
+                heading_deg=182.0,
+                bearing_accuracy_deg=7.5,
+                provider="gps",
+                is_mocked=False,
+                quality_class="good",
+                quality_score=0.91,
+                quality_reason="stable_fix",
+                filtered_latitude=50.9501,
+                filtered_longitude=-118.1601,
+                filtered_altitude_m=1449.8,
+                fused_speed_mps=6.1,
+                derived_speed_mps=6.2,
+                distance_delta_m=4.7,
+                motion_state="moving",
+            )
+        ],
+    )
+
+    assert inserted == 1
+    stored_point = point_repo.batches[0][0]
+    assert stored_point.elapsed_realtime_ns == 123456789
+    assert stored_point.vertical_accuracy_m == 4.1
+    assert stored_point.speed_accuracy_mps == 0.4
+    assert stored_point.bearing_accuracy_deg == 7.5
+    assert stored_point.provider == "gps"
+    assert stored_point.is_mocked is False
+    assert stored_point.quality_class == "good"
+    assert stored_point.quality_score == 0.91
+    assert stored_point.quality_reason == "stable_fix"
+    assert stored_point.filtered_latitude == 50.9501
+    assert stored_point.filtered_longitude == -118.1601
+    assert stored_point.filtered_altitude_m == 1449.8
+    assert stored_point.fused_speed_mps == 6.1
+    assert stored_point.derived_speed_mps == 6.2
+    assert stored_point.distance_delta_m == 4.7
+    assert stored_point.motion_state == "moving"
+
+
+def test_upload_points_batch_preserves_richer_point_fields() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    point_repo = FakeSessionPointRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+
+    service = _build_service(
+        ride_session_repository=ride_sessions,
+        session_point_repository=point_repo,
+    )
+
+    inserted = service.upload_points_batch(
+        session_id=draft_session.id,
+        user_id=user_id,
+        points=[
+            SessionPointInputData(
+                t_offset_ms=0,
+                latitude=50.0,
+                longitude=-122.0,
+                accuracy_m=3.2,
+                elapsed_realtime_ns=123456789,
+                altitude_m=1500.0,
+                vertical_accuracy_m=4.4,
+                speed_mps=7.5,
+                speed_accuracy_mps=0.8,
+                heading_deg=42.0,
+                bearing_accuracy_deg=6.0,
+                provider="fused",
+                is_mocked=False,
+                quality_class="good",
+                quality_score=0.9,
+                quality_reason="strong_fix",
+                filtered_latitude=50.0001,
+                filtered_longitude=-122.0001,
+                filtered_altitude_m=1499.5,
+                fused_speed_mps=7.4,
+                derived_speed_mps=7.3,
+                distance_delta_m=1.2,
+                motion_state="moving",
+            )
+        ],
+    )
+
+    assert inserted == 1
+    saved_point = point_repo.batches[0][0]
+    assert saved_point.elapsed_realtime_ns == 123456789
+    assert saved_point.vertical_accuracy_m == 4.4
+    assert saved_point.speed_accuracy_mps == 0.8
+    assert saved_point.bearing_accuracy_deg == 6.0
+    assert saved_point.provider == "fused"
+    assert saved_point.is_mocked is False
+    assert saved_point.quality_class == "good"
+    assert saved_point.quality_score == 0.9
+    assert saved_point.quality_reason == "strong_fix"
+    assert saved_point.filtered_latitude == 50.0001
+    assert saved_point.filtered_longitude == -122.0001
+    assert saved_point.filtered_altitude_m == 1499.5
+    assert saved_point.fused_speed_mps == 7.4
+    assert saved_point.derived_speed_mps == 7.3
+    assert saved_point.distance_delta_m == 1.2
+    assert saved_point.motion_state == "moving"

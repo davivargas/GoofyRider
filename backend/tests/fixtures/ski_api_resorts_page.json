@@ -1,0 +1,31 @@
+{
+  "page": 1,
+  "per_page": 25,
+  "next_page": null,
+  "total": 2,
+  "total_pages": 1,
+  "data": [
+    {
+      "slug": "whistler-blackcomb",
+      "name": "Whistler Blackcomb",
+      "country": "CA",
+      "region": "BC",
+      "location": {
+        "latitude": 50.10693,
+        "longitude": -122.922073
+      },
+      "url": "https://api.skiapi.com/v1/resort/whistler-blackcomb"
+    },
+    {
+      "slug": "vail",
+      "name": "Vail",
+      "country": "US",
+      "region": "CO",
+      "location": {
+        "latitude": 39.6403,
+        "longitude": -106.3742
+      },
+      "url": "https://api.skiapi.com/v1/resort/vail"
+    }
+  ]
+}

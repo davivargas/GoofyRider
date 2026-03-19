@@ -29,9 +29,25 @@ class SessionPointInputData:
     latitude: float
     longitude: float
     accuracy_m: float | None = None
+    elapsed_realtime_ns: int | None = None
     altitude_m: float | None = None
+    vertical_accuracy_m: float | None = None
     speed_mps: float | None = None
+    speed_accuracy_mps: float | None = None
     heading_deg: float | None = None
+    bearing_accuracy_deg: float | None = None
+    provider: str | None = None
+    is_mocked: bool | None = None
+    quality_class: str | None = None
+    quality_score: float | None = None
+    quality_reason: str | None = None
+    filtered_latitude: float | None = None
+    filtered_longitude: float | None = None
+    filtered_altitude_m: float | None = None
+    fused_speed_mps: float | None = None
+    derived_speed_mps: float | None = None
+    distance_delta_m: float | None = None
+    motion_state: str | None = None
 
 
 @dataclass(frozen=True)
@@ -263,9 +279,25 @@ class SessionService:
                 latitude=point.latitude,
                 longitude=point.longitude,
                 accuracy_m=point.accuracy_m,
+                elapsed_realtime_ns=point.elapsed_realtime_ns,
                 altitude_m=point.altitude_m,
+                vertical_accuracy_m=point.vertical_accuracy_m,
                 speed_mps=point.speed_mps,
+                speed_accuracy_mps=point.speed_accuracy_mps,
                 heading_deg=point.heading_deg,
+                bearing_accuracy_deg=point.bearing_accuracy_deg,
+                provider=point.provider,
+                is_mocked=point.is_mocked,
+                quality_class=point.quality_class,
+                quality_score=point.quality_score,
+                quality_reason=point.quality_reason,
+                filtered_latitude=point.filtered_latitude,
+                filtered_longitude=point.filtered_longitude,
+                filtered_altitude_m=point.filtered_altitude_m,
+                fused_speed_mps=point.fused_speed_mps,
+                derived_speed_mps=point.derived_speed_mps,
+                distance_delta_m=point.distance_delta_m,
+                motion_state=point.motion_state,
             )
             for point in points
             if point.t_offset_ms not in existing_offsets

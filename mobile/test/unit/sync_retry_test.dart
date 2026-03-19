@@ -36,6 +36,9 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Stream<LocationSample> watchPosition() {
     return const Stream<LocationSample>.empty();
   }
+
+  @override
+  Future<void> setTrackingMode(TrackingMode mode) async {}
 }
 
 class FakeSessionRepository implements SessionRepository {

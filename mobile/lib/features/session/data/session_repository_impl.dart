@@ -14,16 +14,13 @@ class SessionRepositoryImpl implements SessionRepository {
   SessionRepositoryImpl({
     required DriftLocalDatabase localDatabase,
     required SessionApi api,
-    SessionAnalyticsEngine analyticsEngine = const SessionAnalyticsEngine(),
     SessionStateMachine stateMachine = const SessionStateMachine(),
   })  : _localDatabase = localDatabase,
         _api = api,
-        _analyticsEngine = analyticsEngine,
         _stateMachine = stateMachine;
 
   final DriftLocalDatabase _localDatabase;
   final SessionApi _api;
-  final SessionAnalyticsEngine _analyticsEngine;
   final SessionStateMachine _stateMachine;
 
   @override
@@ -65,29 +62,8 @@ class SessionRepositoryImpl implements SessionRepository {
     if (session.state != LocalSessionState.recording) {
       return;
     }
-
-    final LocalSessionPoint? previousAccepted =
-        await _localDatabase.latestAcceptedPoint(localSessionId);
-
-    final PointAcceptanceResult acceptance = _analyticsEngine.evaluate(
-      previousAccepted,
-      point,
-    );
-
-    final NewSessionPoint savedPoint = NewSessionPoint(
-      recordedAt: point.recordedAt,
-      tOffsetMs: point.tOffsetMs,
-      latitude: point.latitude,
-      longitude: point.longitude,
-      accuracyM: point.accuracyM,
-      altitudeM: point.altitudeM,
-      speedMps: point.speedMps,
-      headingDeg: point.headingDeg,
-      acceptedForAnalytics: acceptance.acceptedForAnalytics,
-    );
-
     await _localDatabase.insertPoint(
-        localSessionId: localSessionId, point: savedPoint);
+        localSessionId: localSessionId, point: point);
   }
 
   @override
@@ -98,14 +74,12 @@ class SessionRepositoryImpl implements SessionRepository {
     final LocalRideSession session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.locallyCompleted);
 
-    final List<LocalSessionPoint> accepted = await _localDatabase.listPoints(
-      localSessionId,
-      onlyAccepted: true,
-    );
+    final List<LocalSessionPoint> points =
+        await _localDatabase.listPoints(localSessionId);
     final int effectiveDurationS =
-        activeDurationS ?? _computeActiveDurationSeconds(accepted);
-    final SessionStats stats = _analyticsEngine.computeStats(
-      acceptedPoints: accepted,
+        activeDurationS ?? _computeActiveDurationSeconds(points);
+    final SessionStats stats = _computeStatsFromTrackedPoints(
+      points: points,
       activeDurationS: effectiveDurationS,
     );
 
@@ -129,13 +103,11 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
-    final List<LocalSessionPoint> accepted = await _localDatabase.listPoints(
-      localSessionId,
-      onlyAccepted: true,
-    );
-    final int activeDurationS = _computeActiveDurationSeconds(accepted);
-    return _analyticsEngine.computeStats(
-      acceptedPoints: accepted,
+    final List<LocalSessionPoint> points =
+        await _localDatabase.listPoints(localSessionId);
+    final int activeDurationS = _computeActiveDurationSeconds(points);
+    return _computeStatsFromTrackedPoints(
+      points: points,
       activeDurationS: activeDurationS,
     );
   }
@@ -187,9 +159,10 @@ class SessionRepositoryImpl implements SessionRepository {
       for (int index = 0;
           index < dedupedUploadable.length;
           index += SessionConstants.uploadBatchSize) {
-        final int end =
-            min(index + SessionConstants.uploadBatchSize, dedupedUploadable.length);
-        final List<LocalSessionPoint> batch = dedupedUploadable.sublist(index, end);
+        final int end = min(
+            index + SessionConstants.uploadBatchSize, dedupedUploadable.length);
+        final List<LocalSessionPoint> batch =
+            dedupedUploadable.sublist(index, end);
 
         await _api.uploadPointBatch(
           remoteSessionId: remoteId,
@@ -200,9 +173,25 @@ class SessionRepositoryImpl implements SessionRepository {
                   'latitude': point.latitude,
                   'longitude': point.longitude,
                   'accuracy_m': point.accuracyM,
+                  'elapsed_realtime_ns': point.elapsedRealtimeNs,
                   'altitude_m': point.altitudeM,
+                  'vertical_accuracy_m': point.verticalAccuracyM,
                   'speed_mps': point.speedMps,
+                  'speed_accuracy_mps': point.speedAccuracyMps,
                   'heading_deg': point.headingDeg,
+                  'bearing_accuracy_deg': point.bearingAccuracyDeg,
+                  'provider': point.provider,
+                  'is_mocked': point.isMocked,
+                  'quality_class': point.qualityClass,
+                  'quality_score': point.qualityScore,
+                  'quality_reason': point.qualityReason,
+                  'filtered_latitude': point.filteredLatitude,
+                  'filtered_longitude': point.filteredLongitude,
+                  'filtered_altitude_m': point.filteredAltitudeM,
+                  'fused_speed_mps': point.fusedSpeedMps,
+                  'derived_speed_mps': point.derivedSpeedMps,
+                  'distance_delta_m': point.distanceDeltaM,
+                  'motion_state': point.motionState,
                 },
               )
               .toList(growable: false),
@@ -214,8 +203,8 @@ class SessionRepositoryImpl implements SessionRepository {
         endedAt: syncing.endedAt ?? DateTime.now().toUtc(),
         durationS: syncing.activeDurationS,
         distanceM: syncing.distanceM,
-        maxSpeedMps: syncing.maxSpeedMps,
-        avgSpeedMps: syncing.avgSpeedMps,
+        maxSpeedMps: _sanitizeMaxSpeedForRemote(syncing),
+        avgSpeedMps: _sanitizeAvgSpeedForRemote(syncing),
         elevationGainM: syncing.elevationGainM,
         elevationLossM: syncing.elevationLossM,
       );
@@ -303,23 +292,27 @@ class SessionRepositoryImpl implements SessionRepository {
     return session;
   }
 
-  int _computeActiveDurationSeconds(List<LocalSessionPoint> accepted) {
+  int _computeActiveDurationSeconds(List<LocalSessionPoint> points) {
+    final List<LocalSessionPoint> accepted = points
+        .where((LocalSessionPoint point) => point.acceptedForAnalytics)
+        .toList(growable: false);
     if (accepted.length < 2) {
       return 0;
     }
 
-    int total = 0;
+    final int maxDeltaMilliseconds = SessionConstants.maxDeltaSeconds * 1000;
+    int totalMilliseconds = 0;
     for (int index = 1; index < accepted.length; index++) {
-      final int delta = accepted[index]
+      final int deltaMilliseconds = accepted[index]
           .recordedAt
           .difference(accepted[index - 1].recordedAt)
-          .inSeconds;
-      if (delta >= SessionConstants.minDeltaSeconds &&
-          delta <= SessionConstants.maxDeltaSeconds) {
-        total += delta;
+          .inMilliseconds;
+      if (deltaMilliseconds <= 0 || deltaMilliseconds > maxDeltaMilliseconds) {
+        continue;
       }
+      totalMilliseconds += deltaMilliseconds;
     }
-    return total;
+    return (totalMilliseconds / 1000).round();
   }
 
   Future<Set<int>> _fetchExistingRemoteOffsets(String remoteId) async {
@@ -346,6 +339,194 @@ class SessionRepositoryImpl implements SessionRepository {
       uniquePoints.add(point);
     }
     return uniquePoints;
+  }
+
+  SessionStats _computeStatsFromTrackedPoints({
+    required List<LocalSessionPoint> points,
+    required int activeDurationS,
+  }) {
+    final List<LocalSessionPoint> accepted = points
+        .where((LocalSessionPoint point) => point.acceptedForAnalytics)
+        .toList(growable: false);
+    if (accepted.isEmpty) {
+      return SessionStats(
+        durationS: activeDurationS,
+        distanceM: 0,
+        maxSpeedMps: 0,
+        avgSpeedMps: 0,
+        elevationGainM: null,
+        elevationLossM: null,
+      );
+    }
+
+    final double distanceM = _computeDistance(accepted);
+    final double robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
+    final double fallbackMaxSpeedMps = _computeFallbackMaxSpeed(accepted);
+    final (int? gain, int? loss) = _computeElevation(accepted);
+    final double avgSpeedMps =
+        activeDurationS == 0 ? 0 : distanceM / activeDurationS;
+    final double maxSpeedMps =
+        max(max(robustMaxSpeedMps, fallbackMaxSpeedMps), avgSpeedMps);
+
+    return SessionStats(
+      durationS: activeDurationS,
+      distanceM: distanceM,
+      maxSpeedMps: maxSpeedMps,
+      avgSpeedMps: avgSpeedMps,
+      elevationGainM: gain,
+      elevationLossM: loss,
+    );
+  }
+
+  double _computeDistance(List<LocalSessionPoint> points) {
+    double distanceM = 0;
+    LocalSessionPoint? previous;
+    for (final LocalSessionPoint point in points) {
+      if (point.distanceDeltaM != null && point.distanceDeltaM! > 0) {
+        distanceM += point.distanceDeltaM!;
+        previous = point;
+        continue;
+      }
+      if (previous == null) {
+        previous = point;
+        continue;
+      }
+
+      final double startLat = previous.filteredLatitude ?? previous.latitude;
+      final double startLng = previous.filteredLongitude ?? previous.longitude;
+      final double endLat = point.filteredLatitude ?? point.latitude;
+      final double endLng = point.filteredLongitude ?? point.longitude;
+
+      final double segmentDistance =
+          haversineDistanceMeters(startLat, startLng, endLat, endLng);
+      if (segmentDistance > 0) {
+        distanceM += segmentDistance;
+      }
+      previous = point;
+    }
+    return distanceM;
+  }
+
+  double _computeRobustMaxSpeed(List<LocalSessionPoint> points) {
+    final List<LocalSessionPoint> sorted = List<LocalSessionPoint>.from(points)
+      ..sort((LocalSessionPoint a, LocalSessionPoint b) =>
+          a.recordedAt.compareTo(b.recordedAt));
+
+    double robustMax = 0;
+    final List<_TimedSpeed> window = <_TimedSpeed>[];
+    for (final LocalSessionPoint point in sorted) {
+      final double? speed =
+          point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps;
+      if (speed == null) {
+        continue;
+      }
+      if (speed < 0 || speed > SessionConstants.speedHardCapMetersPerSecond) {
+        continue;
+      }
+
+      window.add(
+        _TimedSpeed(
+          time: point.recordedAt,
+          speed: speed,
+          highConfidence: point.qualityClass == 'accept',
+        ),
+      );
+      window.removeWhere(
+        (_TimedSpeed item) =>
+            point.recordedAt.difference(item.time).inSeconds >
+            SessionConstants.maxSpeedWindowSeconds,
+      );
+
+      final List<double> candidates = window
+          .where((_TimedSpeed item) => item.highConfidence)
+          .map((_TimedSpeed item) => item.speed)
+          .toList(growable: false);
+      if (candidates.length < SessionConstants.maxSpeedPersistenceSamples) {
+        continue;
+      }
+
+      candidates.sort();
+      final int middle = candidates.length ~/ 2;
+      final double median = candidates.length.isOdd
+          ? candidates[middle]
+          : (candidates[middle - 1] + candidates[middle]) / 2;
+      robustMax = max(robustMax, median);
+    }
+    return robustMax;
+  }
+
+  double _computeFallbackMaxSpeed(List<LocalSessionPoint> points) {
+    double fallbackMax = 0;
+    for (final LocalSessionPoint point in points) {
+      final double? speed =
+          point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps;
+      if (speed == null) {
+        continue;
+      }
+      if (speed < 0 || speed > SessionConstants.speedHardCapMetersPerSecond) {
+        continue;
+      }
+      fallbackMax = max(fallbackMax, speed);
+    }
+    return fallbackMax;
+  }
+
+  double _sanitizeAvgSpeedForRemote(LocalRideSession session) {
+    final double avg = session.avgSpeedMps;
+    if (!avg.isFinite || avg < 0) {
+      return 0;
+    }
+    return avg;
+  }
+
+  double _sanitizeMaxSpeedForRemote(LocalRideSession session) {
+    final double sanitizedAvg = _sanitizeAvgSpeedForRemote(session);
+    final double rawMax = session.maxSpeedMps;
+    final double sanitizedRawMax =
+        (!rawMax.isFinite || rawMax < 0) ? 0 : rawMax;
+    return max(sanitizedRawMax, sanitizedAvg);
+  }
+
+  (int?, int?) _computeElevation(List<LocalSessionPoint> points) {
+    double? previousAltitude;
+    int gain = 0;
+    int loss = 0;
+    for (final LocalSessionPoint point in points) {
+      final double? altitude = point.filteredAltitudeM ?? point.altitudeM;
+      if (altitude == null) {
+        continue;
+      }
+
+      if (point.verticalAccuracyM != null &&
+          point.verticalAccuracyM! >
+              SessionConstants.verticalAccuracyWeakThresholdMeters) {
+        continue;
+      }
+
+      if (previousAltitude == null) {
+        previousAltitude = altitude;
+        continue;
+      }
+
+      final double threshold = max(
+        SessionConstants.verticalHysteresisFloorMeters,
+        (point.verticalAccuracyM ??
+                SessionConstants.verticalAccuracyWeakThresholdMeters) *
+            SessionConstants.verticalHysteresisAccuracyFactor,
+      );
+      final double delta = altitude - previousAltitude;
+      if (delta.abs() < threshold) {
+        continue;
+      }
+      if (delta > 0) {
+        gain += delta.round();
+      } else {
+        loss += delta.abs().round();
+      }
+      previousAltitude = altitude;
+    }
+
+    return (gain == 0 ? null : gain, loss == 0 ? null : loss);
   }
 
   LocalRideSession _mapRemoteAsLocal(Map<String, dynamic> raw) {
@@ -375,4 +556,16 @@ class SessionRepositoryImpl implements SessionRepository {
       updatedAt: DateTime.parse(raw['started_at'] as String).toUtc(),
     );
   }
+}
+
+class _TimedSpeed {
+  const _TimedSpeed({
+    required this.time,
+    required this.speed,
+    required this.highConfidence,
+  });
+
+  final DateTime time;
+  final double speed;
+  final bool highConfidence;
 }

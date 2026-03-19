@@ -26,25 +26,10 @@ TABLES_TO_TRUNCATE = [
 def db() -> Generator[Session, None, None]:
     session = SessionLocal()
     try:
+        _truncate_known_tables(session)
         yield session
     finally:
-        existing_tables = set(
-            session.execute(
-                text(
-                    """
-                    SELECT tablename
-                    FROM pg_tables
-                    WHERE schemaname = 'public'
-                    """
-                )
-            ).scalars()
-        )
-
-        for table in TABLES_TO_TRUNCATE:
-            if table in existing_tables:
-                session.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
-
-        session.commit()
+        _truncate_known_tables(session)
         session.close()
 
 
@@ -107,3 +92,24 @@ def register_user(client: TestClient) -> Callable[..., dict[str, str]]:
         }
 
     return _register_user
+
+
+def _truncate_known_tables(session: Session) -> None:
+    session.rollback()
+    existing_tables = set(
+        session.execute(
+            text(
+                """
+                SELECT tablename
+                FROM pg_tables
+                WHERE schemaname = 'public'
+                """
+            )
+        ).scalars()
+    )
+
+    for table in TABLES_TO_TRUNCATE:
+        if table in existing_tables:
+            session.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
+
+    session.commit()
