@@ -35,6 +35,19 @@ String? _extractMessage(Object? payload) {
     if (detail is String && detail.isNotEmpty) {
       return detail;
     }
+    if (detail is List) {
+      for (final Object? item in detail) {
+        if (item is Map<String, dynamic>) {
+          final Object? message = item['msg'];
+          if (message is String && message.isNotEmpty) {
+            return message;
+          }
+        }
+        if (item is String && item.isNotEmpty) {
+          return item;
+        }
+      }
+    }
   }
   return null;
 }
