@@ -18,10 +18,17 @@ from app.repositories.weather_cache_repository import WeatherCacheRepository
 from app.services.auth_service import AuthService
 from app.services.exceptions import AuthenticationError
 from app.services.favorites_service import FavoritesService
+from app.services.resort_import_service import ResortImportService
 from app.services.resort_service import ResortService
 from app.services.session_service import SessionService
+from app.services.ski_api_resort_source import SkiApiResortSource
 from app.services.weather_service import OpenMeteoWeatherProvider
 from app.services.weather_service import WeatherService
+from app.core.config import get_ski_api_base_url
+from app.core.config import get_ski_api_host
+from app.core.config import get_ski_api_key
+from app.core.config import get_ski_api_page_size
+from app.core.config import get_ski_api_timeout_seconds
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -68,6 +75,27 @@ def get_resort_service(
     resort_repository: ResortRepository = Depends(get_resort_repository),
 ) -> ResortService:
     return ResortService(resort_repository=resort_repository)
+
+
+def get_ski_api_resort_source() -> SkiApiResortSource:
+    return SkiApiResortSource(
+        base_url=get_ski_api_base_url(),
+        api_key=get_ski_api_key(),
+        api_host=get_ski_api_host(),
+        page_size=get_ski_api_page_size(),
+        timeout_seconds=get_ski_api_timeout_seconds(),
+    )
+
+
+def get_resort_import_service(
+    resort_repository: ResortRepository = Depends(get_resort_repository),
+    resort_source: SkiApiResortSource = Depends(get_ski_api_resort_source),
+) -> ResortImportService:
+    return ResortImportService(
+        resort_repository=resort_repository,
+        resort_source=resort_source,
+        deactivate_missing=False,
+    )
 
 
 def get_favorites_service(

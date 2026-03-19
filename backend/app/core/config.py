@@ -55,6 +55,58 @@ def get_sqlalchemy_echo() -> bool:
     raise ValueError("SQLALCHEMY_ECHO must be a boolean value.")
 
 
+def get_ski_api_base_url() -> str:
+    raw_value = os.getenv("SKI_API_BASE_URL", "https://api.skiapi.com/v1")
+    normalized = raw_value.strip().rstrip("/")
+    if not normalized:
+        raise ValueError("SKI_API_BASE_URL must not be empty.")
+    return normalized
+
+
+def get_ski_api_host() -> str | None:
+    raw_value = os.getenv("SKI_API_HOST")
+    if raw_value is None:
+        return None
+
+    normalized = raw_value.strip()
+    return normalized or None
+
+
+def get_ski_api_key() -> str | None:
+    raw_value = os.getenv("SKI_API_KEY")
+    if raw_value is None:
+        return None
+
+    normalized = raw_value.strip()
+    return normalized or None
+
+
+def get_ski_api_page_size() -> int:
+    return _get_positive_int("SKI_API_PAGE_SIZE", default=50)
+
+
+def get_ski_api_timeout_seconds() -> int:
+    return _get_positive_int("SKI_API_TIMEOUT_SECONDS", default=10)
+
+
+def get_resort_sync_enabled() -> bool:
+    raw_value = os.getenv("RESORT_SYNC_ENABLED")
+    if raw_value is None:
+        return True
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    raise ValueError("RESORT_SYNC_ENABLED must be a boolean value.")
+
+
+def get_resort_sync_interval_days() -> int:
+    return _get_positive_int("RESORT_SYNC_INTERVAL_DAYS", default=7)
+
+
 def _build_database_url_from_postgres_env() -> str:
     user = _get_required_env("POSTGRES_USER")
     password = _get_required_env("POSTGRES_PASSWORD")
