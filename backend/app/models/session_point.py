@@ -2,12 +2,14 @@
 from datetime import datetime
 
 from sqlalchemy import BigInteger
+from sqlalchemy import Boolean
 from sqlalchemy import DateTime
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import Text
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
@@ -54,7 +56,15 @@ class SessionPoint(Base):
         Float,
         nullable=True,
     )
+    elapsed_realtime_ns: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
     altitude_m: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    vertical_accuracy_m: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,
     )
@@ -62,8 +72,64 @@ class SessionPoint(Base):
         Float,
         nullable=True,
     )
+    speed_accuracy_mps: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
     heading_deg: Mapped[float | None] = mapped_column(
         Float,
+        nullable=True,
+    )
+    bearing_accuracy_deg: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    provider: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    is_mocked: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+    )
+    quality_class: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    quality_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    quality_reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    filtered_latitude: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    filtered_longitude: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    filtered_altitude_m: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    fused_speed_mps: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    derived_speed_mps: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    distance_delta_m: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    motion_state: Mapped[str | None] = mapped_column(
+        Text,
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

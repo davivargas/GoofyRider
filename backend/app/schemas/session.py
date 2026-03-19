@@ -18,9 +18,25 @@ class SessionPointInput(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     accuracy_m: float | None = Field(default=None, ge=0)
+    elapsed_realtime_ns: int | None = Field(default=None, ge=0)
     altitude_m: float | None = None
+    vertical_accuracy_m: float | None = Field(default=None, ge=0)
     speed_mps: float | None = Field(default=None, ge=0)
+    speed_accuracy_mps: float | None = Field(default=None, ge=0)
     heading_deg: float | None = Field(default=None, ge=0, le=360)
+    bearing_accuracy_deg: float | None = Field(default=None, ge=0)
+    provider: str | None = None
+    is_mocked: bool | None = None
+    quality_class: str | None = None
+    quality_score: float | None = Field(default=None, ge=0, le=1)
+    quality_reason: str | None = None
+    filtered_latitude: float | None = Field(default=None, ge=-90, le=90)
+    filtered_longitude: float | None = Field(default=None, ge=-180, le=180)
+    filtered_altitude_m: float | None = None
+    fused_speed_mps: float | None = Field(default=None, ge=0)
+    derived_speed_mps: float | None = Field(default=None, ge=0)
+    distance_delta_m: float | None = Field(default=None, ge=0)
+    motion_state: str | None = None
 
 
 class SessionPointsBatchRequest(BaseModel):
@@ -84,9 +100,25 @@ class SessionPointPublic(BaseModel):
     latitude: float
     longitude: float
     accuracy_m: float | None
+    elapsed_realtime_ns: int | None
     altitude_m: float | None
+    vertical_accuracy_m: float | None
     speed_mps: float | None
+    speed_accuracy_mps: float | None
     heading_deg: float | None
+    bearing_accuracy_deg: float | None
+    provider: str | None
+    is_mocked: bool | None
+    quality_class: str | None
+    quality_score: float | None
+    quality_reason: str | None
+    filtered_latitude: float | None
+    filtered_longitude: float | None
+    filtered_altitude_m: float | None
+    fused_speed_mps: float | None
+    derived_speed_mps: float | None
+    distance_delta_m: float | None
+    motion_state: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
