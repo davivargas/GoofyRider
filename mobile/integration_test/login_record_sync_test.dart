@@ -122,6 +122,14 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) async {
+    return const <TrackingDiagnosticEvent>[];
+  }
+
+  @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async =>
       <LocalRideSession>[];
 
@@ -149,6 +157,14 @@ class FakeSessionRepository implements SessionRepository {
     syncCalled = true;
     return _session(LocalSessionState.synced);
   }
+
+  @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) async {}
 
   @override
   Future<int> unsyncedCount() async => 0;

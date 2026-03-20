@@ -47,6 +47,19 @@ class ControlledLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    return LocationSample(
+      timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+      latitude: 49,
+      longitude: -123,
+      accuracyM: 6,
+      altitudeM: 500,
+      speedMps: 0,
+      headingDeg: 0,
+    );
+  }
+
+  @override
   Stream<LocationSample> watchPosition() {
     return _controller.stream;
   }
@@ -60,6 +73,61 @@ class ControlledLocationRepository implements LocationTrackingRepository {
 
   Future<void> close() async {
     await _controller.close();
+  }
+}
+
+class HangingCancelLocationRepository implements LocationTrackingRepository {
+  HangingCancelLocationRepository();
+
+  final StreamController<LocationSample> _controller =
+      StreamController<LocationSample>.broadcast(
+    onCancel: _neverEndingCancel,
+  );
+
+  static Future<void> _neverEndingCancel() {
+    return Completer<void>().future;
+  }
+
+  @override
+  Future<LocationPermissionState> checkPermissions() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
+  Future<LocationPermissionState> ensurePermissions() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
+  Future<bool> isServiceEnabled() async {
+    return true;
+  }
+
+  @override
+  Future<bool> openAppSettings() async {
+    return true;
+  }
+
+  @override
+  Future<bool> openLocationSettings() async {
+    return true;
+  }
+
+  @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    return null;
+  }
+
+  @override
+  Stream<LocationSample> watchPosition() {
+    return _controller.stream;
+  }
+
+  @override
+  Future<void> setTrackingMode(TrackingMode mode) async {}
+
+  void emit(LocationSample sample) {
+    _controller.add(sample);
   }
 }
 
@@ -115,13 +183,30 @@ class FakeSessionRepository implements SessionRepository {
       session: session,
       points: _recoveryAcceptedPoints,
       acceptedPoints: _recoveryAcceptedPoints,
+      trackingDiagnostics: const <TrackingDiagnosticEvent>[],
     );
+  }
+
+  @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) async {
+    return const <TrackingDiagnosticEvent>[];
   }
 
   @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async {
     return <LocalRideSession>[];
   }
+
+  @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async {
+    return <LocalRideSession>[];
+  }
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {}
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
@@ -180,6 +265,14 @@ class FakeSessionRepository implements SessionRepository {
   Future<int> unsyncedCount() async {
     return 0;
   }
+
+  @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) async {}
 }
 
 LocalRideSession _buildSession({
@@ -190,6 +283,7 @@ LocalRideSession _buildSession({
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: id,
+    ownerUserId: 'user-1',
     remoteId: null,
     resortId: null,
     startedAt: startedAt,
@@ -338,6 +432,42 @@ void main() {
     await controller.openLocationPermissionSettings();
     expect(
         controller.state.errorMessage, contains('Could not open app settings'));
+
+    controller.dispose();
+  });
+
+  test('finish does not stay stuck when stream cancellation hangs', () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final HangingCancelLocationRepository locationRepository =
+        HangingCancelLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+        latitude: 49.0,
+        longitude: -123.0,
+        accuracyM: 5,
+        altitudeM: 100,
+        speedMps: 4,
+        headingDeg: 90,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    await controller.finish().timeout(const Duration(seconds: 8));
+    expect(controller.state.phase, isNot(RecordScreenPhase.finishing));
+    expect(controller.state.phase, RecordScreenPhase.ready);
+    expect(controller.state.session, isNull);
+    expect(controller.state.route, isEmpty);
+    expect(controller.state.liveStats.distanceM, 0);
+    expect(controller.state.elapsed, Duration.zero);
 
     controller.dispose();
   });
