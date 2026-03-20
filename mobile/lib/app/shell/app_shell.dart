@@ -14,20 +14,23 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  static const double _edgeSwipeInset = 28;
-  static const double _swipeVelocityThreshold = 700;
-  double? _dragStartDx;
+  static const double _swipeVelocityThreshold = 400;
+  static const double _swipeDistanceThreshold = 70;
+  double _dragDx = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onHorizontalDragStart: (DragStartDetails details) {
-          _dragStartDx = details.globalPosition.dx;
+        onHorizontalDragUpdate: (DragUpdateDetails details) {
+          _dragDx += details.delta.dx;
         },
         onHorizontalDragEnd: (DragEndDetails details) {
           _onHorizontalDragEnd(context, details);
+        },
+        onHorizontalDragCancel: () {
+          _dragDx = 0;
         },
         child: widget.navigationShell,
       ),
@@ -66,27 +69,21 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _onHorizontalDragEnd(BuildContext context, DragEndDetails details) {
-    final double? dragStartDx = _dragStartDx;
-    _dragStartDx = null;
-    if (dragStartDx == null) {
-      return;
-    }
-
-    final double width = MediaQuery.sizeOf(context).width;
-    final bool nearScreenEdge = dragStartDx <= _edgeSwipeInset ||
-        dragStartDx >= width - _edgeSwipeInset;
-    if (!nearScreenEdge) {
-      return;
-    }
-
     final double velocity = details.primaryVelocity ?? 0;
-    if (velocity.abs() < _swipeVelocityThreshold) {
+
+    final swipedLeft = _dragDx <= -_swipeDistanceThreshold ||
+        velocity <= -_swipeVelocityThreshold;
+
+    final swipedRight = _dragDx >= _swipeDistanceThreshold ||
+        velocity >= _swipeVelocityThreshold;
+
+    _dragDx = 0;
+    if(!swipedLeft && !swipedRight) {
       return;
     }
 
     final int tabCount = 5;
     final int currentIndex = widget.navigationShell.currentIndex;
-    final bool swipedLeft = velocity < 0;
     final int nextIndex = swipedLeft ? currentIndex + 1 : currentIndex - 1;
 
     if (nextIndex < 0 || nextIndex >= tabCount) {
