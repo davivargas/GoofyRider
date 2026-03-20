@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/providers.dart';
+import '../../../core/providers/distance_unit_preference_provider.dart';
+import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../auth/presentation/auth_providers.dart';
 
@@ -15,6 +17,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -37,6 +40,8 @@ class ProfileScreen extends ConsumerWidget {
                 children: <Widget>[
                   const Text('Units preference'),
                   const SizedBox(height: 10),
+                  const Text('Speed'),
+                  const SizedBox(height: 8),
                   SegmentedButton<SpeedUnit>(
                     segments: const <ButtonSegment<SpeedUnit>>[
                       ButtonSegment<SpeedUnit>(
@@ -47,12 +52,37 @@ class ProfileScreen extends ConsumerWidget {
                         value: SpeedUnit.metersPerSecond,
                         label: Text('m/s'),
                       ),
+                      ButtonSegment<SpeedUnit>(
+                        value: SpeedUnit.milesPerHour,
+                        label: Text('mph'),
+                      ),
                     ],
                     selected: <SpeedUnit>{speedUnit},
                     onSelectionChanged: (Set<SpeedUnit> selection) {
                       ref
                           .read(speedUnitPreferenceProvider.notifier)
                           .setSpeedUnit(selection.first);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Distance'),
+                  const SizedBox(height: 8),
+                  SegmentedButton<DistanceUnit>(
+                    segments: const <ButtonSegment<DistanceUnit>>[
+                      ButtonSegment<DistanceUnit>(
+                        value: DistanceUnit.meters,
+                        label: Text('m'),
+                      ),
+                      ButtonSegment<DistanceUnit>(
+                        value: DistanceUnit.feet,
+                        label: Text('ft'),
+                      ),
+                    ],
+                    selected: <DistanceUnit>{distanceUnit},
+                    onSelectionChanged: (Set<DistanceUnit> selection) {
+                      ref
+                          .read(distanceUnitPreferenceProvider.notifier)
+                          .setDistanceUnit(selection.first);
                     },
                   ),
                 ],

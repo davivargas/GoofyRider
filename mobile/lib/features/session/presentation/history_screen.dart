@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/utils/date_time_formatting.dart';
+import '../../../core/utils/distance_unit.dart';
+import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_empty_view.dart';
 import '../../../core/widgets/app_error_view.dart';
@@ -19,6 +25,9 @@ class HistoryScreen extends ConsumerWidget {
     final AsyncValue<List<LocalRideSession>> history =
         ref.watch(historyProvider);
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final bool showDebugDiagnostics =
+        kDebugMode && AppConstants.isDebugDiagnostics;
 
     return Scaffold(
       appBar: AppBar(title: const Text('History')),
@@ -59,22 +68,51 @@ class HistoryScreen extends ConsumerWidget {
                               ),
                             )
                         : null,
+                    leading: _SessionDateBox(date: session.startedAt),
                     title: Text(
                       session.resortId ?? 'Unknown resort',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      'Duration ${session.activeDurationS}s | Distance ${session.distanceM.toStringAsFixed(0)}m\n'
+                      'Duration ${formatSecondsAsDuration(session.activeDurationS)} | Distance ${distanceUnit.formatFromMeters(session.distanceM)}\n'
                       'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
                     ),
-                    trailing: _SyncBadge(state: session.state),
+                    trailing: showDebugDiagnostics
+                        ? _SyncBadge(state: session.state)
+                        : null,
                   ),
                 );
               },
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _SessionDateBox extends StatelessWidget {
+  const _SessionDateBox({required this.date});
+
+  final DateTime date;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF123048),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        date.toDayLabel(),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

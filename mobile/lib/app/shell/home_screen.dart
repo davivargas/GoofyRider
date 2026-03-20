@@ -1,8 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/route_paths.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/providers/distance_unit_preference_provider.dart';
+import '../../core/utils/distance_unit.dart';
+import '../../core/utils/duration_formatting.dart';
 import '../../features/auth/presentation/auth_providers.dart';
 import '../../features/resorts/domain/resort_models.dart';
 import '../../features/resorts/presentation/resort_providers.dart';
@@ -15,12 +20,15 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
+    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final AsyncValue<List<ResortSummary>> favorites =
         ref.watch(favoriteResortsProvider);
     final AsyncValue<List<LocalRideSession>> history =
         ref.watch(historyProvider);
     final AsyncValue<int> unsyncedCount =
         ref.watch(unsyncedSessionCountProvider);
+    final bool showDebugDiagnostics =
+        kDebugMode && AppConstants.isDebugDiagnostics;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
@@ -40,29 +48,32 @@ class HomeScreen extends ConsumerWidget {
             Card(
               child: ListTile(
                 title: Text(
-                    'Welcome back, ${authState.session?.user.displayName ?? 'Rider'}'),
+                  'Welcome back, ${authState.session?.user.displayName ?? 'Rider'}',
+                ),
                 subtitle: const Text('Ready for your next run?'),
               ),
             ),
             const SizedBox(height: 12),
-            unsyncedCount.when(
-              data: (int count) {
-                if (count <= 0) {
-                  return const SizedBox.shrink();
-                }
-                return Card(
-                  color: Colors.orange.withValues(alpha: 0.16),
-                  child: ListTile(
-                    leading: const Icon(Icons.sync_problem),
-                    title: Text('$count session(s) pending sync'),
-                    subtitle:
-                        const Text('Open History to retry any failed uploads.'),
-                  ),
-                );
-              },
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-            ),
+            if (showDebugDiagnostics)
+              unsyncedCount.when(
+                data: (int count) {
+                  if (count <= 0) {
+                    return const SizedBox.shrink();
+                  }
+                  return Card(
+                    color: Colors.orange.withValues(alpha: 0.16),
+                    child: ListTile(
+                      leading: const Icon(Icons.sync_problem),
+                      title: Text('$count session(s) pending sync'),
+                      subtitle: const Text(
+                        'Open History to retry any failed uploads.',
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -82,8 +93,10 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            const Text('Favorite resorts',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text(
+              'Favorite resorts',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 8),
             favorites.when(
               loading: () => const SizedBox(
@@ -102,7 +115,8 @@ class HomeScreen extends ConsumerWidget {
                     child: Padding(
                       padding: EdgeInsets.all(12),
                       child: Text(
-                          'No favorites yet. Add some from the Resorts tab.'),
+                        'No favorites yet. Add some from the Resorts tab.',
+                      ),
                     ),
                   );
                 }
@@ -136,7 +150,8 @@ class HomeScreen extends ConsumerWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w700),
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                               Text('${resort.region}, ${resort.country}'),
                               Text(
@@ -155,8 +170,10 @@ class HomeScreen extends ConsumerWidget {
               },
             ),
             const SizedBox(height: 16),
-            const Text('Recent sessions',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text(
+              'Recent sessions',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 8),
             history.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -183,9 +200,11 @@ class HomeScreen extends ConsumerWidget {
                       child: ListTile(
                         title: Text(session.resortId ?? 'Unknown resort'),
                         subtitle: Text(
-                          '${session.distanceM.toStringAsFixed(0)}m • ${session.activeDurationS}s',
+                          '${distanceUnit.formatFromMeters(session.distanceM)} • ${formatSecondsAsDuration(session.activeDurationS)}',
                         ),
-                        trailing: Text(session.state.wireValue),
+                        trailing: showDebugDiagnostics
+                            ? Text(session.state.wireValue)
+                            : null,
                         onTap: session.localId > 0
                             ? () => context.go(
                                   RoutePaths.sessionDetail.replaceAll(

@@ -1,4 +1,6 @@
-﻿class AppConstants {
+import 'package:flutter/foundation.dart';
+
+class AppConstants {
   AppConstants._();
 
   static const String apiBaseUrl = String.fromEnvironment(
@@ -8,10 +10,12 @@
 
   static const Duration httpTimeout = Duration(seconds: 20);
   static const Duration weatherCacheTtl = Duration(minutes: 60);
-  static const bool isDebugDiagnostics = bool.fromEnvironment(
+  static const bool _forceDebugDiagnostics = bool.fromEnvironment(
     'DEBUG_DIAGNOSTICS',
-    defaultValue: true,
+    defaultValue: false,
   );
+
+  static bool get isDebugDiagnostics => kDebugMode || _forceDebugDiagnostics;
 }
 
 class MapTileProviderConfig {
