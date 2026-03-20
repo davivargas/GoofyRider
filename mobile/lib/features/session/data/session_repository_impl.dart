@@ -361,12 +361,10 @@ class SessionRepositoryImpl implements SessionRepository {
 
     final double distanceM = _computeDistance(accepted);
     final double robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
-    final double fallbackMaxSpeedMps = _computeFallbackMaxSpeed(accepted);
     final (int? gain, int? loss) = _computeElevation(accepted);
     final double avgSpeedMps =
         activeDurationS == 0 ? 0 : distanceM / activeDurationS;
-    final double maxSpeedMps =
-        max(max(robustMaxSpeedMps, fallbackMaxSpeedMps), avgSpeedMps);
+    final double maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
 
     return SessionStats(
       durationS: activeDurationS,
@@ -408,11 +406,21 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   double _computeRobustMaxSpeed(List<LocalSessionPoint> points) {
+    return _computeWindowedMaxSpeed(
+      points,
+      highConfidenceOnly: true,
+    );
+  }
+
+  double _computeWindowedMaxSpeed(
+    List<LocalSessionPoint> points, {
+    required bool highConfidenceOnly,
+  }) {
     final List<LocalSessionPoint> sorted = List<LocalSessionPoint>.from(points)
       ..sort((LocalSessionPoint a, LocalSessionPoint b) =>
           a.recordedAt.compareTo(b.recordedAt));
 
-    double robustMax = 0;
+    double maxSpeed = 0;
     final List<_TimedSpeed> window = <_TimedSpeed>[];
     for (final LocalSessionPoint point in sorted) {
       final double? speed =
@@ -437,8 +445,10 @@ class SessionRepositoryImpl implements SessionRepository {
             SessionConstants.maxSpeedWindowSeconds,
       );
 
-      final List<double> candidates = window
-          .where((_TimedSpeed item) => item.highConfidence)
+      final Iterable<_TimedSpeed> candidatesWindow = highConfidenceOnly
+          ? window.where((_TimedSpeed item) => item.highConfidence)
+          : window;
+      final List<double> candidates = candidatesWindow
           .map((_TimedSpeed item) => item.speed)
           .toList(growable: false);
       if (candidates.length < SessionConstants.maxSpeedPersistenceSamples) {
@@ -450,25 +460,9 @@ class SessionRepositoryImpl implements SessionRepository {
       final double median = candidates.length.isOdd
           ? candidates[middle]
           : (candidates[middle - 1] + candidates[middle]) / 2;
-      robustMax = max(robustMax, median);
+      maxSpeed = max(maxSpeed, median);
     }
-    return robustMax;
-  }
-
-  double _computeFallbackMaxSpeed(List<LocalSessionPoint> points) {
-    double fallbackMax = 0;
-    for (final LocalSessionPoint point in points) {
-      final double? speed =
-          point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps;
-      if (speed == null) {
-        continue;
-      }
-      if (speed < 0 || speed > SessionConstants.speedHardCapMetersPerSecond) {
-        continue;
-      }
-      fallbackMax = max(fallbackMax, speed);
-    }
-    return fallbackMax;
+    return maxSpeed;
   }
 
   double _sanitizeAvgSpeedForRemote(LocalRideSession session) {

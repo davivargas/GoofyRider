@@ -46,6 +46,12 @@ LocalRideSession _buildSession({
 
 LocalSessionPoint _buildPoint({
   required int offsetMs,
+  double speedMps = 7,
+  String qualityClass = 'accept',
+  bool acceptedForAnalytics = true,
+  double? fusedSpeedMps,
+  double? derivedSpeedMps,
+  double? distanceDeltaM,
 }) {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalSessionPoint(
@@ -57,9 +63,13 @@ LocalSessionPoint _buildPoint({
     longitude: -123.0 - (offsetMs / 1000000),
     accuracyM: 8,
     altitudeM: 500,
-    speedMps: 7,
+    speedMps: speedMps,
     headingDeg: 90,
-    acceptedForAnalytics: true,
+    acceptedForAnalytics: acceptedForAnalytics,
+    qualityClass: qualityClass,
+    fusedSpeedMps: fusedSpeedMps ?? speedMps,
+    derivedSpeedMps: derivedSpeedMps,
+    distanceDeltaM: distanceDeltaM,
   );
 }
 
@@ -328,6 +338,25 @@ void main() {
 
     expect(stats.durationS, 2);
     expect(stats.maxSpeedMps, greaterThan(0));
+  });
+
+  test('computeSessionStats resists single accepted max-speed spikes',
+      () async {
+    when(() => localDatabase.listPoints(1)).thenAnswer(
+      (_) async => <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, speedMps: 12, distanceDeltaM: 0),
+        _buildPoint(offsetMs: 1000, speedMps: 12, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 2000, speedMps: 12, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 3000, speedMps: 32, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 4000, speedMps: 12, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 5000, speedMps: 12, distanceDeltaM: 12),
+      ],
+    );
+
+    final SessionStats stats = await repository.computeSessionStats(1);
+
+    expect(stats.maxSpeedMps, greaterThan(10));
+    expect(stats.maxSpeedMps, lessThan(18));
   });
 
   test('syncSession clamps completion max speed to be at least average speed',

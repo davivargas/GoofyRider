@@ -68,32 +68,32 @@ void main() {
     final Map<String, dynamic> activeDescentConfig =
         Map<String, dynamic>.from(byMode['active_descent'] as Map);
     expect(activeDescentConfig['priority'], 'high_accuracy');
-    expect(activeDescentConfig['intervalMs'], 1000);
-    expect(activeDescentConfig['minIntervalMs'], 200);
-    expect(activeDescentConfig['maxDelayMs'], 1000);
+    expect(activeDescentConfig['intervalMs'], 900);
+    expect(activeDescentConfig['minIntervalMs'], 250);
+    expect(activeDescentConfig['maxDelayMs'], 900);
     expect(activeDescentConfig['minDistanceM'], 1.0);
     expect(activeDescentConfig['waitForAccurate'], isFalse);
 
     final Map<String, dynamic> liftConfig =
         Map<String, dynamic>.from(byMode['lift_uphill'] as Map);
     expect(liftConfig['priority'], 'balanced_power');
-    expect(liftConfig['intervalMs'], 3000);
-    expect(liftConfig['minIntervalMs'], 2000);
-    expect(liftConfig['maxDelayMs'], 10000);
-    expect(liftConfig['minDistanceM'], 5.0);
+    expect(liftConfig['intervalMs'], 4000);
+    expect(liftConfig['minIntervalMs'], 2500);
+    expect(liftConfig['maxDelayMs'], 12000);
+    expect(liftConfig['minDistanceM'], 6.0);
 
     final Map<String, dynamic> stoppedConfig =
         Map<String, dynamic>.from(byMode['stopped_idle'] as Map);
-    expect(stoppedConfig['intervalMs'], 8000);
-    expect(stoppedConfig['minIntervalMs'], 5000);
-    expect(stoppedConfig['maxDelayMs'], 30000);
+    expect(stoppedConfig['intervalMs'], 12000);
+    expect(stoppedConfig['minIntervalMs'], 8000);
+    expect(stoppedConfig['maxDelayMs'], 45000);
     expect(stoppedConfig['waitForAccurate'], isFalse);
 
     final Map<String, dynamic> recoveryConfig =
         Map<String, dynamic>.from(byMode['low_confidence_recovery'] as Map);
     expect(recoveryConfig['priority'], 'high_accuracy');
-    expect(recoveryConfig['intervalMs'], 1200);
-    expect(recoveryConfig['minIntervalMs'], 600);
+    expect(recoveryConfig['intervalMs'], 1000);
+    expect(recoveryConfig['minIntervalMs'], 500);
     expect(recoveryConfig['maxDelayMs'], 0);
     expect(recoveryConfig['waitForAccurate'], isTrue);
   });
