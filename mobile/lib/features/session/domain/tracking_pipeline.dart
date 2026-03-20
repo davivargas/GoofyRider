@@ -123,8 +123,10 @@ class TrackingPipelineEngine {
   int _elevationGainMeters = 0;
   int _elevationLossMeters = 0;
   double? _smoothedLiveSpeedMps;
+  DateTime? _lastLiveSpeedTimestampUtc;
   int _stableFixSamples = 0;
   MotionState _motionState = MotionState.initializingFix;
+  MotionState _lastStableMotionState = MotionState.stoppedIdle;
   MotionState? _pendingMotionState;
   double _pendingMotionSeconds = 0;
   final Queue<_SpeedWindowSample> _speedWindow = Queue<_SpeedWindowSample>();
@@ -147,8 +149,10 @@ class TrackingPipelineEngine {
     _elevationGainMeters = 0;
     _elevationLossMeters = 0;
     _smoothedLiveSpeedMps = null;
+    _lastLiveSpeedTimestampUtc = null;
     _stableFixSamples = 0;
     _motionState = MotionState.initializingFix;
+    _lastStableMotionState = MotionState.stoppedIdle;
     _pendingMotionState = null;
     _pendingMotionSeconds = 0;
     _speedWindow.clear();
@@ -172,6 +176,12 @@ class TrackingPipelineEngine {
     for (final LocalSessionPoint point in points) {
       _lastObservedTimestampUtc = point.recordedAt.toUtc();
       _lastObservedElapsedRealtimeNs = point.elapsedRealtimeNs;
+      final MotionState? pointMotionState = point.motionState == null
+          ? null
+          : _parseMotionState(point.motionState!);
+      if (pointMotionState != null && _isStableMotionState(pointMotionState)) {
+        _lastStableMotionState = pointMotionState;
+      }
       if (!point.acceptedForAnalytics) {
         continue;
       }
@@ -184,14 +194,15 @@ class TrackingPipelineEngine {
       _lastFilteredAltitude = point.filteredAltitudeM ?? point.altitudeM;
       _smoothedLiveSpeedMps =
           point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps;
+      _lastLiveSpeedTimestampUtc = point.recordedAt.toUtc();
       if (_stableFixSamples < SessionConstants.initialFixStableSamples) {
         _stableFixSamples += 1;
       }
     }
 
-    final LocalSessionPoint? last = points.isEmpty ? null : points.last;
-    if (last?.motionState != null) {
-      _motionState = _parseMotionState(last!.motionState!);
+    final LocalSessionPoint last = points.last;
+    if (last.motionState != null) {
+      _motionState = _parseMotionState(last.motionState!);
     }
   }
 
@@ -217,8 +228,14 @@ class TrackingPipelineEngine {
       filteredLatitude: filteredLatitude,
       filteredLongitude: filteredLongitude,
     );
-    final double fusedSpeedMps =
-        _fusedSpeed(sample: sample, derivedSpeedMps: derivedSpeedMps);
+    final _FusedSpeedResult fusedSpeed = _fusedSpeed(
+      sample: sample,
+      derivedSpeedMps: derivedSpeedMps,
+    );
+    final double fusedSpeedMps = fusedSpeed.speedMps;
+    final bool acceptedForAnalytics =
+        quality.qualityClass != TrackingQualityClass.reject;
+    final bool acceptedForReplay = acceptedForAnalytics;
     final double distanceDeltaM = _distanceDelta(
       quality: quality,
       filteredLatitude: filteredLatitude,
@@ -237,6 +254,7 @@ class TrackingPipelineEngine {
       quality: quality,
     );
     final double deltaSeconds = _deltaSecondsFromLastAccepted(sample);
+    final MotionState smoothingMotionState = _motionState;
     _updateMotionState(
       quality: quality,
       speedMps: fusedSpeedMps,
@@ -249,12 +267,12 @@ class TrackingPipelineEngine {
       sampleTime: sample.timestamp.toUtc(),
       speedMps: fusedSpeedMps,
       quality: quality,
+      speedTrustedForMax: _isSpeedTrustedForMax(
+        sample: sample,
+        platformTrust: fusedSpeed.platformTrust,
+        derivedSpeedMps: derivedSpeedMps,
+      ),
     );
-
-    final bool acceptedForAnalytics =
-        quality.qualityClass != TrackingQualityClass.reject;
-    final bool acceptedForReplay =
-        quality.qualityClass != TrackingQualityClass.reject;
 
     if (acceptedForAnalytics) {
       _lastAcceptedTimestampUtc = sample.timestamp.toUtc();
@@ -271,7 +289,12 @@ class TrackingPipelineEngine {
     _lastObservedTimestampUtc = sample.timestamp.toUtc();
     _lastObservedElapsedRealtimeNs = sample.elapsedRealtimeNs;
 
-    final double liveSpeed = _smoothLiveSpeed(fusedSpeedMps);
+    final double liveSpeed = _smoothLiveSpeed(
+      rawSpeedMps: fusedSpeedMps,
+      sampleTimeUtc: sample.timestamp.toUtc(),
+      acceptedForAnalytics: acceptedForAnalytics,
+      motionState: smoothingMotionState,
+    );
     final SessionStats stats = SessionStats(
       durationS: activeDurationS,
       distanceM: _distanceMeters,
@@ -462,7 +485,11 @@ class TrackingPipelineEngine {
       return false;
     }
 
-    if (_isPlatformSpeedTrusted(sample, speedFromGeometry)) {
+    if (_assessPlatformSpeedTrust(
+          sample: sample,
+          geometrySpeedMps: speedFromGeometry,
+        ) ==
+        _PlatformSpeedTrust.strong) {
       return false;
     }
 
@@ -491,7 +518,11 @@ class TrackingPipelineEngine {
       return false;
     }
 
-    return !_isPlatformSpeedTrusted(sample, speedFromGeometry);
+    return _assessPlatformSpeedTrust(
+          sample: sample,
+          geometrySpeedMps: speedFromGeometry,
+        ) !=
+        _PlatformSpeedTrust.strong;
   }
 
   double _deriveSpeed({
@@ -525,45 +556,171 @@ class TrackingPipelineEngine {
         .toDouble();
   }
 
-  double _fusedSpeed({
+  _FusedSpeedResult _fusedSpeed({
     required LocationSample sample,
     required double derivedSpeedMps,
   }) {
-    final double? platformSpeed = sample.speedMps;
-    if (platformSpeed == null) {
-      return derivedSpeedMps;
-    }
-
-    if (_isPlatformSpeedTrusted(sample, derivedSpeedMps)) {
-      return platformSpeed
-          .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
-          .toDouble();
-    }
-
-    final double blended = (platformSpeed * 0.35) + (derivedSpeedMps * 0.65);
-    return blended
+    final double derivedSpeed = derivedSpeedMps
         .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
         .toDouble();
+    final double? platformSpeedRaw = sample.speedMps;
+    if (platformSpeedRaw == null) {
+      return _FusedSpeedResult(
+        speedMps: derivedSpeed,
+        platformTrust: _PlatformSpeedTrust.untrusted,
+      );
+    }
+
+    if (!platformSpeedRaw.isFinite ||
+        platformSpeedRaw < 0 ||
+        platformSpeedRaw > SessionConstants.speedHardCapMetersPerSecond) {
+      return _FusedSpeedResult(
+        speedMps: derivedSpeed,
+        platformTrust: _PlatformSpeedTrust.untrusted,
+      );
+    }
+
+    final double platformSpeed = platformSpeedRaw
+        .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
+        .toDouble();
+    final _PlatformSpeedTrust trust = _assessPlatformSpeedTrust(
+      sample: sample,
+      geometrySpeedMps: derivedSpeed,
+    );
+
+    if (derivedSpeed < SessionConstants.geometryCoherenceMinSpeedMps) {
+      return _FusedSpeedResult(
+        speedMps: trust == _PlatformSpeedTrust.untrusted
+            ? derivedSpeed
+            : platformSpeed,
+        platformTrust: trust,
+      );
+    }
+
+    final double fusedSpeed = switch (trust) {
+      _PlatformSpeedTrust.strong => platformSpeed,
+      _PlatformSpeedTrust.moderate => _blendSpeeds(
+          platformSpeed: platformSpeed,
+          geometrySpeed: derivedSpeed,
+          platformWeight: SessionConstants.platformSpeedModerateBlendWeight,
+        ),
+      _PlatformSpeedTrust.weak => _blendSpeeds(
+          platformSpeed: platformSpeed,
+          geometrySpeed: derivedSpeed,
+          platformWeight: SessionConstants.platformSpeedWeakBlendWeight,
+        ),
+      _PlatformSpeedTrust.untrusted => derivedSpeed,
+    };
+    return _FusedSpeedResult(speedMps: fusedSpeed, platformTrust: trust);
   }
 
-  bool _isPlatformSpeedTrusted(LocationSample sample, double geometrySpeedMps) {
-    final double platformSpeed = sample.speedMps ?? geometrySpeedMps;
-    if (platformSpeed > SessionConstants.speedHardCapMetersPerSecond) {
+  bool _isSpeedTrustedForMax({
+    required LocationSample sample,
+    required _PlatformSpeedTrust platformTrust,
+    required double derivedSpeedMps,
+  }) {
+    if (sample.speedMps != null) {
+      return platformTrust == _PlatformSpeedTrust.strong ||
+          platformTrust == _PlatformSpeedTrust.moderate;
+    }
+    return _isGeometrySpeedReliableForCoherence(
+      sample: sample,
+      geometrySpeedMps: derivedSpeedMps,
+    );
+  }
+
+  _PlatformSpeedTrust _assessPlatformSpeedTrust({
+    required LocationSample sample,
+    required double geometrySpeedMps,
+  }) {
+    final double? platformSpeed = sample.speedMps;
+    if (platformSpeed == null ||
+        !platformSpeed.isFinite ||
+        platformSpeed < 0 ||
+        platformSpeed > SessionConstants.speedHardCapMetersPerSecond) {
+      return _PlatformSpeedTrust.untrusted;
+    }
+
+    final double horizontalAccuracyM = sample.accuracyM ??
+        SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
+    final bool horizontalStrong =
+        horizontalAccuracyM <= _horizontalAcceptThresholdForSample(sample);
+    final bool horizontalUsable = horizontalAccuracyM <=
+        SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
+    if (!horizontalUsable) {
+      return _PlatformSpeedTrust.untrusted;
+    }
+
+    final double? speedAccuracyMps = sample.speedAccuracyMps;
+    final bool speedStrong = speedAccuracyMps != null &&
+        speedAccuracyMps <= SessionConstants.platformSpeedStrongAccuracyMps;
+    final bool speedUsable = speedAccuracyMps == null ||
+        speedAccuracyMps <= SessionConstants.platformSpeedUsableAccuracyMps;
+    if (!speedUsable) {
+      return _PlatformSpeedTrust.untrusted;
+    }
+
+    final bool geometryReliable = _isGeometrySpeedReliableForCoherence(
+      sample: sample,
+      geometrySpeedMps: geometrySpeedMps,
+    );
+    final double mismatchMps = (platformSpeed - geometrySpeedMps).abs();
+    final double moderateMismatchToleranceMps = math.max(
+      SessionConstants.platformSpeedModerateMismatchFloorMps,
+      platformSpeed * SessionConstants.platformSpeedModerateMismatchRatio,
+    );
+    final double severeMismatchToleranceMps = math.max(
+      SessionConstants.platformSpeedSevereMismatchFloorMps,
+      platformSpeed * SessionConstants.platformSpeedSevereMismatchRatio,
+    );
+
+    if (geometryReliable && mismatchMps > severeMismatchToleranceMps) {
+      return _PlatformSpeedTrust.untrusted;
+    }
+
+    if (speedStrong &&
+        horizontalStrong &&
+        (!geometryReliable || mismatchMps <= moderateMismatchToleranceMps)) {
+      return _PlatformSpeedTrust.strong;
+    }
+
+    if (!geometryReliable || mismatchMps <= moderateMismatchToleranceMps) {
+      return _PlatformSpeedTrust.moderate;
+    }
+
+    return _PlatformSpeedTrust.weak;
+  }
+
+  bool _isGeometrySpeedReliableForCoherence({
+    required LocationSample sample,
+    required double geometrySpeedMps,
+  }) {
+    if (geometrySpeedMps < SessionConstants.geometryCoherenceMinSpeedMps) {
       return false;
     }
 
-    final double horizontalAccuracy = sample.accuracyM ?? 60;
-    final double requiredHorizontalAccuracyM =
-        _motionState == MotionState.activeDescent
-            ? SessionConstants.activeDescentAcceptHorizontalAccuracyMeters
-            : SessionConstants.qualityAcceptHorizontalAccuracyMeters;
-    final bool horizontalReliable =
-        horizontalAccuracy <= requiredHorizontalAccuracyM;
-    final double speedAccuracy = sample.speedAccuracyMps ?? 2.5;
-    final bool speedReliable = speedAccuracy <= 1.8;
-    final double mismatch = (platformSpeed - geometrySpeedMps).abs();
-    final bool geometryCoherent = mismatch <= math.max(3, platformSpeed * 0.6);
-    return horizontalReliable && speedReliable && geometryCoherent;
+    final double deltaSeconds = _deltaSecondsFromLastAccepted(sample);
+    if (deltaSeconds < SessionConstants.geometryCoherenceMinDeltaSeconds ||
+        deltaSeconds > SessionConstants.maxDeltaSeconds) {
+      return false;
+    }
+
+    final double? horizontalAccuracyM = sample.accuracyM;
+    if (horizontalAccuracyM == null) {
+      return false;
+    }
+    return horizontalAccuracyM <= _horizontalAcceptThresholdForSample(sample);
+  }
+
+  double _blendSpeeds({
+    required double platformSpeed,
+    required double geometrySpeed,
+    required double platformWeight,
+  }) {
+    return ((platformSpeed * platformWeight) +
+            (geometrySpeed * (1 - platformWeight)))
+        .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
+        .toDouble();
   }
 
   double _distanceDelta({
@@ -702,6 +859,9 @@ class TrackingPipelineEngine {
     final int requiredSeconds = _requiredPersistenceSeconds(candidate);
     if (_pendingMotionSeconds >= requiredSeconds) {
       _motionState = candidate;
+      if (_isStableMotionState(candidate)) {
+        _lastStableMotionState = candidate;
+      }
       _pendingMotionState = null;
       _pendingMotionSeconds = 0;
     }
@@ -745,7 +905,7 @@ class TrackingPipelineEngine {
       return MotionState.liftUphill;
     }
 
-    return MotionState.activeDescent;
+    return _lastStableMotionState;
   }
 
   int _requiredPersistenceSeconds(MotionState state) {
@@ -767,10 +927,12 @@ class TrackingPipelineEngine {
     required DateTime sampleTime,
     required double speedMps,
     required _QualityDecision quality,
+    required bool speedTrustedForMax,
   }) {
     final bool highConfidence =
         quality.qualityClass == TrackingQualityClass.accept &&
-            quality.score >= 0.65;
+            quality.score >= 0.65 &&
+            speedTrustedForMax;
     if (!highConfidence) {
       return;
     }
@@ -800,11 +962,85 @@ class TrackingPipelineEngine {
     }
   }
 
-  double _smoothLiveSpeed(double speedMps) {
-    final double previous = _smoothedLiveSpeedMps ?? speedMps;
-    final double smoothed = previous + (0.35 * (speedMps - previous));
-    _smoothedLiveSpeedMps = smoothed;
-    return smoothed;
+  double _smoothLiveSpeed({
+    required double rawSpeedMps,
+    required DateTime sampleTimeUtc,
+    required bool acceptedForAnalytics,
+    required MotionState motionState,
+  }) {
+    final double clampedRawSpeed = rawSpeedMps
+        .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
+        .toDouble();
+    final double? previousSmoothed = _smoothedLiveSpeedMps;
+
+    if (!acceptedForAnalytics) {
+      if (_lastLiveSpeedTimestampUtc == null ||
+          sampleTimeUtc.isAfter(_lastLiveSpeedTimestampUtc!)) {
+        _lastLiveSpeedTimestampUtc = sampleTimeUtc;
+      }
+      return previousSmoothed ?? 0;
+    }
+
+    if (previousSmoothed == null) {
+      _smoothedLiveSpeedMps = clampedRawSpeed;
+      _lastLiveSpeedTimestampUtc = sampleTimeUtc;
+      return clampedRawSpeed;
+    }
+
+    final DateTime? previousTime = _lastLiveSpeedTimestampUtc;
+    if (previousTime == null) {
+      _smoothedLiveSpeedMps = clampedRawSpeed;
+      _lastLiveSpeedTimestampUtc = sampleTimeUtc;
+      return clampedRawSpeed;
+    }
+
+    final int deltaMs = sampleTimeUtc.difference(previousTime).inMilliseconds;
+    if (deltaMs <= 0) {
+      return previousSmoothed;
+    }
+
+    _lastLiveSpeedTimestampUtc = sampleTimeUtc;
+    final double deltaSeconds = deltaMs / 1000;
+    final bool decelerating = clampedRawSpeed < previousSmoothed;
+    final double tauSeconds = _liveSpeedTauSeconds(
+      motionState: motionState,
+      decelerating: decelerating,
+    );
+    final double alpha = 1 - math.exp(-deltaSeconds / tauSeconds);
+    final double smoothed =
+        previousSmoothed + (alpha * (clampedRawSpeed - previousSmoothed));
+    _smoothedLiveSpeedMps = smoothed
+        .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
+        .toDouble();
+    return _smoothedLiveSpeedMps!;
+  }
+
+  double _liveSpeedTauSeconds({
+    required MotionState motionState,
+    required bool decelerating,
+  }) {
+    switch (motionState) {
+      case MotionState.initializingFix:
+        return decelerating
+            ? SessionConstants.liveSpeedTauInitializingFallSeconds
+            : SessionConstants.liveSpeedTauInitializingRiseSeconds;
+      case MotionState.activeDescent:
+        return decelerating
+            ? SessionConstants.liveSpeedTauActiveDescentFallSeconds
+            : SessionConstants.liveSpeedTauActiveDescentRiseSeconds;
+      case MotionState.liftUphill:
+        return decelerating
+            ? SessionConstants.liveSpeedTauLiftFallSeconds
+            : SessionConstants.liveSpeedTauLiftRiseSeconds;
+      case MotionState.stoppedIdle:
+        return decelerating
+            ? SessionConstants.liveSpeedTauStoppedFallSeconds
+            : SessionConstants.liveSpeedTauStoppedRiseSeconds;
+      case MotionState.lowConfidenceRecovery:
+        return decelerating
+            ? SessionConstants.liveSpeedTauRecoveryFallSeconds
+            : SessionConstants.liveSpeedTauRecoveryRiseSeconds;
+    }
   }
 
   double _updateHeadingWindow({
@@ -964,6 +1200,29 @@ class TrackingPipelineEngine {
       orElse: () => MotionState.initializingFix,
     );
   }
+
+  bool _isStableMotionState(MotionState state) {
+    return state == MotionState.activeDescent ||
+        state == MotionState.liftUphill ||
+        state == MotionState.stoppedIdle;
+  }
+}
+
+enum _PlatformSpeedTrust {
+  strong,
+  moderate,
+  weak,
+  untrusted,
+}
+
+class _FusedSpeedResult {
+  const _FusedSpeedResult({
+    required this.speedMps,
+    required this.platformTrust,
+  });
+
+  final double speedMps;
+  final _PlatformSpeedTrust platformTrust;
 }
 
 class _QualityDecision {

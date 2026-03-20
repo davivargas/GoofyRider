@@ -9,6 +9,7 @@ import '../utils/speed_unit.dart';
 const String _speedUnitStorageKey = 'goofyrider_speed_unit';
 const String _speedUnitKmhValue = 'kmh';
 const String _speedUnitMpsValue = 'mps';
+const String _speedUnitMphValue = 'mph';
 
 class SpeedUnitPreferenceController extends StateNotifier<SpeedUnit> {
   SpeedUnitPreferenceController({FlutterSecureStorage? storage})
@@ -46,6 +47,8 @@ class SpeedUnitPreferenceController extends StateNotifier<SpeedUnit> {
         return SpeedUnit.kilometersPerHour;
       case _speedUnitMpsValue:
         return SpeedUnit.metersPerSecond;
+      case _speedUnitMphValue:
+        return SpeedUnit.milesPerHour;
       default:
         return null;
     }
@@ -57,6 +60,8 @@ class SpeedUnitPreferenceController extends StateNotifier<SpeedUnit> {
         return _speedUnitKmhValue;
       case SpeedUnit.metersPerSecond:
         return _speedUnitMpsValue;
+      case SpeedUnit.milesPerHour:
+        return _speedUnitMphValue;
     }
   }
 

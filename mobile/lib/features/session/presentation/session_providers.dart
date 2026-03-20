@@ -27,10 +27,14 @@ final locationTrackingRepositoryProvider = Provider<LocationTrackingRepository>(
 );
 
 final sessionRepositoryProvider = Provider<SessionRepository>(
-  (ref) => SessionRepositoryImpl(
-    localDatabase: ref.watch(driftLocalDatabaseProvider),
-    api: ref.watch(sessionApiProvider),
-  ),
+  (ref) {
+    return SessionRepositoryImpl(
+      localDatabase: ref.watch(driftLocalDatabaseProvider),
+      api: ref.watch(sessionApiProvider),
+      currentUserIdGetter: () =>
+          ref.read(authControllerProvider).session?.user.id,
+    );
+  },
 );
 
 final recordingControllerProvider =
@@ -60,5 +64,12 @@ final sessionDetailProvider = FutureProvider.family.autoDispose(
 );
 
 final unsyncedSessionCountProvider = FutureProvider.autoDispose(
-  (ref) => ref.watch(sessionRepositoryProvider).unsyncedCount(),
+  (ref) {
+    ref.watch(
+      recordingControllerProvider.select(
+        (RecordingViewState state) => state.historyRevision,
+      ),
+    );
+    return ref.watch(sessionRepositoryProvider).unsyncedCount();
+  },
 );

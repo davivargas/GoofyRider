@@ -18,6 +18,11 @@ class FakeLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    return null;
+  }
+
+  @override
   Future<bool> isServiceEnabled() async {
     return true;
   }
@@ -49,7 +54,9 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<void> appendLocationPoint(
-      int localSessionId, NewSessionPoint point) async {}
+    int localSessionId,
+    NewSessionPoint point,
+  ) async {}
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
@@ -70,9 +77,29 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) async {
+    return const <TrackingDiagnosticEvent>[];
+  }
+
+  @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async {
     return sessions;
   }
+
+  @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async {
+    return sessions
+        .where((LocalRideSession session) =>
+            session.state == LocalSessionState.syncPending ||
+            session.state == LocalSessionState.syncFailed)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {}
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
@@ -83,6 +110,14 @@ class FakeSessionRepository implements SessionRepository {
   Future<LocalRideSession?> recoverInProgressSession() async {
     return null;
   }
+
+  @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) async {}
 
   @override
   Future<LocalRideSession> resumeLocalSession(int localSessionId) async {
@@ -119,6 +154,7 @@ LocalRideSession buildSession({
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: id,
+    ownerUserId: 'user-1',
     remoteId: null,
     resortId: null,
     startedAt: now,

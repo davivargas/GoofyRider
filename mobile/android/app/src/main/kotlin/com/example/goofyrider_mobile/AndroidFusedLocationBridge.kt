@@ -252,35 +252,35 @@ class AndroidFusedLocationBridge(
 
                     TrackingMode.ACTIVE_DESCENT -> TrackingConfig(
                         priority = Priority.PRIORITY_HIGH_ACCURACY,
-                        intervalMs = 1_000,
-                        minIntervalMs = 200,
-                        maxDelayMs = 1_000,
+                        intervalMs = 900,
+                        minIntervalMs = 250,
+                        maxDelayMs = 900,
                         minDistanceM = 1f,
                         waitForAccurate = false,
                     )
 
                     TrackingMode.LIFT_UPHILL -> TrackingConfig(
                         priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                        intervalMs = 3_000,
-                        minIntervalMs = 2_000,
-                        maxDelayMs = 10_000,
-                        minDistanceM = 5f,
+                        intervalMs = 4_000,
+                        minIntervalMs = 2_500,
+                        maxDelayMs = 12_000,
+                        minDistanceM = 6f,
                         waitForAccurate = false,
                     )
 
                     TrackingMode.STOPPED_IDLE -> TrackingConfig(
                         priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                        intervalMs = 8_000,
-                        minIntervalMs = 5_000,
-                        maxDelayMs = 30_000,
-                        minDistanceM = 8f,
+                        intervalMs = 12_000,
+                        minIntervalMs = 8_000,
+                        maxDelayMs = 45_000,
+                        minDistanceM = 10f,
                         waitForAccurate = false,
                     )
 
                     TrackingMode.LOW_CONFIDENCE_RECOVERY -> TrackingConfig(
                         priority = Priority.PRIORITY_HIGH_ACCURACY,
-                        intervalMs = 1_200,
-                        minIntervalMs = 600,
+                        intervalMs = 1_000,
+                        minIntervalMs = 500,
                         maxDelayMs = 0,
                         minDistanceM = 0f,
                         waitForAccurate = true,

@@ -70,6 +70,19 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<bool> openLocationSettings() async => true;
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    return LocationSample(
+      timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+      latitude: 50.0,
+      longitude: -122.0,
+      accuracyM: 5,
+      altitudeM: 1000,
+      speedMps: 0,
+      headingDeg: 0,
+    );
+  }
+
+  @override
   Stream<LocationSample> watchPosition() {
     return Stream<LocationSample>.fromIterable(<LocationSample>[
       LocationSample(
@@ -122,8 +135,23 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) async {
+    return const <TrackingDiagnosticEvent>[];
+  }
+
+  @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async =>
       <LocalRideSession>[];
+
+  @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async =>
+      <LocalRideSession>[];
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {}
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async =>
@@ -151,12 +179,21 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) async {}
+
+  @override
   Future<int> unsyncedCount() async => 0;
 
   LocalRideSession _session(LocalSessionState state) {
     final DateTime now = DateTime.utc(2026, 1, 1);
     return LocalRideSession(
       localId: 1,
+      ownerUserId: 'user-1',
       remoteId: null,
       resortId: null,
       startedAt: now,

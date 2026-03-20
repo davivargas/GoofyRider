@@ -5,7 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/utils/date_time_formatting.dart';
+import '../../../core/utils/distance_unit.dart';
+import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
@@ -26,9 +30,16 @@ class SessionDetailScreen extends ConsumerWidget {
     final AsyncValue<SessionDetail> detail =
         ref.watch(sessionDetailProvider(localSessionId));
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final bool showDebugDiagnostics =
+        kDebugMode && AppConstants.isDebugDiagnostics;
+    final String appBarTitle = detail.maybeWhen(
+      data: (SessionDetail data) => data.session.startedAt.toDayLabel(),
+      orElse: () => 'Session detail',
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Session detail')),
+      appBar: AppBar(title: Text(appBarTitle)),
       body: detail.when(
         loading: () => const AppLoadingView(label: 'Loading details...'),
         error: (Object error, StackTrace _) => AppErrorView(
@@ -41,7 +52,18 @@ class SessionDetailScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: <Widget>[
-              _summaryCards(session, speedUnit),
+              Card(
+                child: ListTile(
+                  title: Text(
+                    session.startedAt.toDayLabel(),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle:
+                      Text('Started at ${session.startedAt.toTimeLabel()}'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _summaryCards(session, speedUnit, distanceUnit),
               const SizedBox(height: 12),
               _mapReplay(data.points),
               const SizedBox(height: 12),
@@ -55,7 +77,19 @@ class SessionDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (kDebugMode && AppConstants.isDebugDiagnostics)
+              if (data.trackingDiagnostics.isNotEmpty)
+                Card(
+                  child: ListTile(
+                    title: const Text('Tracking diagnostics'),
+                    subtitle: Text(
+                      data.trackingDiagnostics
+                          .take(16)
+                          .map(_diagnosticLine)
+                          .join('\n'),
+                    ),
+                  ),
+                ),
+              if (showDebugDiagnostics)
                 Card(
                   child: ListTile(
                     title: const Text('Diagnostics'),
@@ -63,11 +97,13 @@ class SessionDetailScreen extends ConsumerWidget {
                       'Raw points: ${data.points.length}\n'
                       'Filtered points: ${data.acceptedPoints.length}\n'
                       'Upload state: ${session.state.wireValue}\n'
-                      'Last sync error: ${session.lastSyncError ?? 'None'}',
+                      'Last sync error: ${session.lastSyncError ?? 'None'}\n'
+                      'Tracking events: ${data.trackingDiagnostics.length}',
                     ),
                   ),
                 ),
-              if (session.state == LocalSessionState.syncFailed)
+              if (showDebugDiagnostics &&
+                  session.state == LocalSessionState.syncFailed)
                 FilledButton(
                   onPressed: () async {
                     await ref
@@ -84,17 +120,27 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _summaryCards(LocalRideSession session, SpeedUnit speedUnit) {
+  Widget _summaryCards(
+    LocalRideSession session,
+    SpeedUnit speedUnit,
+    DistanceUnit distanceUnit,
+  ) {
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        _summaryCard('Duration', '${session.activeDurationS}s'),
-        _summaryCard('Distance', '${session.distanceM.toStringAsFixed(0)}m'),
-        _summaryCard('Max speed',
-            speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)),
-        _summaryCard('Avg speed',
-            speedUnit.formatFromMetersPerSecond(session.avgSpeedMps)),
+        _summaryCard(
+            'Duration', formatSecondsAsDuration(session.activeDurationS)),
+        _summaryCard(
+            'Distance', distanceUnit.formatFromMeters(session.distanceM)),
+        _summaryCard(
+          'Max speed',
+          speedUnit.formatFromMetersPerSecond(session.maxSpeedMps),
+        ),
+        _summaryCard(
+          'Avg speed',
+          speedUnit.formatFromMetersPerSecond(session.avgSpeedMps),
+        ),
       ],
     );
   }
@@ -112,9 +158,10 @@ class SessionDetailScreen extends ConsumerWidget {
         children: <Widget>[
           Text(title, style: const TextStyle(fontSize: 12)),
           const SizedBox(height: 4),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );
@@ -131,8 +178,9 @@ class SessionDetailScreen extends ConsumerWidget {
     }
 
     final List<LatLng> route = points
-        .map((LocalSessionPoint point) =>
-            LatLng(point.latitude, point.longitude))
+        .map(
+          (LocalSessionPoint point) => LatLng(point.latitude, point.longitude),
+        )
         .toList(growable: false);
 
     return SizedBox(
@@ -170,5 +218,13 @@ class SessionDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _diagnosticLine(TrackingDiagnosticEvent event) {
+    final String stamp =
+        event.occurredAt.toLocal().toIso8601String().substring(11, 19);
+    final String details = event.details.isEmpty ? '' : ' ${event.details}';
+    final String message = event.message == null ? '' : ' (${event.message})';
+    return '[$stamp] ${event.eventType}$message$details';
   }
 }

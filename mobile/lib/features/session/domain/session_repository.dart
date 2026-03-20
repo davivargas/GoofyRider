@@ -14,7 +14,19 @@ abstract class SessionRepository {
   Future<LocalRideSession> syncSession(int localSessionId);
   Future<LocalRideSession> retryFailedSync(int localSessionId);
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory();
+  Future<List<LocalRideSession>> listPendingSyncSessions();
+  Future<void> refreshRemoteSessionHistoryCache();
   Future<SessionDetail> getSessionDetail(int localSessionId);
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  });
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit,
+  });
   Future<int> unsyncedCount();
 }
 
@@ -23,9 +35,11 @@ class SessionDetail {
     required this.session,
     required this.points,
     required this.acceptedPoints,
+    required this.trackingDiagnostics,
   });
 
   final LocalRideSession session;
   final List<LocalSessionPoint> points;
   final List<LocalSessionPoint> acceptedPoints;
+  final List<TrackingDiagnosticEvent> trackingDiagnostics;
 }

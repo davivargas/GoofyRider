@@ -44,6 +44,7 @@ extension LocalSessionStateCodec on LocalSessionState {
 class LocalRideSession {
   const LocalRideSession({
     required this.localId,
+    required this.ownerUserId,
     required this.remoteId,
     required this.resortId,
     required this.startedAt,
@@ -63,6 +64,7 @@ class LocalRideSession {
   });
 
   final int localId;
+  final String? ownerUserId;
   final String? remoteId;
   final String? resortId;
   final DateTime startedAt;
@@ -148,6 +150,24 @@ class LocalSessionPoint {
   final double? derivedSpeedMps;
   final double? distanceDeltaM;
   final String? motionState;
+}
+
+class TrackingDiagnosticEvent {
+  const TrackingDiagnosticEvent({
+    required this.id,
+    required this.localSessionId,
+    required this.occurredAt,
+    required this.eventType,
+    required this.message,
+    required this.details,
+  });
+
+  final int id;
+  final int localSessionId;
+  final DateTime occurredAt;
+  final String eventType;
+  final String? message;
+  final Map<String, dynamic> details;
 }
 
 class NewSessionPoint {

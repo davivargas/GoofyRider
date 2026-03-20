@@ -15,6 +15,8 @@ class MockSessionApi extends Mock implements SessionApi {}
 
 class FakeNewSessionPoint extends Fake implements NewSessionPoint {}
 
+const String _ownerUserId = 'user-1';
+
 LocalRideSession _buildSession({
   required int localId,
   required LocalSessionState state,
@@ -25,6 +27,7 @@ LocalRideSession _buildSession({
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: localId,
+    ownerUserId: _ownerUserId,
     remoteId: remoteId,
     resortId: null,
     startedAt: now,
@@ -46,6 +49,12 @@ LocalRideSession _buildSession({
 
 LocalSessionPoint _buildPoint({
   required int offsetMs,
+  double speedMps = 7,
+  String qualityClass = 'accept',
+  bool acceptedForAnalytics = true,
+  double? fusedSpeedMps,
+  double? derivedSpeedMps,
+  double? distanceDeltaM,
 }) {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalSessionPoint(
@@ -57,9 +66,13 @@ LocalSessionPoint _buildPoint({
     longitude: -123.0 - (offsetMs / 1000000),
     accuracyM: 8,
     altitudeM: 500,
-    speedMps: 7,
+    speedMps: speedMps,
     headingDeg: 90,
-    acceptedForAnalytics: true,
+    acceptedForAnalytics: acceptedForAnalytics,
+    qualityClass: qualityClass,
+    fusedSpeedMps: fusedSpeedMps ?? speedMps,
+    derivedSpeedMps: derivedSpeedMps,
+    distanceDeltaM: distanceDeltaM,
   );
 }
 
@@ -76,7 +89,36 @@ void main() {
   setUp(() {
     localDatabase = MockDriftLocalDatabase();
     api = MockSessionApi();
-    repository = SessionRepositoryImpl(localDatabase: localDatabase, api: api);
+    repository = SessionRepositoryImpl(
+      localDatabase: localDatabase,
+      api: api,
+      currentUserIdGetter: () => _ownerUserId,
+    );
+  });
+
+  test('startLocalSession persists the authenticated owner id', () async {
+    final LocalRideSession created = _buildSession(
+      localId: 7,
+      state: LocalSessionState.recording,
+    );
+
+    when(() => localDatabase.insertLocalSession(
+          startedAt: any(named: 'startedAt'),
+          ownerUserId: any(named: 'ownerUserId'),
+          resortId: any(named: 'resortId'),
+        )).thenAnswer((_) async => 7);
+    when(() => localDatabase.getSessionById(7, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => created);
+
+    final LocalRideSession result =
+        await repository.startLocalSession(resortId: 'resort-1');
+
+    expect(result.ownerUserId, _ownerUserId);
+    verify(() => localDatabase.insertLocalSession(
+          startedAt: any(named: 'startedAt'),
+          ownerUserId: _ownerUserId,
+          resortId: 'resort-1',
+        )).called(1);
   });
 
   test('syncSession dedupes duplicate offsets before upload batches', () async {
@@ -93,7 +135,7 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1))
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
     when(
       () => localDatabase.updateSessionState(
@@ -170,7 +212,7 @@ void main() {
       message: 'Network unavailable',
     );
 
-    when(() => localDatabase.getSessionById(1))
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
     when(
       () => localDatabase.updateSessionState(
@@ -232,7 +274,7 @@ void main() {
       type: DioExceptionType.badResponse,
     );
 
-    when(() => localDatabase.getSessionById(1))
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
     when(
       () => localDatabase.updateSessionState(
@@ -288,7 +330,7 @@ void main() {
       motionState: 'active_descent',
     );
 
-    when(() => localDatabase.getSessionById(1))
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => recordingSession);
     when(
       () => localDatabase.insertPoint(
@@ -330,6 +372,25 @@ void main() {
     expect(stats.maxSpeedMps, greaterThan(0));
   });
 
+  test('computeSessionStats resists single accepted max-speed spikes',
+      () async {
+    when(() => localDatabase.listPoints(1)).thenAnswer(
+      (_) async => <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, speedMps: 12, distanceDeltaM: 0),
+        _buildPoint(offsetMs: 1000, speedMps: 12, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 2000, speedMps: 12, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 3000, speedMps: 32, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 4000, speedMps: 12, distanceDeltaM: 12),
+        _buildPoint(offsetMs: 5000, speedMps: 12, distanceDeltaM: 12),
+      ],
+    );
+
+    final SessionStats stats = await repository.computeSessionStats(1);
+
+    expect(stats.maxSpeedMps, greaterThan(10));
+    expect(stats.maxSpeedMps, lessThan(18));
+  });
+
   test('syncSession clamps completion max speed to be at least average speed',
       () async {
     final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
@@ -358,7 +419,7 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1))
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
     when(
       () => localDatabase.updateSessionState(
@@ -409,5 +470,59 @@ void main() {
     final double capturedAvgSpeed = completeCaptured[1] as double;
     expect(capturedMaxSpeed, greaterThanOrEqualTo(capturedAvgSpeed));
     expect(capturedAvgSpeed, 9);
+  });
+
+  test('history uses scoped local rows and cached remote rows offline',
+      () async {
+    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+        .thenAnswer(
+      (_) async => <LocalRideSession>[
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncPending,
+          remoteId: 'remote-1',
+        ),
+      ],
+    );
+    when(() =>
+            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
+        .thenAnswer(
+      (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'remote-1',
+          'started_at': '2026-01-01T00:00:00Z',
+          'ended_at': '2026-01-01T00:10:00Z',
+          'duration_s': 600,
+          'distance_m': 1500,
+          'max_speed_mps': 10,
+          'avg_speed_mps': 8,
+        },
+        <String, dynamic>{
+          'id': 'remote-2',
+          'started_at': '2026-01-02T00:00:00Z',
+          'ended_at': '2026-01-02T00:10:00Z',
+          'duration_s': 600,
+          'distance_m': 1800,
+          'max_speed_mps': 12,
+          'avg_speed_mps': 9,
+        },
+      ],
+    );
+    when(() => api.listRemoteSessions())
+        .thenAnswer((_) async => <Map<String, dynamic>>[]);
+    when(
+      () => localDatabase.replaceCachedRemoteSessions(
+        ownerUserId: _ownerUserId,
+        sessions: any(named: 'sessions'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final List<LocalRideSession> history =
+        await repository.listLocalAndRemoteSessionHistory();
+
+    expect(history.map((LocalRideSession item) => item.remoteId), <String?>[
+      'remote-2',
+      'remote-1',
+    ]);
   });
 }

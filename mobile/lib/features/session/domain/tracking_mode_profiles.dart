@@ -40,12 +40,12 @@ class TrackingModeProfile {
 class TrackingModeProfiles {
   TrackingModeProfiles._();
 
-  // Downhill: target >=1Hz with room for bursts up to 5Hz.
+  // Downhill: target just over 1Hz with room for short bursts.
   static const TrackingModeProfile activeDescent = TrackingModeProfile(
     priority: TrackingModePriority.highAccuracy,
-    intervalMs: 1000,
-    minIntervalMs: 200,
-    maxDelayMs: 1000,
+    intervalMs: 900,
+    minIntervalMs: 250,
+    maxDelayMs: 900,
     minDistanceM: 1,
     waitForAccurate: false,
   );
@@ -61,26 +61,26 @@ class TrackingModeProfiles {
 
   static const TrackingModeProfile liftUphill = TrackingModeProfile(
     priority: TrackingModePriority.balancedPower,
-    intervalMs: 3000,
-    minIntervalMs: 2000,
-    maxDelayMs: 10000,
-    minDistanceM: 5,
+    intervalMs: 4000,
+    minIntervalMs: 2500,
+    maxDelayMs: 12000,
+    minDistanceM: 6,
     waitForAccurate: false,
   );
 
   static const TrackingModeProfile stoppedIdle = TrackingModeProfile(
     priority: TrackingModePriority.balancedPower,
-    intervalMs: 8000,
-    minIntervalMs: 5000,
-    maxDelayMs: 30000,
-    minDistanceM: 8,
+    intervalMs: 12000,
+    minIntervalMs: 8000,
+    maxDelayMs: 45000,
+    minDistanceM: 10,
     waitForAccurate: false,
   );
 
   static const TrackingModeProfile lowConfidenceRecovery = TrackingModeProfile(
     priority: TrackingModePriority.highAccuracy,
-    intervalMs: 1200,
-    minIntervalMs: 600,
+    intervalMs: 1000,
+    minIntervalMs: 500,
     maxDelayMs: 0,
     minDistanceM: 0,
     waitForAccurate: true,

@@ -54,6 +54,34 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return null;
+    }
+
+    final LocationPermission permission = await Geolocator.checkPermission();
+    final LocationPermissionState permissionState =
+        _toPermissionState(permission);
+    if (permissionState != LocationPermissionState.granted &&
+        permissionState != LocationPermissionState.grantedForegroundOnly) {
+      return null;
+    }
+
+    try {
+      final Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      return _toLocationSample(position);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Stream<LocationSample> watchPosition() {
     _controller ??= StreamController<LocationSample>.broadcast(
       onListen: _startOrRestartPositionStream,

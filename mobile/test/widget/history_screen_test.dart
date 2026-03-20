@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +10,7 @@ LocalRideSession buildSession() {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: 1,
+    ownerUserId: 'user-1',
     remoteId: null,
     resortId: 'Whistler',
     startedAt: now,
@@ -30,11 +31,14 @@ LocalRideSession buildSession() {
 }
 
 void main() {
-  testWidgets('history screen renders session card with sync badge', (WidgetTester tester) async {
+  testWidgets('history screen renders formatted session card',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
-          historyProvider.overrideWith((Ref ref) async => <LocalRideSession>[buildSession()]),
+          historyProvider.overrideWith(
+            (Ref ref) async => <LocalRideSession>[buildSession()],
+          ),
         ],
         child: MaterialApp.router(
           routerConfig: GoRouter(
@@ -48,6 +52,7 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(find.text('Whistler'), findsOneWidget);
+    expect(find.textContaining('00:06:00'), findsOneWidget);
     expect(find.text('Pending'), findsOneWidget);
   });
 }

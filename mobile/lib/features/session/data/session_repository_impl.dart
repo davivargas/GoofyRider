@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -14,23 +15,28 @@ class SessionRepositoryImpl implements SessionRepository {
   SessionRepositoryImpl({
     required DriftLocalDatabase localDatabase,
     required SessionApi api,
+    required String? Function() currentUserIdGetter,
     SessionStateMachine stateMachine = const SessionStateMachine(),
   })  : _localDatabase = localDatabase,
         _api = api,
+        _currentUserIdGetter = currentUserIdGetter,
         _stateMachine = stateMachine;
 
   final DriftLocalDatabase _localDatabase;
   final SessionApi _api;
+  final String? Function() _currentUserIdGetter;
   final SessionStateMachine _stateMachine;
 
   @override
   Future<LocalRideSession> startLocalSession({String? resortId}) async {
+    final String ownerUserId = _requireCurrentUserId();
     final int localId = await _localDatabase.insertLocalSession(
       startedAt: DateTime.now().toUtc(),
+      ownerUserId: ownerUserId,
       resortId: resortId,
     );
     final LocalRideSession? created =
-        await _localDatabase.getSessionById(localId);
+        await _localDatabase.getSessionById(localId, ownerUserId: ownerUserId);
     if (created == null) {
       throw StateError('Local session was not created.');
     }
@@ -43,7 +49,7 @@ class SessionRepositoryImpl implements SessionRepository {
     _stateMachine.transition(session.state, LocalSessionState.paused);
     await _localDatabase.updateSessionState(
         localSessionId, LocalSessionState.paused);
-    return (await _localDatabase.getSessionById(localSessionId))!;
+    return _requireSession(localSessionId);
   }
 
   @override
@@ -52,7 +58,7 @@ class SessionRepositoryImpl implements SessionRepository {
     _stateMachine.transition(session.state, LocalSessionState.recording);
     await _localDatabase.updateSessionState(
         localSessionId, LocalSessionState.recording);
-    return (await _localDatabase.getSessionById(localSessionId))!;
+    return _requireSession(localSessionId);
   }
 
   @override
@@ -91,14 +97,16 @@ class SessionRepositoryImpl implements SessionRepository {
       stats: stats,
     );
 
-    final LocalRideSession completed =
-        (await _localDatabase.getSessionById(localSessionId))!;
-    return completed;
+    return _requireSession(localSessionId);
   }
 
   @override
-  Future<LocalRideSession?> recoverInProgressSession() {
-    return _localDatabase.getInProgressSession();
+  Future<LocalRideSession?> recoverInProgressSession() async {
+    final String? ownerUserId = _currentUserIdOrNull;
+    if (ownerUserId == null || ownerUserId.isEmpty) {
+      return null;
+    }
+    return _localDatabase.getInProgressSession(ownerUserId: ownerUserId);
   }
 
   @override
@@ -124,8 +132,7 @@ class SessionRepositoryImpl implements SessionRepository {
       );
       await _localDatabase.incrementSyncAttempt(localSessionId);
 
-      final LocalRideSession syncing =
-          (await _localDatabase.getSessionById(localSessionId))!;
+      final LocalRideSession syncing = await _requireSession(localSessionId);
 
       String? remoteId = syncing.remoteId;
       if (remoteId == null || remoteId.isEmpty) {
@@ -211,7 +218,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
       await _localDatabase.updateSessionState(
           localSessionId, LocalSessionState.synced);
-      return (await _localDatabase.getSessionById(localSessionId))!;
+      return _requireSession(localSessionId);
     } on DioException catch (exception) {
       final String message = mapDioException(exception).message;
       await _localDatabase.updateSessionState(
@@ -220,7 +227,7 @@ class SessionRepositoryImpl implements SessionRepository {
         lastSyncError: message,
       );
       await _localDatabase.incrementSyncAttempt(localSessionId, error: message);
-      return (await _localDatabase.getSessionById(localSessionId)) ?? original;
+      return await _tryGetScopedSession(localSessionId) ?? original;
     }
   }
 
@@ -235,14 +242,58 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async {
-    final List<LocalRideSession> local = await _localDatabase.listSessions();
-    List<Map<String, dynamic>> remote = <Map<String, dynamic>>[];
-    try {
-      remote = await _api.listRemoteSessions();
-    } on DioException {
-      remote = <Map<String, dynamic>>[];
+    final String? ownerUserId = _currentUserIdOrNull;
+    if (ownerUserId == null || ownerUserId.isEmpty) {
+      return const <LocalRideSession>[];
     }
 
+    final List<LocalRideSession> local =
+        await _localDatabase.listSessions(ownerUserId: ownerUserId);
+    final List<Map<String, dynamic>> cachedRemote =
+        await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
+
+    if (local.isNotEmpty || cachedRemote.isNotEmpty) {
+      unawaited(refreshRemoteSessionHistoryCache());
+      return _mergeHistory(
+        local: local,
+        remote: cachedRemote,
+        ownerUserId: ownerUserId,
+      );
+    }
+
+    await refreshRemoteSessionHistoryCache();
+    final List<Map<String, dynamic>> refreshedRemote =
+        await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
+    return _mergeHistory(
+      local: local,
+      remote: refreshedRemote,
+      ownerUserId: ownerUserId,
+    );
+  }
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {
+    final String? ownerUserId = _currentUserIdOrNull;
+    if (ownerUserId == null || ownerUserId.isEmpty) {
+      return;
+    }
+
+    try {
+      final List<Map<String, dynamic>> remote = await _api.listRemoteSessions();
+      await _localDatabase.replaceCachedRemoteSessions(
+        ownerUserId: ownerUserId,
+        sessions: remote,
+      );
+    } on DioException {
+      return;
+    }
+  }
+
+  List<LocalRideSession> _mergeHistory({
+    required List<LocalRideSession> local,
+    required List<Map<String, dynamic>> remote,
+    required String ownerUserId,
+  }) {
     final Set<String> localRemoteIds = local
         .where((LocalRideSession session) => session.remoteId != null)
         .map((LocalRideSession session) => session.remoteId!)
@@ -253,7 +304,10 @@ class SessionRepositoryImpl implements SessionRepository {
           final String id = item['id'] as String;
           return !localRemoteIds.contains(id);
         })
-        .map(_mapRemoteAsLocal)
+        .map(
+          (Map<String, dynamic> item) =>
+              _mapRemoteAsLocal(item, ownerUserId: ownerUserId),
+        )
         .toList(growable: false);
 
     final List<LocalRideSession> merged = <LocalRideSession>[
@@ -266,6 +320,15 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async {
+    final String? ownerUserId = _currentUserIdOrNull;
+    if (ownerUserId == null || ownerUserId.isEmpty) {
+      return const <LocalRideSession>[];
+    }
+    return _localDatabase.listPendingSyncSessions(ownerUserId: ownerUserId);
+  }
+
+  @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
     final LocalRideSession session = await _requireSession(localSessionId);
     final List<LocalSessionPoint> points =
@@ -273,23 +336,83 @@ class SessionRepositoryImpl implements SessionRepository {
     final List<LocalSessionPoint> accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
+    final List<TrackingDiagnosticEvent> diagnostics =
+        await _localDatabase.listTrackingDiagnostics(localSessionId);
 
     return SessionDetail(
-        session: session, points: points, acceptedPoints: accepted);
+      session: session,
+      points: points,
+      acceptedPoints: accepted,
+      trackingDiagnostics: diagnostics,
+    );
+  }
+
+  @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) {
+    return _localDatabase.insertTrackingDiagnostic(
+      localSessionId: localSessionId,
+      eventType: eventType,
+      message: message,
+      details: details,
+    );
+  }
+
+  @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) {
+    return _localDatabase.listTrackingDiagnostics(
+      localSessionId,
+      limit: limit,
+    );
   }
 
   @override
   Future<int> unsyncedCount() {
-    return _localDatabase.unsyncedCount();
+    final String? ownerUserId = _currentUserIdOrNull;
+    if (ownerUserId == null || ownerUserId.isEmpty) {
+      return Future<int>.value(0);
+    }
+    return _localDatabase.unsyncedCount(ownerUserId: ownerUserId);
   }
 
   Future<LocalRideSession> _requireSession(int localSessionId) async {
     final LocalRideSession? session =
-        await _localDatabase.getSessionById(localSessionId);
+        await _tryGetScopedSession(localSessionId);
     if (session == null) {
       throw StateError('Session not found: $localSessionId');
     }
     return session;
+  }
+
+  Future<LocalRideSession?> _tryGetScopedSession(int localSessionId) {
+    final String ownerUserId = _requireCurrentUserId();
+    return _localDatabase.getSessionById(
+      localSessionId,
+      ownerUserId: ownerUserId,
+    );
+  }
+
+  String? get _currentUserIdOrNull {
+    final String? currentUserId = _currentUserIdGetter();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return null;
+    }
+    return currentUserId;
+  }
+
+  String _requireCurrentUserId() {
+    final String? currentUserId = _currentUserIdOrNull;
+    if (currentUserId == null) {
+      throw StateError('Authenticated user is required for session access.');
+    }
+    return currentUserId;
   }
 
   int _computeActiveDurationSeconds(List<LocalSessionPoint> points) {
@@ -361,12 +484,10 @@ class SessionRepositoryImpl implements SessionRepository {
 
     final double distanceM = _computeDistance(accepted);
     final double robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
-    final double fallbackMaxSpeedMps = _computeFallbackMaxSpeed(accepted);
     final (int? gain, int? loss) = _computeElevation(accepted);
     final double avgSpeedMps =
         activeDurationS == 0 ? 0 : distanceM / activeDurationS;
-    final double maxSpeedMps =
-        max(max(robustMaxSpeedMps, fallbackMaxSpeedMps), avgSpeedMps);
+    final double maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
 
     return SessionStats(
       durationS: activeDurationS,
@@ -408,11 +529,21 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   double _computeRobustMaxSpeed(List<LocalSessionPoint> points) {
+    return _computeWindowedMaxSpeed(
+      points,
+      highConfidenceOnly: true,
+    );
+  }
+
+  double _computeWindowedMaxSpeed(
+    List<LocalSessionPoint> points, {
+    required bool highConfidenceOnly,
+  }) {
     final List<LocalSessionPoint> sorted = List<LocalSessionPoint>.from(points)
       ..sort((LocalSessionPoint a, LocalSessionPoint b) =>
           a.recordedAt.compareTo(b.recordedAt));
 
-    double robustMax = 0;
+    double maxSpeed = 0;
     final List<_TimedSpeed> window = <_TimedSpeed>[];
     for (final LocalSessionPoint point in sorted) {
       final double? speed =
@@ -437,8 +568,10 @@ class SessionRepositoryImpl implements SessionRepository {
             SessionConstants.maxSpeedWindowSeconds,
       );
 
-      final List<double> candidates = window
-          .where((_TimedSpeed item) => item.highConfidence)
+      final Iterable<_TimedSpeed> candidatesWindow = highConfidenceOnly
+          ? window.where((_TimedSpeed item) => item.highConfidence)
+          : window;
+      final List<double> candidates = candidatesWindow
           .map((_TimedSpeed item) => item.speed)
           .toList(growable: false);
       if (candidates.length < SessionConstants.maxSpeedPersistenceSamples) {
@@ -450,25 +583,9 @@ class SessionRepositoryImpl implements SessionRepository {
       final double median = candidates.length.isOdd
           ? candidates[middle]
           : (candidates[middle - 1] + candidates[middle]) / 2;
-      robustMax = max(robustMax, median);
+      maxSpeed = max(maxSpeed, median);
     }
-    return robustMax;
-  }
-
-  double _computeFallbackMaxSpeed(List<LocalSessionPoint> points) {
-    double fallbackMax = 0;
-    for (final LocalSessionPoint point in points) {
-      final double? speed =
-          point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps;
-      if (speed == null) {
-        continue;
-      }
-      if (speed < 0 || speed > SessionConstants.speedHardCapMetersPerSecond) {
-        continue;
-      }
-      fallbackMax = max(fallbackMax, speed);
-    }
-    return fallbackMax;
+    return maxSpeed;
   }
 
   double _sanitizeAvgSpeedForRemote(LocalRideSession session) {
@@ -529,13 +646,17 @@ class SessionRepositoryImpl implements SessionRepository {
     return (gain == 0 ? null : gain, loss == 0 ? null : loss);
   }
 
-  LocalRideSession _mapRemoteAsLocal(Map<String, dynamic> raw) {
+  LocalRideSession _mapRemoteAsLocal(
+    Map<String, dynamic> raw, {
+    required String ownerUserId,
+  }) {
     final String id = raw['id'] as String;
     final Map<String, dynamic>? resortSummary =
         raw['resort'] as Map<String, dynamic>?;
 
     return LocalRideSession(
       localId: -id.hashCode.abs(),
+      ownerUserId: ownerUserId,
       remoteId: id,
       resortId: resortSummary?['id'] as String?,
       startedAt: DateTime.parse(raw['started_at'] as String).toUtc(),

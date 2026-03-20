@@ -1,6 +1,7 @@
 enum SpeedUnit {
   kilometersPerHour,
   metersPerSecond,
+  milesPerHour,
 }
 
 extension SpeedUnitFormatting on SpeedUnit {
@@ -10,6 +11,8 @@ extension SpeedUnitFormatting on SpeedUnit {
         return 'km/h';
       case SpeedUnit.metersPerSecond:
         return 'm/s';
+      case SpeedUnit.milesPerHour:
+        return 'mph';
     }
   }
 
@@ -19,6 +22,8 @@ extension SpeedUnitFormatting on SpeedUnit {
         return 'Kilometers per hour';
       case SpeedUnit.metersPerSecond:
         return 'Meters per second';
+      case SpeedUnit.milesPerHour:
+        return 'Miles per hour';
     }
   }
 
@@ -28,6 +33,8 @@ extension SpeedUnitFormatting on SpeedUnit {
         return valueMps * 3.6;
       case SpeedUnit.metersPerSecond:
         return valueMps;
+      case SpeedUnit.milesPerHour:
+        return valueMps * 2.2369362921;
     }
   }
 
