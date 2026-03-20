@@ -48,6 +48,11 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() {
+    return _permissionsDelegate.getCurrentLocationSample();
+  }
+
+  @override
   Stream<LocationSample> watchPosition() async* {
     await for (final dynamic event in _eventChannel.receiveBroadcastStream()) {
       final List<Map<String, dynamic>> rawSamples = _extractRawSamples(event);
@@ -66,7 +71,8 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
       <String, dynamic>{
         'mode': mode.wireValue,
         'config': profile.toChannelPayload(),
-        'staleSampleThresholdSeconds': SessionConstants.staleSampleThresholdSeconds,
+        'staleSampleThresholdSeconds':
+            SessionConstants.staleSampleThresholdSeconds,
       },
     );
   }
@@ -90,8 +96,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
             .whereType<Map>()
             .map(
               (Map item) => item.map(
-                (dynamic key, dynamic value) =>
-                    MapEntry(key.toString(), value),
+                (dynamic key, dynamic value) => MapEntry(key.toString(), value),
               ),
             )
             .toList(growable: false);

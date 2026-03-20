@@ -21,6 +21,19 @@ class FakeLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    return LocationSample(
+      timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+      latitude: 49,
+      longitude: -123,
+      accuracyM: 6,
+      altitudeM: 500,
+      speedMps: 0,
+      headingDeg: 0,
+    );
+  }
+
+  @override
   Future<bool> isServiceEnabled() async => true;
 
   @override
@@ -42,7 +55,9 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<void> appendLocationPoint(
-      int localSessionId, NewSessionPoint point) async {}
+    int localSessionId,
+    NewSessionPoint point,
+  ) async {}
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async =>
@@ -63,8 +78,23 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) async {
+    return const <TrackingDiagnosticEvent>[];
+  }
+
+  @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async =>
       <LocalRideSession>[];
+
+  @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async =>
+      <LocalRideSession>[];
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {}
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
@@ -74,6 +104,14 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<LocalRideSession?> recoverInProgressSession() async => null;
+
+  @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) async {}
 
   @override
   Future<LocalRideSession> resumeLocalSession(int localSessionId) async {
@@ -106,6 +144,7 @@ class FakeSessionRepository implements SessionRepository {
     final DateTime now = DateTime.utc(2026, 1, 1);
     return LocalRideSession(
       localId: 1,
+      ownerUserId: 'user-1',
       remoteId: null,
       resortId: null,
       startedAt: now,
@@ -127,7 +166,7 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 void main() {
-  testWidgets('record screen toggles from start to finish flow',
+  testWidgets('record screen shows gps badge and resets after finish',
       (WidgetTester tester) async {
     final FakeSessionRepository fakeRepository = FakeSessionRepository();
 
@@ -144,10 +183,10 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(find.text('Start Recording'), findsOneWidget);
+    expect(find.text('GPS'), findsOneWidget);
 
     await tester.tap(find.text('Start Recording'));
     await tester.pumpAndSettle();
-
     expect(find.text('Finish'), findsOneWidget);
 
     await tester.tap(find.text('Finish'));
