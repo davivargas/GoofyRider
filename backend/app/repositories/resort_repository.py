@@ -2,7 +2,6 @@ import uuid
 
 from sqlalchemy import func
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.resort import Resort
@@ -10,9 +9,6 @@ from app.repositories.base import SqlAlchemyRepository
 
 
 class ResortRepository(SqlAlchemyRepository):
-    def __init__(self, db: Session) -> None:
-        super().__init__(db)
-
     def add(self, resort: Resort) -> None:
         self._db.add(resort)
 

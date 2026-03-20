@@ -36,7 +36,7 @@ def register(
             detail=str(exc),
         ) from exc
 
-    return TokenPair(**token_pair)
+    return TokenPair.model_validate(token_pair)
 
 
 @router.post("/login", response_model=TokenPair)
@@ -52,7 +52,7 @@ def login(
             detail=str(exc),
         ) from exc
 
-    return TokenPair(**token_pair)
+    return TokenPair.model_validate(token_pair)
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -68,7 +68,7 @@ def refresh(
             detail=str(exc),
         ) from exc
 
-    return TokenPair(**token_pair)
+    return TokenPair.model_validate(token_pair)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

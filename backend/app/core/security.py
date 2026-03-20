@@ -5,7 +5,11 @@ import secrets
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+from collections.abc import Mapping
+from collections.abc import Sequence
 from typing import Any
+from typing import Protocol
+from typing import cast
 
 import jwt
 from jwt import ExpiredSignatureError
@@ -26,6 +30,32 @@ KEY_BYTES = 32
 
 class TokenValidationError(Exception):
     pass
+
+
+class JwtDecodeProtocol(Protocol):
+    def __call__(
+        self,
+        jwt: str | bytes,
+        key: object = "",
+        algorithms: Sequence[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        ...
+
+
+class JwtEncodeProtocol(Protocol):
+    def __call__(
+        self,
+        payload: Mapping[str, Any],
+        key: object,
+        algorithm: str | None = None,
+        **kwargs: Any,
+    ) -> str:
+        ...
+
+
+jwt_decode = cast(JwtDecodeProtocol, getattr(jwt, "decode"))
+jwt_encode = cast(JwtEncodeProtocol, getattr(jwt, "encode"))
 
 
 def hash_password(password: str) -> str:
@@ -85,7 +115,7 @@ def create_refresh_token(subject: str) -> str:
 
 def decode_token(token: str, expected_token_type: str | None = None) -> dict[str, Any]:
     try:
-        payload = jwt.decode(
+        payload = jwt_decode(
             token,
             get_jwt_secret_key(),
             algorithms=[get_jwt_algorithm()],
@@ -110,10 +140,10 @@ def decode_token(token: str, expected_token_type: str | None = None) -> dict[str
 def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:
     issued_at = datetime.now(UTC)
     expires_at = issued_at + expires_delta
-    payload = {
+    payload: dict[str, str | int] = {
         "sub": subject,
         "type": token_type,
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
-    return jwt.encode(payload, get_jwt_secret_key(), algorithm=get_jwt_algorithm())
+    return jwt_encode(payload, get_jwt_secret_key(), algorithm=get_jwt_algorithm())

@@ -1,42 +1,44 @@
+from typing import Annotated
+
 from pydantic import BaseModel
-from pydantic import Field
+from pydantic import EmailStr
+from pydantic import StringConstraints
 from pydantic import field_validator
 
 
+NormalizedEmail = Annotated[
+    EmailStr,
+    StringConstraints(max_length=255, strip_whitespace=True),
+]
+Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
+LoginPassword = Annotated[str, StringConstraints(min_length=1, max_length=128)]
+DisplayName = Annotated[str, StringConstraints(min_length=1, max_length=100, strip_whitespace=True)]
+NonEmptyToken = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]
+
+
 class RegisterRequest(BaseModel):
-    email: str = Field(max_length=255)
-    password: str = Field(min_length=8, max_length=128)
-    display_name: str = Field(min_length=1, max_length=100)
+    email: NormalizedEmail
+    password: Password
+    display_name: DisplayName
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, value: str) -> str:
-        email = value.strip().lower()
-        if "@" not in email or email.startswith("@") or email.endswith("@"):
-            raise ValueError("A valid email is required.")
-        return email
-
-    @field_validator("display_name")
-    @classmethod
-    def normalize_display_name(cls, value: str) -> str:
-        display_name = value.strip()
-        if not display_name:
-            raise ValueError("Display name is required.")
-        return display_name
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).lower()
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str = Field(min_length=1, max_length=128)
+    email: NormalizedEmail
+    password: LoginPassword
 
     @field_validator("email")
     @classmethod
-    def normalize_email(cls, value: str) -> str:
-        return value.strip().lower()
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).lower()
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str = Field(min_length=1)
+    refresh_token: NonEmptyToken
 
 
 class TokenPair(BaseModel):

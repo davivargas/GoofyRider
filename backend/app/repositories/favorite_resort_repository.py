@@ -2,7 +2,6 @@ import uuid
 
 from sqlalchemy import delete
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.favorite_resort import FavoriteResort
 from app.models.resort import Resort
@@ -10,9 +9,6 @@ from app.repositories.base import SqlAlchemyRepository
 
 
 class FavoriteResortRepository(SqlAlchemyRepository):
-    def __init__(self, db: Session) -> None:
-        super().__init__(db)
-
     def list_by_user_id(self, user_id: uuid.UUID) -> list[Resort]:
         stmt = (
             select(Resort)
@@ -39,4 +35,5 @@ class FavoriteResortRepository(SqlAlchemyRepository):
                 FavoriteResort.resort_id == resort_id,
             )
         )
-        return int(result.rowcount or 0)
+        rowcount = getattr(result, "rowcount", None)
+        return int(rowcount or 0)

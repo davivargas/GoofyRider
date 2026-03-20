@@ -1,11 +1,12 @@
-﻿from datetime import datetime
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import field_validator
+from pydantic import model_validator
 
 from app.models.ride_session import RideSessionStatus
+from app.schemas.base import ORMBaseModel
 
 
 class SessionCreateRequest(BaseModel):
@@ -57,25 +58,25 @@ class SessionCompleteRequest(BaseModel):
     elevation_gain_m: int | None = Field(default=None, ge=0)
     elevation_loss_m: int | None = Field(default=None, ge=0)
 
-    @field_validator("avg_speed_mps")
-    @classmethod
-    def validate_avg_speed(cls, value: float | None, info) -> float | None:
-        max_speed = info.data.get("max_speed_mps")
-        if value is not None and max_speed is not None and value > max_speed:
+    @model_validator(mode="after")
+    def validate_avg_speed(self) -> "SessionCompleteRequest":
+        if (
+            self.avg_speed_mps is not None
+            and self.max_speed_mps is not None
+            and self.avg_speed_mps > self.max_speed_mps
+        ):
             raise ValueError("Average speed cannot be greater than max speed.")
-        return value
+        return self
 
 
-class SessionResortSummary(BaseModel):
+class SessionResortSummary(ORMBaseModel):
     id: UUID
     name: str
     country: str
     region: str
 
-    model_config = {"from_attributes": True}
 
-
-class RideSessionPublic(BaseModel):
+class RideSessionPublic(ORMBaseModel):
     id: UUID
     user_id: UUID
     resort_id: UUID | None
@@ -91,10 +92,8 @@ class RideSessionPublic(BaseModel):
     status: RideSessionStatus
     created_at: datetime
 
-    model_config = {"from_attributes": True}
 
-
-class SessionPointPublic(BaseModel):
+class SessionPointPublic(ORMBaseModel):
     id: int
     t_offset_ms: int
     latitude: float
@@ -120,8 +119,6 @@ class SessionPointPublic(BaseModel):
     distance_delta_m: float | None
     motion_state: str | None
     created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class SessionPointsListResponse(BaseModel):
