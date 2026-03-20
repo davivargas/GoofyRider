@@ -201,8 +201,8 @@ class TrackingPipelineEngine {
     }
 
     final LocalSessionPoint last = points.last;
-    if (last?.motionState != null) {
-      _motionState = _parseMotionState(last!.motionState!);
+    if (last.motionState != null) {
+      _motionState = _parseMotionState(last.motionState!);
     }
   }
 

@@ -70,6 +70,19 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<bool> openLocationSettings() async => true;
 
   @override
+  Future<LocationSample?> getCurrentLocationSample() async {
+    return LocationSample(
+      timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+      latitude: 50.0,
+      longitude: -122.0,
+      accuracyM: 5,
+      altitudeM: 1000,
+      speedMps: 0,
+      headingDeg: 0,
+    );
+  }
+
+  @override
   Stream<LocationSample> watchPosition() {
     return Stream<LocationSample>.fromIterable(<LocationSample>[
       LocationSample(
@@ -134,6 +147,13 @@ class FakeSessionRepository implements SessionRepository {
       <LocalRideSession>[];
 
   @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async =>
+      <LocalRideSession>[];
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {}
+
+  @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async =>
       _session(LocalSessionState.paused);
 
@@ -173,6 +193,7 @@ class FakeSessionRepository implements SessionRepository {
     final DateTime now = DateTime.utc(2026, 1, 1);
     return LocalRideSession(
       localId: 1,
+      ownerUserId: 'user-1',
       remoteId: null,
       resortId: null,
       startedAt: now,
