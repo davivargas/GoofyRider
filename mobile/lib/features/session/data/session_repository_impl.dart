@@ -348,9 +348,14 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
-    final List<LocalSessionPoint> points =
-        await _localDatabase.listPoints(localSessionId);
+    LocalRideSession session = await _requireSession(localSessionId);
+    List<LocalSessionPoint> points = await _localDatabase.listPoints(
+      localSessionId,
+    );
+    if (points.isEmpty && _canRestoreRemotePoints(session)) {
+      points = await _restoreRemotePoints(session);
+      session = await _requireSession(localSessionId);
+    }
     final List<LocalSessionPoint> accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
@@ -517,6 +522,93 @@ class SessionRepositoryImpl implements SessionRepository {
         raw['ended_at'] != null;
   }
 
+  bool _canRestoreRemotePoints(LocalRideSession session) {
+    final String? remoteId = session.remoteId;
+    return remoteId != null && remoteId.isNotEmpty;
+  }
+
+  Future<List<LocalSessionPoint>> _restoreRemotePoints(
+    LocalRideSession session,
+  ) async {
+    final String remoteId = session.remoteId!;
+    try {
+      final List<Map<String, dynamic>> remotePoints =
+          await _api.getRemoteSessionPoints(remoteId);
+      await _localDatabase.replaceSessionPoints(
+        localSessionId: session.localId,
+        points: _mapRemotePoints(
+          sessionStartedAt: session.startedAt,
+          remotePoints: remotePoints,
+        ),
+      );
+    } on DioException {
+      return _localDatabase.listPoints(session.localId);
+    }
+    return _localDatabase.listPoints(session.localId);
+  }
+
+  List<NewSessionPoint> _mapRemotePoints({
+    required DateTime sessionStartedAt,
+    required List<Map<String, dynamic>> remotePoints,
+  }) {
+    final List<Map<String, dynamic>> sorted =
+        List<Map<String, dynamic>>.from(remotePoints)
+          ..sort(
+            (Map<String, dynamic> a, Map<String, dynamic> b) =>
+                _remoteIntOrZero(a['t_offset_ms'])
+                    .compareTo(_remoteIntOrZero(b['t_offset_ms'])),
+          );
+
+    return sorted.map((Map<String, dynamic> raw) {
+      final int tOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
+      final String? qualityClass = raw['quality_class'] as String?;
+      final String? motionState = raw['motion_state'] as String?;
+      return NewSessionPoint(
+        recordedAt:
+            sessionStartedAt.toUtc().add(Duration(milliseconds: tOffsetMs)),
+        tOffsetMs: tOffsetMs,
+        latitude: _remoteDouble(raw['latitude']),
+        longitude: _remoteDouble(raw['longitude']),
+        accuracyM: _remoteNullableDouble(raw['accuracy_m']),
+        altitudeM: _remoteNullableDouble(raw['altitude_m']),
+        speedMps: _remoteNullableDouble(raw['speed_mps']),
+        headingDeg: _remoteNullableDouble(raw['heading_deg']),
+        acceptedForAnalytics: _remotePointAcceptedForAnalytics(
+          qualityClass: qualityClass,
+          motionState: motionState,
+        ),
+        elapsedRealtimeNs: _remoteNullableInt(raw['elapsed_realtime_ns']),
+        verticalAccuracyM: _remoteNullableDouble(raw['vertical_accuracy_m']),
+        speedAccuracyMps: _remoteNullableDouble(raw['speed_accuracy_mps']),
+        bearingAccuracyDeg: _remoteNullableDouble(raw['bearing_accuracy_deg']),
+        provider: raw['provider'] as String?,
+        isMocked: _remoteNullableBool(raw['is_mocked']),
+        qualityClass: qualityClass,
+        qualityScore: _remoteNullableDouble(raw['quality_score']),
+        qualityReason: raw['quality_reason'] as String?,
+        filteredLatitude: _remoteNullableDouble(raw['filtered_latitude']),
+        filteredLongitude: _remoteNullableDouble(raw['filtered_longitude']),
+        filteredAltitudeM: _remoteNullableDouble(raw['filtered_altitude_m']),
+        fusedSpeedMps: _remoteNullableDouble(raw['fused_speed_mps']),
+        derivedSpeedMps: _remoteNullableDouble(raw['derived_speed_mps']),
+        distanceDeltaM: _remoteNullableDouble(raw['distance_delta_m']),
+        motionState: motionState,
+      );
+    }).toList(growable: false);
+  }
+
+  bool _remotePointAcceptedForAnalytics({
+    required String? qualityClass,
+    required String? motionState,
+  }) {
+    if (qualityClass != null && qualityClass.isNotEmpty) {
+      return qualityClass != 'reject';
+    }
+    if (motionState == 'low_confidence_recovery') {
+      return false;
+    }
+    return true;
+  }
 
   Future<Set<int>> _fetchExistingRemoteOffsets(String remoteId) async {
     try {

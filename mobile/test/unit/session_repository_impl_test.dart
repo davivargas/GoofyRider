@@ -666,4 +666,109 @@ void main() {
     ).called(1);
   });
 
+  test('getSessionDetail restores remote points for hydrated sessions',
+      () async {
+    final LocalRideSession hydrated = _buildSession(
+      localId: 1,
+      state: LocalSessionState.synced,
+      remoteId: 'remote-restore',
+      activeDurationS: 20,
+    );
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        hydrated,
+        hydrated,
+      ],
+    );
+    final Queue<List<LocalSessionPoint>> pointSnapshots =
+        Queue<List<LocalSessionPoint>>.from(
+      <List<LocalSessionPoint>>[
+        const <LocalSessionPoint>[],
+        <LocalSessionPoint>[
+          _buildPoint(
+            offsetMs: 0,
+            distanceDeltaM: 0,
+            motionState: 'active_descent',
+            latitude: 49.0,
+            longitude: -123.0,
+          ),
+          _buildPoint(
+            offsetMs: 10000,
+            distanceDeltaM: 30,
+            motionState: 'active_descent',
+            latitude: 49.0003,
+            longitude: -123.0002,
+          ),
+          _buildPoint(
+            offsetMs: 20000,
+            acceptedForAnalytics: false,
+            qualityClass: 'reject',
+            distanceDeltaM: 0,
+            motionState: 'low_confidence_recovery',
+            latitude: 49.0003,
+            longitude: -123.0002,
+          ),
+        ],
+      ],
+    );
+
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => sessions.removeFirst());
+    when(() => localDatabase.listPoints(1)).thenAnswer(
+      (_) async => pointSnapshots.removeFirst(),
+    );
+    when(
+      () => localDatabase.replaceSessionPoints(
+        localSessionId: any(named: 'localSessionId'),
+        points: any(named: 'points'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+        .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
+    when(() => api.getRemoteSessionPoints('remote-restore')).thenAnswer(
+      (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          't_offset_ms': 0,
+          'latitude': 49.0,
+          'longitude': -123.0,
+          'quality_class': 'accept_low_confidence',
+          'motion_state': 'active_descent',
+          'distance_delta_m': 0,
+        },
+        <String, dynamic>{
+          't_offset_ms': 10000,
+          'latitude': 49.0003,
+          'longitude': -123.0002,
+          'quality_class': 'accept',
+          'motion_state': 'active_descent',
+          'distance_delta_m': 30,
+        },
+        <String, dynamic>{
+          't_offset_ms': 20000,
+          'latitude': 49.0003,
+          'longitude': -123.0002,
+          'motion_state': 'low_confidence_recovery',
+          'distance_delta_m': 0,
+        },
+      ],
+    );
+
+    final SessionDetail detail = await repository.getSessionDetail(1);
+
+    expect(detail.points, hasLength(3));
+    expect(detail.acceptedPoints, hasLength(2));
+    final List<dynamic> captured = verify(
+      () => localDatabase.replaceSessionPoints(
+        localSessionId: 1,
+        points: captureAny(named: 'points'),
+      ),
+    ).captured;
+    final List<NewSessionPoint> restored =
+        captured.single as List<NewSessionPoint>;
+    expect(restored, hasLength(3));
+    expect(restored[0].acceptedForAnalytics, isTrue);
+    expect(restored[1].acceptedForAnalytics, isTrue);
+    expect(restored[2].acceptedForAnalytics, isFalse);
+    expect(restored[2].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 20));
+  });
 }

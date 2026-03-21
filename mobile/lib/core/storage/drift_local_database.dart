@@ -632,6 +632,100 @@ class DriftLocalDatabase extends GeneratedDatabase {
     return rows.map(_mapPoint).toList(growable: false);
   }
 
+  Future<void> replaceSessionPoints({
+    required int localSessionId,
+    required List<NewSessionPoint> points,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    await transaction(() async {
+      await customStatement(
+        'DELETE FROM local_session_points WHERE local_session_id = ?',
+        <Object?>[localSessionId],
+      );
+
+      for (final NewSessionPoint point in points) {
+        await customInsert(
+          '''
+          INSERT INTO local_session_points (
+            local_session_id,
+            recorded_at,
+            t_offset_ms,
+            latitude,
+            longitude,
+            accuracy_m,
+            elapsed_realtime_ns,
+            altitude_m,
+            vertical_accuracy_m,
+            speed_mps,
+            speed_accuracy_mps,
+            heading_deg,
+            bearing_accuracy_deg,
+            provider,
+            is_mocked,
+            quality_class,
+            quality_score,
+            quality_reason,
+            filtered_latitude,
+            filtered_longitude,
+            filtered_altitude_m,
+            fused_speed_mps,
+            derived_speed_mps,
+            distance_delta_m,
+            motion_state,
+            accepted_for_analytics,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ''',
+          variables: <Variable>[
+            Variable<int>(localSessionId),
+            Variable<String>(point.recordedAt.toUtc().toIso8601String()),
+            Variable<int>(point.tOffsetMs),
+            Variable<double>(point.latitude),
+            Variable<double>(point.longitude),
+            Variable<double>(point.accuracyM),
+            Variable<int>(point.elapsedRealtimeNs),
+            Variable<double>(point.altitudeM),
+            Variable<double>(point.verticalAccuracyM),
+            Variable<double>(point.speedMps),
+            Variable<double>(point.speedAccuracyMps),
+            Variable<double>(point.headingDeg),
+            Variable<double>(point.bearingAccuracyDeg),
+            Variable<String>(point.provider),
+            Variable<int>(
+              point.isMocked == null ? null : (point.isMocked! ? 1 : 0),
+            ),
+            Variable<String>(point.qualityClass),
+            Variable<double>(point.qualityScore),
+            Variable<String>(point.qualityReason),
+            Variable<double>(point.filteredLatitude),
+            Variable<double>(point.filteredLongitude),
+            Variable<double>(point.filteredAltitudeM),
+            Variable<double>(point.fusedSpeedMps),
+            Variable<double>(point.derivedSpeedMps),
+            Variable<double>(point.distanceDeltaM),
+            Variable<String>(point.motionState),
+            Variable<int>(point.acceptedForAnalytics ? 1 : 0),
+            Variable<String>(now.toIso8601String()),
+          ],
+        );
+      }
+
+      await customUpdate(
+        '''
+        UPDATE local_ride_sessions
+        SET point_count = ?,
+            updated_at = ?
+        WHERE local_id = ?
+        ''',
+        variables: <Variable>[
+          Variable<int>(points.length),
+          Variable<String>(now.toIso8601String()),
+          Variable<int>(localSessionId),
+        ],
+      );
+    });
+  }
+
   Future<void> _migrateToV2() async {
     await _addColumnIfMissing(
         'local_session_points', 'elapsed_realtime_ns INTEGER');
