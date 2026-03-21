@@ -8,6 +8,7 @@ import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
 import 'package:goofyrider_mobile/features/session/data/session_api.dart';
 import 'package:goofyrider_mobile/features/session/data/session_repository_impl.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
+import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
 
 class MockDriftLocalDatabase extends Mock implements DriftLocalDatabase {}
 
@@ -21,18 +22,22 @@ LocalRideSession _buildSession({
   required int localId,
   required LocalSessionState state,
   String? remoteId,
+  int activeDurationS = 120,
   double maxSpeedMps = 10,
   double avgSpeedMps = 8,
+  DateTime? startedAt,
+  DateTime? endedAt,
 }) {
-  final DateTime now = DateTime.utc(2026, 1, 1);
+  final DateTime effectiveStartedAt = startedAt ?? DateTime.utc(2026, 1, 1);
+  final DateTime effectiveEndedAt = endedAt ?? effectiveStartedAt;
   return LocalRideSession(
     localId: localId,
     ownerUserId: _ownerUserId,
     remoteId: remoteId,
     resortId: null,
-    startedAt: now,
-    endedAt: now,
-    activeDurationS: 120,
+    startedAt: effectiveStartedAt,
+    endedAt: effectiveEndedAt,
+    activeDurationS: activeDurationS,
     distanceM: 1000,
     maxSpeedMps: maxSpeedMps,
     avgSpeedMps: avgSpeedMps,
@@ -42,11 +47,10 @@ LocalRideSession _buildSession({
     pointCount: 0,
     syncAttemptCount: 0,
     lastSyncError: null,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: effectiveStartedAt,
+    updatedAt: effectiveEndedAt,
   );
 }
-
 LocalSessionPoint _buildPoint({
   required int offsetMs,
   double speedMps = 7,
@@ -55,6 +59,9 @@ LocalSessionPoint _buildPoint({
   double? fusedSpeedMps,
   double? derivedSpeedMps,
   double? distanceDeltaM,
+  String? motionState,
+  double? latitude,
+  double? longitude,
 }) {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalSessionPoint(
@@ -62,8 +69,8 @@ LocalSessionPoint _buildPoint({
     localSessionId: 1,
     recordedAt: now.add(Duration(milliseconds: offsetMs)),
     tOffsetMs: offsetMs,
-    latitude: 49.0 + (offsetMs / 1000000),
-    longitude: -123.0 - (offsetMs / 1000000),
+    latitude: latitude ?? 49.0 + (offsetMs / 1000000),
+    longitude: longitude ?? -123.0 - (offsetMs / 1000000),
     accuracyM: 8,
     altitudeM: 500,
     speedMps: speedMps,
@@ -73,12 +80,14 @@ LocalSessionPoint _buildPoint({
     fusedSpeedMps: fusedSpeedMps ?? speedMps,
     derivedSpeedMps: derivedSpeedMps,
     distanceDeltaM: distanceDeltaM,
+    motionState: motionState,
   );
 }
 
 void main() {
   setUpAll(() {
     registerFallbackValue(FakeNewSessionPoint());
+    registerFallbackValue(<NewSessionPoint>[FakeNewSessionPoint()]);
     registerFallbackValue(LocalSessionState.syncPending);
   });
 
@@ -372,6 +381,7 @@ void main() {
     expect(stats.maxSpeedMps, greaterThan(0));
   });
 
+
   test('computeSessionStats resists single accepted max-speed spikes',
       () async {
     when(() => localDatabase.listPoints(1)).thenAnswer(
@@ -474,16 +484,35 @@ void main() {
 
   test('history uses scoped local rows and cached remote rows offline',
       () async {
-    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
-        .thenAnswer(
-      (_) async => <LocalRideSession>[
-        _buildSession(
-          localId: 1,
-          state: LocalSessionState.syncPending,
-          remoteId: 'remote-1',
-        ),
+    final Queue<List<LocalRideSession>> localSnapshots =
+        Queue<List<LocalRideSession>>.from(
+      <List<LocalRideSession>>[
+        <LocalRideSession>[
+          _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncPending,
+            remoteId: 'remote-1',
+            startedAt: DateTime.utc(2026, 1, 1),
+          ),
+        ],
+        <LocalRideSession>[
+          _buildSession(
+            localId: 2,
+            state: LocalSessionState.synced,
+            remoteId: 'remote-2',
+            startedAt: DateTime.utc(2026, 1, 2),
+          ),
+          _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncPending,
+            remoteId: 'remote-1',
+            startedAt: DateTime.utc(2026, 1, 1),
+          ),
+        ],
       ],
     );
+    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => localSnapshots.removeFirst());
     when(() =>
             localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
         .thenAnswer(
@@ -508,6 +537,25 @@ void main() {
         },
       ],
     );
+    when(
+      () => localDatabase.upsertRemoteSessionSummary(
+        ownerUserId: any(named: 'ownerUserId'),
+        remoteId: any(named: 'remoteId'),
+        startedAt: any(named: 'startedAt'),
+        endedAt: any(named: 'endedAt'),
+        activeDurationS: any(named: 'activeDurationS'),
+        distanceM: any(named: 'distanceM'),
+        maxSpeedMps: any(named: 'maxSpeedMps'),
+        avgSpeedMps: any(named: 'avgSpeedMps'),
+        elevationGainM: any(named: 'elevationGainM'),
+        elevationLossM: any(named: 'elevationLossM'),
+        resortId: any(named: 'resortId'),
+        createdAt: any(named: 'createdAt'),
+      ),
+    ).thenAnswer((Invocation invocation) async {
+      final String remoteId = invocation.namedArguments[#remoteId] as String;
+      return remoteId == 'remote-1' ? 1 : 2;
+    });
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
@@ -524,5 +572,98 @@ void main() {
       'remote-2',
       'remote-1',
     ]);
+    expect(history.every((LocalRideSession item) => item.localId > 0), isTrue);
   });
+
+  test('history rebuild hydrates fresh-install remote sessions into local rows',
+      () async {
+    final Map<String, dynamic> remoteSummary = <String, dynamic>{
+      'id': 'remote-7',
+      'status': 'COMPLETED',
+      'started_at': '2026-01-03T00:00:00Z',
+      'ended_at': '2026-01-03T00:12:00Z',
+      'duration_s': 720,
+      'distance_m': 2100,
+      'max_speed_mps': 14,
+      'avg_speed_mps': 8,
+      'created_at': '2026-01-03T00:12:05Z',
+    };
+    final Queue<List<LocalRideSession>> localSnapshots =
+        Queue<List<LocalRideSession>>.from(
+      <List<LocalRideSession>>[
+        const <LocalRideSession>[],
+        <LocalRideSession>[
+          _buildSession(
+            localId: 7,
+            state: LocalSessionState.synced,
+            remoteId: 'remote-7',
+            activeDurationS: 720,
+            maxSpeedMps: 14,
+            avgSpeedMps: 8,
+          ),
+        ],
+      ],
+    );
+    final Queue<List<Map<String, dynamic>>> remoteSnapshots =
+        Queue<List<Map<String, dynamic>>>.from(
+      <List<Map<String, dynamic>>>[
+        const <Map<String, dynamic>>[],
+        <Map<String, dynamic>>[remoteSummary],
+      ],
+    );
+
+    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => localSnapshots.removeFirst());
+    when(() =>
+            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => remoteSnapshots.removeFirst());
+    when(() => api.listRemoteSessions())
+        .thenAnswer((_) async => <Map<String, dynamic>>[remoteSummary]);
+    when(
+      () => localDatabase.replaceCachedRemoteSessions(
+        ownerUserId: _ownerUserId,
+        sessions: any(named: 'sessions'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => localDatabase.upsertRemoteSessionSummary(
+        ownerUserId: any(named: 'ownerUserId'),
+        remoteId: any(named: 'remoteId'),
+        startedAt: any(named: 'startedAt'),
+        endedAt: any(named: 'endedAt'),
+        activeDurationS: any(named: 'activeDurationS'),
+        distanceM: any(named: 'distanceM'),
+        maxSpeedMps: any(named: 'maxSpeedMps'),
+        avgSpeedMps: any(named: 'avgSpeedMps'),
+        elevationGainM: any(named: 'elevationGainM'),
+        elevationLossM: any(named: 'elevationLossM'),
+        resortId: any(named: 'resortId'),
+        createdAt: any(named: 'createdAt'),
+      ),
+    ).thenAnswer((_) async => 7);
+
+    final List<LocalRideSession> history =
+        await repository.listLocalAndRemoteSessionHistory();
+
+    expect(history, hasLength(1));
+    expect(history.single.localId, 7);
+    expect(history.single.remoteId, 'remote-7');
+    verify(
+      () => localDatabase.upsertRemoteSessionSummary(
+        ownerUserId: _ownerUserId,
+        remoteId: 'remote-7',
+        startedAt: DateTime.utc(2026, 1, 3, 0, 0, 0),
+        endedAt: DateTime.utc(2026, 1, 3, 0, 12, 0),
+        activeDurationS: 720,
+        distanceM: 2100,
+        maxSpeedMps: 14,
+        avgSpeedMps: 8,
+        elevationGainM: null,
+        elevationLossM: null,
+        resortId: null,
+        createdAt: DateTime.utc(2026, 1, 3, 0, 12, 5),
+      ),
+    ).called(1);
+  });
+
 }

@@ -1,4 +1,4 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 
 class SessionApi {
   SessionApi(this._dio);
@@ -55,27 +55,51 @@ class SessionApi {
   }
 
   Future<List<Map<String, dynamic>>> listRemoteSessions() async {
-    final Response<dynamic> response = await _dio.get<dynamic>(
-      '/users/me/sessions',
-      queryParameters: <String, dynamic>{
-        'page': 1,
-        'page_size': 100,
-      },
-    );
-    final Map<String, dynamic> payload = response.data as Map<String, dynamic>;
-    final List<dynamic> items = payload['items'] as List<dynamic>? ?? <dynamic>[];
-    return items.cast<Map<String, dynamic>>();
+    const int pageSize = 100;
+    final List<Map<String, dynamic>> sessions = <Map<String, dynamic>>[];
+    int page = 1;
+    int? total;
+
+    while (true) {
+      final Response<dynamic> response = await _dio.get<dynamic>(
+        '/users/me/sessions',
+        queryParameters: <String, dynamic>{
+          'page': page,
+          'page_size': pageSize,
+        },
+      );
+      final Map<String, dynamic> payload =
+          response.data as Map<String, dynamic>;
+      final List<dynamic> items =
+          payload['items'] as List<dynamic>? ?? <dynamic>[];
+      sessions.addAll(items.cast<Map<String, dynamic>>());
+      total ??= (payload['total'] as num?)?.toInt();
+
+      if (items.isEmpty || items.length < pageSize) {
+        break;
+      }
+      if (total != null && sessions.length >= total) {
+        break;
+      }
+      page += 1;
+    }
+
+    return sessions;
   }
 
   Future<Map<String, dynamic>> getRemoteSession(String sessionId) async {
-    final Response<dynamic> response = await _dio.get<dynamic>('/sessions/$sessionId');
+    final Response<dynamic> response =
+        await _dio.get<dynamic>('/sessions/$sessionId');
     return response.data as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> getRemoteSessionPoints(String sessionId) async {
-    final Response<dynamic> response = await _dio.get<dynamic>('/sessions/$sessionId/points');
+  Future<List<Map<String, dynamic>>> getRemoteSessionPoints(
+      String sessionId) async {
+    final Response<dynamic> response =
+        await _dio.get<dynamic>('/sessions/$sessionId/points');
     final Map<String, dynamic> payload = response.data as Map<String, dynamic>;
-    final List<dynamic> items = payload['items'] as List<dynamic>? ?? <dynamic>[];
+    final List<dynamic> items =
+        payload['items'] as List<dynamic>? ?? <dynamic>[];
     return items.cast<Map<String, dynamic>>();
   }
 }
