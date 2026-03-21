@@ -308,8 +308,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                 'Max', speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps)),
             _statCard(
                 'Distance', distanceUnit.formatFromMeters(stats.distanceM)),
-            _statCard(
-                'Avg', speedUnit.formatFromMetersPerSecond(stats.avgSpeedMps)),
+            _statCard('Ride avg',
+                speedUnit.formatFromMetersPerSecond(stats.rideAvgSpeedMps)),
             _statCard('Duration', state.elapsed.toHoursMinutesSeconds()),
             _statCard('Points', '${state.route.length}'),
             _statCard('Updated', DateTime.now().toTimeLabel()),

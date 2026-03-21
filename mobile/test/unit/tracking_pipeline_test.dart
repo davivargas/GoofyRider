@@ -11,6 +11,7 @@ LocationSample _sample({
   double altitudeM = 1200,
   double? speedMps,
   double headingDeg = 120,
+  double? bearingAccuracyDeg,
   double? speedAccuracyMps,
   double? verticalAccuracyM = 12,
 }) {
@@ -22,6 +23,7 @@ LocationSample _sample({
     altitudeM: altitudeM,
     speedMps: speedMps,
     headingDeg: headingDeg,
+    bearingAccuracyDeg: bearingAccuracyDeg,
     speedAccuracyMps: speedAccuracyMps,
     verticalAccuracyM: verticalAccuracyM,
   );
@@ -1000,9 +1002,88 @@ void main() {
     expect(ambiguous.motionState, MotionState.stoppedIdle);
   });
 
+  test('live stats keep ride average tied to descent time only', () {
+    final TrackingPipelineEngine engine = TrackingPipelineEngine();
+    final DateTime start = DateTime.utc(2026, 1, 16, 7, 0, 0);
+    double latitude = 49.5;
+
+    for (int index = 0; index < 3; index++) {
+      engine.processSample(
+        sample: _sample(
+          timestamp: start.add(Duration(seconds: index)),
+          latitude: latitude,
+          longitude: -122.8,
+          altitudeM: 2200,
+          speedMps: 0.1,
+          speedAccuracyMps: 1.0,
+          accuracyM: 8,
+        ),
+        sessionStartedAtUtc: start,
+        activeDurationS: index,
+      );
+      latitude += 0.000001;
+    }
+
+    TrackingProcessResult last = engine.processSample(
+      sample: _sample(
+        timestamp: start.add(const Duration(seconds: 3)),
+        latitude: latitude,
+        longitude: -122.8,
+        altitudeM: 2197,
+        speedMps: 12,
+        speedAccuracyMps: 0.8,
+        accuracyM: 8,
+      ),
+      sessionStartedAtUtc: start,
+      activeDurationS: 3,
+    );
+    latitude += 0.00012;
+
+    for (int index = 4; index < 13; index++) {
+      last = engine.processSample(
+        sample: _sample(
+          timestamp: start.add(Duration(seconds: index)),
+          latitude: latitude,
+          longitude: -122.8,
+          altitudeM: 2197 - ((index - 2) * 3),
+          speedMps: 12,
+          speedAccuracyMps: 0.8,
+          accuracyM: 8,
+        ),
+        sessionStartedAtUtc: start,
+        activeDurationS: index,
+      );
+      latitude += 0.00012;
+    }
+
+    for (int index = 13; index < 45; index++) {
+      last = engine.processSample(
+        sample: _sample(
+          timestamp: start.add(Duration(seconds: index)),
+          latitude: latitude,
+          longitude: -122.79996 + ((index - 13) * 0.00001),
+          altitudeM: 2164 + ((index - 12) * 1.9),
+          speedMps: 5.8,
+          speedAccuracyMps: 0.8,
+          accuracyM: 8,
+          headingDeg: 32 + ((index % 3) * 1.2),
+          bearingAccuracyDeg: 8,
+        ),
+        sessionStartedAtUtc: start,
+        activeDurationS: index,
+      );
+      latitude += 0.00002;
+    }
+
+    expect(last.motionState, MotionState.liftUphill);
+    expect(last.stats.descentDurationS, greaterThan(0));
+    expect(last.stats.liftDurationS, greaterThan(0));
+    expect(last.stats.rideAvgSpeedMps, greaterThan(last.stats.avgSpeedMps));
+  });
+
   test('seedFromPersistedPoints restores the last stable motion fallback', () {
     final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 16, 8, 0, 0);
+    final DateTime start = DateTime.utc(2026, 1, 17, 8, 0, 0);
 
     engine.seedFromPersistedPoints(
       points: <LocalSessionPoint>[

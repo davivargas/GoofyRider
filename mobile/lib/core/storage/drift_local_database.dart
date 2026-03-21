@@ -78,6 +78,11 @@ class DriftLocalDatabase extends GeneratedDatabase {
     ''');
 
     await customStatement('''
+      CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_remote
+      ON local_ride_sessions(owner_user_id, remote_id)
+    ''');
+
+    await customStatement('''
       CREATE TABLE IF NOT EXISTS local_session_points (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         local_session_id INTEGER NOT NULL,
@@ -385,6 +390,133 @@ class DriftLocalDatabase extends GeneratedDatabase {
     return _mapSession(rows.first);
   }
 
+  Future<LocalRideSession?> getSessionByRemoteId({
+    required String ownerUserId,
+    required String remoteId,
+  }) async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT *
+      FROM local_ride_sessions
+      WHERE owner_user_id = ?
+      AND remote_id = ?
+      ORDER BY local_id DESC
+      LIMIT 1
+      ''',
+      variables: <Variable>[
+        Variable<String>(ownerUserId),
+        Variable<String>(remoteId),
+      ],
+    ).get();
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _mapSession(rows.first);
+  }
+
+  Future<int> upsertRemoteSessionSummary({
+    required String ownerUserId,
+    required String remoteId,
+    required DateTime startedAt,
+    required DateTime? endedAt,
+    required int activeDurationS,
+    required double distanceM,
+    required double maxSpeedMps,
+    required double avgSpeedMps,
+    required int? elevationGainM,
+    required int? elevationLossM,
+    required String? resortId,
+    DateTime? createdAt,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    final LocalRideSession? existing = await getSessionByRemoteId(
+      ownerUserId: ownerUserId,
+      remoteId: remoteId,
+    );
+
+    if (existing != null) {
+      await customUpdate(
+        '''
+        UPDATE local_ride_sessions
+        SET owner_user_id = ?,
+            resort_id = ?,
+            started_at = ?,
+            ended_at = ?,
+            active_duration_s = ?,
+            distance_m = ?,
+            max_speed_mps = ?,
+            avg_speed_mps = ?,
+            elevation_gain_m = ?,
+            elevation_loss_m = ?,
+            state = ?,
+            last_sync_error = NULL,
+            updated_at = ?
+        WHERE local_id = ?
+        ''',
+        variables: <Variable>[
+          Variable<String>(ownerUserId),
+          Variable<String>(resortId),
+          Variable<String>(startedAt.toUtc().toIso8601String()),
+          Variable<String>(endedAt?.toUtc().toIso8601String()),
+          Variable<int>(activeDurationS),
+          Variable<double>(distanceM),
+          Variable<double>(maxSpeedMps),
+          Variable<double>(avgSpeedMps),
+          Variable<int>(elevationGainM),
+          Variable<int>(elevationLossM),
+          Variable<String>(LocalSessionState.synced.wireValue),
+          Variable<String>(now.toIso8601String()),
+          Variable<int>(existing.localId),
+        ],
+      );
+      return existing.localId;
+    }
+
+    return customInsert(
+      '''
+      INSERT INTO local_ride_sessions (
+        owner_user_id,
+        remote_id,
+        resort_id,
+        started_at,
+        ended_at,
+        active_duration_s,
+        distance_m,
+        max_speed_mps,
+        avg_speed_mps,
+        elevation_gain_m,
+        elevation_loss_m,
+        state,
+        point_count,
+        sync_attempt_count,
+        last_sync_error,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''',
+      variables: <Variable>[
+        Variable<String>(ownerUserId),
+        Variable<String>(remoteId),
+        Variable<String>(resortId),
+        Variable<String>(startedAt.toUtc().toIso8601String()),
+        Variable<String>(endedAt?.toUtc().toIso8601String()),
+        Variable<int>(activeDurationS),
+        Variable<double>(distanceM),
+        Variable<double>(maxSpeedMps),
+        Variable<double>(avgSpeedMps),
+        Variable<int>(elevationGainM),
+        Variable<int>(elevationLossM),
+        Variable<String>(LocalSessionState.synced.wireValue),
+        const Variable<int>(0),
+        const Variable<int>(0),
+        const Variable<String>(null),
+        Variable<String>((createdAt ?? now).toUtc().toIso8601String()),
+        Variable<String>(now.toIso8601String()),
+      ],
+    );
+  }
+
   Future<LocalRideSession?> getInProgressSession({
     required String ownerUserId,
   }) async {
@@ -498,6 +630,100 @@ class DriftLocalDatabase extends GeneratedDatabase {
     ).get();
 
     return rows.map(_mapPoint).toList(growable: false);
+  }
+
+  Future<void> replaceSessionPoints({
+    required int localSessionId,
+    required List<NewSessionPoint> points,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    await transaction(() async {
+      await customStatement(
+        'DELETE FROM local_session_points WHERE local_session_id = ?',
+        <Object?>[localSessionId],
+      );
+
+      for (final NewSessionPoint point in points) {
+        await customInsert(
+          '''
+          INSERT INTO local_session_points (
+            local_session_id,
+            recorded_at,
+            t_offset_ms,
+            latitude,
+            longitude,
+            accuracy_m,
+            elapsed_realtime_ns,
+            altitude_m,
+            vertical_accuracy_m,
+            speed_mps,
+            speed_accuracy_mps,
+            heading_deg,
+            bearing_accuracy_deg,
+            provider,
+            is_mocked,
+            quality_class,
+            quality_score,
+            quality_reason,
+            filtered_latitude,
+            filtered_longitude,
+            filtered_altitude_m,
+            fused_speed_mps,
+            derived_speed_mps,
+            distance_delta_m,
+            motion_state,
+            accepted_for_analytics,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ''',
+          variables: <Variable>[
+            Variable<int>(localSessionId),
+            Variable<String>(point.recordedAt.toUtc().toIso8601String()),
+            Variable<int>(point.tOffsetMs),
+            Variable<double>(point.latitude),
+            Variable<double>(point.longitude),
+            Variable<double>(point.accuracyM),
+            Variable<int>(point.elapsedRealtimeNs),
+            Variable<double>(point.altitudeM),
+            Variable<double>(point.verticalAccuracyM),
+            Variable<double>(point.speedMps),
+            Variable<double>(point.speedAccuracyMps),
+            Variable<double>(point.headingDeg),
+            Variable<double>(point.bearingAccuracyDeg),
+            Variable<String>(point.provider),
+            Variable<int>(
+              point.isMocked == null ? null : (point.isMocked! ? 1 : 0),
+            ),
+            Variable<String>(point.qualityClass),
+            Variable<double>(point.qualityScore),
+            Variable<String>(point.qualityReason),
+            Variable<double>(point.filteredLatitude),
+            Variable<double>(point.filteredLongitude),
+            Variable<double>(point.filteredAltitudeM),
+            Variable<double>(point.fusedSpeedMps),
+            Variable<double>(point.derivedSpeedMps),
+            Variable<double>(point.distanceDeltaM),
+            Variable<String>(point.motionState),
+            Variable<int>(point.acceptedForAnalytics ? 1 : 0),
+            Variable<String>(now.toIso8601String()),
+          ],
+        );
+      }
+
+      await customUpdate(
+        '''
+        UPDATE local_ride_sessions
+        SET point_count = ?,
+            updated_at = ?
+        WHERE local_id = ?
+        ''',
+        variables: <Variable>[
+          Variable<int>(points.length),
+          Variable<String>(now.toIso8601String()),
+          Variable<int>(localSessionId),
+        ],
+      );
+    });
   }
 
   Future<void> _migrateToV2() async {

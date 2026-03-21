@@ -8,6 +8,7 @@ import '../../../core/network/api_error.dart';
 import '../../../core/storage/drift_local_database.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
+import '../domain/session_segmentation.dart';
 import '../domain/session_state_machine.dart';
 import 'session_api.dart';
 
@@ -247,10 +248,19 @@ class SessionRepositoryImpl implements SessionRepository {
       return const <LocalRideSession>[];
     }
 
-    final List<LocalRideSession> local =
+    List<LocalRideSession> local =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
     final List<Map<String, dynamic>> cachedRemote =
         await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
+
+    if (cachedRemote.isNotEmpty &&
+        _hasUnhydratedRemoteSessions(local: local, remote: cachedRemote)) {
+      await _hydrateRemoteSessionSummaries(
+        ownerUserId: ownerUserId,
+        remote: cachedRemote,
+      );
+      local = await _localDatabase.listSessions(ownerUserId: ownerUserId);
+    }
 
     if (local.isNotEmpty || cachedRemote.isNotEmpty) {
       unawaited(refreshRemoteSessionHistoryCache());
@@ -262,10 +272,12 @@ class SessionRepositoryImpl implements SessionRepository {
     }
 
     await refreshRemoteSessionHistoryCache();
+    final List<LocalRideSession> refreshedLocal =
+        await _localDatabase.listSessions(ownerUserId: ownerUserId);
     final List<Map<String, dynamic>> refreshedRemote =
         await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
     return _mergeHistory(
-      local: local,
+      local: refreshedLocal,
       remote: refreshedRemote,
       ownerUserId: ownerUserId,
     );
@@ -284,6 +296,10 @@ class SessionRepositoryImpl implements SessionRepository {
         ownerUserId: ownerUserId,
         sessions: remote,
       );
+      await _hydrateRemoteSessionSummaries(
+        ownerUserId: ownerUserId,
+        remote: remote,
+      );
     } on DioException {
       return;
     }
@@ -301,6 +317,9 @@ class SessionRepositoryImpl implements SessionRepository {
 
     final List<LocalRideSession> remoteOnly = remote
         .where((Map<String, dynamic> item) {
+          if (!_isHistoryVisibleRemoteSession(item)) {
+            return false;
+          }
           final String id = item['id'] as String;
           return !localRemoteIds.contains(id);
         })
@@ -330,20 +349,38 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
-    final List<LocalSessionPoint> points =
-        await _localDatabase.listPoints(localSessionId);
+    LocalRideSession session = await _requireSession(localSessionId);
+    List<LocalSessionPoint> points = await _localDatabase.listPoints(
+      localSessionId,
+    );
+    if (points.isEmpty && _canRestoreRemotePoints(session)) {
+      points = await _restoreRemotePoints(session);
+      session = await _requireSession(localSessionId);
+    }
     final List<LocalSessionPoint> accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     final List<TrackingDiagnosticEvent> diagnostics =
         await _localDatabase.listTrackingDiagnostics(localSessionId);
+    final int effectiveDurationS = session.activeDurationS > 0
+        ? session.activeDurationS
+        : _computeActiveDurationSeconds(points);
+    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+      points: points,
+    );
+    final SessionStats stats = _buildSessionStats(
+      points: points,
+      durationS: effectiveDurationS,
+      analysis: analysis,
+    );
 
     return SessionDetail(
       session: session,
       points: points,
       acceptedPoints: accepted,
       trackingDiagnostics: diagnostics,
+      stats: stats,
+      timeline: analysis.segments,
     );
   }
 
@@ -438,6 +475,155 @@ class SessionRepositoryImpl implements SessionRepository {
     return (totalMilliseconds / 1000).round();
   }
 
+  Future<void> _hydrateRemoteSessionSummaries({
+    required String ownerUserId,
+    required List<Map<String, dynamic>> remote,
+  }) async {
+    for (final Map<String, dynamic> raw in remote) {
+      if (!_isHistoryVisibleRemoteSession(raw)) {
+        continue;
+      }
+      final String? remoteId = raw['id'] as String?;
+      if (remoteId == null || remoteId.isEmpty) {
+        continue;
+      }
+
+      await _localDatabase.upsertRemoteSessionSummary(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        startedAt:
+            _parseRemoteDateTime(raw['started_at']) ?? DateTime.now().toUtc(),
+        endedAt: _parseRemoteDateTime(raw['ended_at']),
+        activeDurationS: _remoteIntOrZero(raw['duration_s']),
+        distanceM: _remoteDoubleOrZero(raw['distance_m']),
+        maxSpeedMps: _remoteDoubleOrZero(raw['max_speed_mps']),
+        avgSpeedMps: _remoteDoubleOrZero(raw['avg_speed_mps']),
+        elevationGainM: _remoteNullableInt(raw['elevation_gain_m']),
+        elevationLossM: _remoteNullableInt(raw['elevation_loss_m']),
+        resortId: _remoteSessionResortId(raw),
+        createdAt: _parseRemoteDateTime(raw['created_at']) ??
+            _parseRemoteDateTime(raw['started_at']),
+      );
+    }
+  }
+
+  bool _hasUnhydratedRemoteSessions({
+    required List<LocalRideSession> local,
+    required List<Map<String, dynamic>> remote,
+  }) {
+    final Set<String> localRemoteIds = local
+        .map((LocalRideSession session) => session.remoteId)
+        .whereType<String>()
+        .toSet();
+    return remote.any((Map<String, dynamic> item) {
+      if (!_isHistoryVisibleRemoteSession(item)) {
+        return false;
+      }
+      final String? remoteId = item['id'] as String?;
+      return remoteId != null &&
+          remoteId.isNotEmpty &&
+          !localRemoteIds.contains(remoteId);
+    });
+  }
+
+  bool _isHistoryVisibleRemoteSession(Map<String, dynamic> raw) {
+    final String? status = (raw['status'] as String?)?.toUpperCase();
+    if (status == null || status.isEmpty) {
+      return true;
+    }
+    return status == 'COMPLETED' ||
+        status == 'SYNCED' ||
+        raw['ended_at'] != null;
+  }
+
+  bool _canRestoreRemotePoints(LocalRideSession session) {
+    final String? remoteId = session.remoteId;
+    return remoteId != null && remoteId.isNotEmpty;
+  }
+
+  Future<List<LocalSessionPoint>> _restoreRemotePoints(
+    LocalRideSession session,
+  ) async {
+    final String remoteId = session.remoteId!;
+    try {
+      final List<Map<String, dynamic>> remotePoints =
+          await _api.getRemoteSessionPoints(remoteId);
+      await _localDatabase.replaceSessionPoints(
+        localSessionId: session.localId,
+        points: _mapRemotePoints(
+          sessionStartedAt: session.startedAt,
+          remotePoints: remotePoints,
+        ),
+      );
+    } on DioException {
+      return _localDatabase.listPoints(session.localId);
+    }
+    return _localDatabase.listPoints(session.localId);
+  }
+
+  List<NewSessionPoint> _mapRemotePoints({
+    required DateTime sessionStartedAt,
+    required List<Map<String, dynamic>> remotePoints,
+  }) {
+    final List<Map<String, dynamic>> sorted =
+        List<Map<String, dynamic>>.from(remotePoints)
+          ..sort(
+            (Map<String, dynamic> a, Map<String, dynamic> b) =>
+                _remoteIntOrZero(a['t_offset_ms'])
+                    .compareTo(_remoteIntOrZero(b['t_offset_ms'])),
+          );
+
+    return sorted.map((Map<String, dynamic> raw) {
+      final int tOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
+      final String? qualityClass = raw['quality_class'] as String?;
+      final String? motionState = raw['motion_state'] as String?;
+      return NewSessionPoint(
+        recordedAt:
+            sessionStartedAt.toUtc().add(Duration(milliseconds: tOffsetMs)),
+        tOffsetMs: tOffsetMs,
+        latitude: _remoteDouble(raw['latitude']),
+        longitude: _remoteDouble(raw['longitude']),
+        accuracyM: _remoteNullableDouble(raw['accuracy_m']),
+        altitudeM: _remoteNullableDouble(raw['altitude_m']),
+        speedMps: _remoteNullableDouble(raw['speed_mps']),
+        headingDeg: _remoteNullableDouble(raw['heading_deg']),
+        acceptedForAnalytics: _remotePointAcceptedForAnalytics(
+          qualityClass: qualityClass,
+          motionState: motionState,
+        ),
+        elapsedRealtimeNs: _remoteNullableInt(raw['elapsed_realtime_ns']),
+        verticalAccuracyM: _remoteNullableDouble(raw['vertical_accuracy_m']),
+        speedAccuracyMps: _remoteNullableDouble(raw['speed_accuracy_mps']),
+        bearingAccuracyDeg: _remoteNullableDouble(raw['bearing_accuracy_deg']),
+        provider: raw['provider'] as String?,
+        isMocked: _remoteNullableBool(raw['is_mocked']),
+        qualityClass: qualityClass,
+        qualityScore: _remoteNullableDouble(raw['quality_score']),
+        qualityReason: raw['quality_reason'] as String?,
+        filteredLatitude: _remoteNullableDouble(raw['filtered_latitude']),
+        filteredLongitude: _remoteNullableDouble(raw['filtered_longitude']),
+        filteredAltitudeM: _remoteNullableDouble(raw['filtered_altitude_m']),
+        fusedSpeedMps: _remoteNullableDouble(raw['fused_speed_mps']),
+        derivedSpeedMps: _remoteNullableDouble(raw['derived_speed_mps']),
+        distanceDeltaM: _remoteNullableDouble(raw['distance_delta_m']),
+        motionState: motionState,
+      );
+    }).toList(growable: false);
+  }
+
+  bool _remotePointAcceptedForAnalytics({
+    required String? qualityClass,
+    required String? motionState,
+  }) {
+    if (qualityClass != null && qualityClass.isNotEmpty) {
+      return qualityClass != 'reject';
+    }
+    if (motionState == 'low_confidence_recovery') {
+      return false;
+    }
+    return true;
+  }
+
   Future<Set<int>> _fetchExistingRemoteOffsets(String remoteId) async {
     try {
       final List<Map<String, dynamic>> remotePoints =
@@ -468,12 +654,27 @@ class SessionRepositoryImpl implements SessionRepository {
     required List<LocalSessionPoint> points,
     required int activeDurationS,
   }) {
+    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+      points: points,
+    );
+    return _buildSessionStats(
+      points: points,
+      durationS: activeDurationS,
+      analysis: analysis,
+    );
+  }
+
+  SessionStats _buildSessionStats({
+    required List<LocalSessionPoint> points,
+    required int durationS,
+    required SessionTimelineAnalysis analysis,
+  }) {
     final List<LocalSessionPoint> accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     if (accepted.isEmpty) {
       return SessionStats(
-        durationS: activeDurationS,
+        durationS: durationS,
         distanceM: 0,
         maxSpeedMps: 0,
         avgSpeedMps: 0,
@@ -482,50 +683,26 @@ class SessionRepositoryImpl implements SessionRepository {
       );
     }
 
-    final double distanceM = _computeDistance(accepted);
     final double robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
     final (int? gain, int? loss) = _computeElevation(accepted);
     final double avgSpeedMps =
-        activeDurationS == 0 ? 0 : distanceM / activeDurationS;
+        durationS == 0 ? 0 : analysis.distanceM / durationS;
     final double maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
 
     return SessionStats(
-      durationS: activeDurationS,
-      distanceM: distanceM,
+      durationS: durationS,
+      distanceM: analysis.distanceM,
       maxSpeedMps: maxSpeedMps,
       avgSpeedMps: avgSpeedMps,
       elevationGainM: gain,
       elevationLossM: loss,
+      descentDurationS: analysis.descentDurationS,
+      liftDurationS: analysis.liftDurationS,
+      idleDurationS: analysis.idleDurationS,
+      descentDistanceM: analysis.descentDistanceM,
+      liftDistanceM: analysis.liftDistanceM,
+      idleDistanceM: analysis.idleDistanceM,
     );
-  }
-
-  double _computeDistance(List<LocalSessionPoint> points) {
-    double distanceM = 0;
-    LocalSessionPoint? previous;
-    for (final LocalSessionPoint point in points) {
-      if (point.distanceDeltaM != null && point.distanceDeltaM! > 0) {
-        distanceM += point.distanceDeltaM!;
-        previous = point;
-        continue;
-      }
-      if (previous == null) {
-        previous = point;
-        continue;
-      }
-
-      final double startLat = previous.filteredLatitude ?? previous.latitude;
-      final double startLng = previous.filteredLongitude ?? previous.longitude;
-      final double endLat = point.filteredLatitude ?? point.latitude;
-      final double endLng = point.filteredLongitude ?? point.longitude;
-
-      final double segmentDistance =
-          haversineDistanceMeters(startLat, startLng, endLat, endLng);
-      if (segmentDistance > 0) {
-        distanceM += segmentDistance;
-      }
-      previous = point;
-    }
-    return distanceM;
   }
 
   double _computeRobustMaxSpeed(List<LocalSessionPoint> points) {
@@ -651,31 +828,105 @@ class SessionRepositoryImpl implements SessionRepository {
     required String ownerUserId,
   }) {
     final String id = raw['id'] as String;
-    final Map<String, dynamic>? resortSummary =
-        raw['resort'] as Map<String, dynamic>?;
+    final DateTime startedAt =
+        _parseRemoteDateTime(raw['started_at']) ?? DateTime.now().toUtc();
 
     return LocalRideSession(
       localId: -id.hashCode.abs(),
       ownerUserId: ownerUserId,
       remoteId: id,
-      resortId: resortSummary?['id'] as String?,
-      startedAt: DateTime.parse(raw['started_at'] as String).toUtc(),
-      endedAt: raw['ended_at'] == null
-          ? null
-          : DateTime.parse(raw['ended_at'] as String).toUtc(),
-      activeDurationS: raw['duration_s'] as int? ?? 0,
-      distanceM: (raw['distance_m'] as num?)?.toDouble() ?? 0,
-      maxSpeedMps: (raw['max_speed_mps'] as num?)?.toDouble() ?? 0,
-      avgSpeedMps: (raw['avg_speed_mps'] as num?)?.toDouble() ?? 0,
-      elevationGainM: raw['elevation_gain_m'] as int?,
-      elevationLossM: raw['elevation_loss_m'] as int?,
+      resortId: _remoteSessionResortId(raw),
+      startedAt: startedAt,
+      endedAt: _parseRemoteDateTime(raw['ended_at']),
+      activeDurationS: _remoteIntOrZero(raw['duration_s']),
+      distanceM: _remoteDoubleOrZero(raw['distance_m']),
+      maxSpeedMps: _remoteDoubleOrZero(raw['max_speed_mps']),
+      avgSpeedMps: _remoteDoubleOrZero(raw['avg_speed_mps']),
+      elevationGainM: _remoteNullableInt(raw['elevation_gain_m']),
+      elevationLossM: _remoteNullableInt(raw['elevation_loss_m']),
       state: LocalSessionState.synced,
       pointCount: 0,
       syncAttemptCount: 0,
       lastSyncError: null,
-      createdAt: DateTime.parse(raw['started_at'] as String).toUtc(),
-      updatedAt: DateTime.parse(raw['started_at'] as String).toUtc(),
+      createdAt: _parseRemoteDateTime(raw['created_at']) ?? startedAt,
+      updatedAt: _parseRemoteDateTime(raw['ended_at']) ?? startedAt,
     );
+  }
+
+  String? _remoteSessionResortId(Map<String, dynamic> raw) {
+    final Map<String, dynamic>? resortSummary =
+        raw['resort'] as Map<String, dynamic>?;
+    return resortSummary?['id'] as String? ?? raw['resort_id'] as String?;
+  }
+
+  DateTime? _parseRemoteDateTime(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return DateTime.parse(value.toString()).toUtc();
+  }
+
+  int _remoteIntOrZero(Object? value) {
+    return _remoteNullableInt(value) ?? 0;
+  }
+
+  int? _remoteNullableInt(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value.toString());
+  }
+
+  double _remoteDouble(Object? value) {
+    final double? parsed = _remoteNullableDouble(value);
+    if (parsed == null) {
+      throw StateError('Expected remote numeric value, got $value');
+    }
+    return parsed;
+  }
+
+  double _remoteDoubleOrZero(Object? value) {
+    return _remoteNullableDouble(value) ?? 0;
+  }
+
+  double? _remoteNullableDouble(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is double) {
+      return value;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value.toString());
+  }
+
+  bool? _remoteNullableBool(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is bool) {
+      return value;
+    }
+    final int? integerValue = _remoteNullableInt(value);
+    if (integerValue != null) {
+      return integerValue == 1;
+    }
+    final String normalized = value.toString().trim().toLowerCase();
+    if (normalized == 'true') {
+      return true;
+    }
+    if (normalized == 'false') {
+      return false;
+    }
+    return null;
   }
 }
 

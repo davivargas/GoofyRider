@@ -122,6 +122,12 @@ class TrackingPipelineEngine {
   double _maxSpeedMps = 0;
   int _elevationGainMeters = 0;
   int _elevationLossMeters = 0;
+  int _descentDurationMilliseconds = 0;
+  int _liftDurationMilliseconds = 0;
+  int _idleDurationMilliseconds = 0;
+  double _descentDistanceMeters = 0;
+  double _liftDistanceMeters = 0;
+  double _idleDistanceMeters = 0;
   double? _smoothedLiveSpeedMps;
   DateTime? _lastLiveSpeedTimestampUtc;
   int _stableFixSamples = 0;
@@ -148,6 +154,12 @@ class TrackingPipelineEngine {
     _maxSpeedMps = 0;
     _elevationGainMeters = 0;
     _elevationLossMeters = 0;
+    _descentDurationMilliseconds = 0;
+    _liftDurationMilliseconds = 0;
+    _idleDurationMilliseconds = 0;
+    _descentDistanceMeters = 0;
+    _liftDistanceMeters = 0;
+    _idleDistanceMeters = 0;
     _smoothedLiveSpeedMps = null;
     _lastLiveSpeedTimestampUtc = null;
     _stableFixSamples = 0;
@@ -168,6 +180,12 @@ class TrackingPipelineEngine {
     _maxSpeedMps = stats.maxSpeedMps;
     _elevationGainMeters = stats.elevationGainM ?? 0;
     _elevationLossMeters = stats.elevationLossM ?? 0;
+    _descentDurationMilliseconds = stats.descentDurationS * 1000;
+    _liftDurationMilliseconds = stats.liftDurationS * 1000;
+    _idleDurationMilliseconds = stats.idleDurationS * 1000;
+    _descentDistanceMeters = stats.descentDistanceM;
+    _liftDistanceMeters = stats.liftDistanceM;
+    _idleDistanceMeters = stats.idleDistanceM;
 
     if (points.isEmpty) {
       return;
@@ -262,6 +280,11 @@ class TrackingPipelineEngine {
       headingStability: headingStability,
       deltaSeconds: deltaSeconds,
     );
+    _accumulateActivityTotals(
+      acceptedForAnalytics: acceptedForAnalytics,
+      deltaSeconds: deltaSeconds,
+      distanceDeltaM: distanceDeltaM,
+    );
 
     _updateMaxSpeed(
       sampleTime: sample.timestamp.toUtc(),
@@ -302,6 +325,12 @@ class TrackingPipelineEngine {
       avgSpeedMps: activeDurationS == 0 ? 0 : _distanceMeters / activeDurationS,
       elevationGainM: _elevationGainMeters == 0 ? null : _elevationGainMeters,
       elevationLossM: _elevationLossMeters == 0 ? null : _elevationLossMeters,
+      descentDurationS: _millisecondsToSeconds(_descentDurationMilliseconds),
+      liftDurationS: _millisecondsToSeconds(_liftDurationMilliseconds),
+      idleDurationS: _millisecondsToSeconds(_idleDurationMilliseconds),
+      descentDistanceM: _descentDistanceMeters,
+      liftDistanceM: _liftDistanceMeters,
+      idleDistanceM: _idleDistanceMeters,
     );
 
     final NewSessionPoint point = NewSessionPoint(
@@ -1147,6 +1176,70 @@ class TrackingPipelineEngine {
       return 0;
     }
     return milliseconds / 1000;
+  }
+
+  void _accumulateActivityTotals({
+    required bool acceptedForAnalytics,
+    required double deltaSeconds,
+    required double distanceDeltaM,
+  }) {
+    if (!acceptedForAnalytics ||
+        deltaSeconds <= 0 ||
+        deltaSeconds > SessionConstants.maxDeltaSeconds) {
+      return;
+    }
+
+    final int deltaMilliseconds = (deltaSeconds * 1000).round();
+    final SessionActivityType activity = _activityTypeForMotionState(
+      _motionState,
+    );
+
+    switch (activity) {
+      case SessionActivityType.descent:
+        _descentDurationMilliseconds += deltaMilliseconds;
+        _descentDistanceMeters += distanceDeltaM;
+        break;
+      case SessionActivityType.lift:
+        _liftDurationMilliseconds += deltaMilliseconds;
+        _liftDistanceMeters += distanceDeltaM;
+        break;
+      case SessionActivityType.idle:
+        _idleDurationMilliseconds += deltaMilliseconds;
+        _idleDistanceMeters += distanceDeltaM;
+        break;
+    }
+  }
+
+  SessionActivityType _activityTypeForMotionState(MotionState motionState) {
+    switch (motionState) {
+      case MotionState.activeDescent:
+        return SessionActivityType.descent;
+      case MotionState.liftUphill:
+        return SessionActivityType.lift;
+      case MotionState.stoppedIdle:
+        return SessionActivityType.idle;
+      case MotionState.initializingFix:
+      case MotionState.lowConfidenceRecovery:
+        return _activityTypeForStableMotionState(_lastStableMotionState);
+    }
+  }
+
+  SessionActivityType _activityTypeForStableMotionState(
+      MotionState motionState) {
+    switch (motionState) {
+      case MotionState.activeDescent:
+        return SessionActivityType.descent;
+      case MotionState.liftUphill:
+        return SessionActivityType.lift;
+      case MotionState.stoppedIdle:
+      case MotionState.initializingFix:
+      case MotionState.lowConfidenceRecovery:
+        return SessionActivityType.idle;
+    }
+  }
+
+  int _millisecondsToSeconds(int milliseconds) {
+    return (milliseconds / 1000).round();
   }
 
   double _nextFilteredCoordinate({

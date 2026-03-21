@@ -63,9 +63,11 @@ class SessionDetailScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              _summaryCards(session, speedUnit, distanceUnit),
+              _summaryCards(data, speedUnit, distanceUnit),
               const SizedBox(height: 12),
-              _mapReplay(data.points),
+              _mapReplay(data),
+              const SizedBox(height: 12),
+              _timelineCard(data, distanceUnit),
               const SizedBox(height: 12),
               Card(
                 child: ListTile(
@@ -121,25 +123,51 @@ class SessionDetailScreen extends ConsumerWidget {
   }
 
   Widget _summaryCards(
-    LocalRideSession session,
+    SessionDetail detail,
     SpeedUnit speedUnit,
     DistanceUnit distanceUnit,
   ) {
+    final SessionStats stats = detail.stats;
+    final bool hasSegmentBreakdown = detail.timeline.isNotEmpty ||
+        stats.descentDurationS > 0 ||
+        stats.liftDurationS > 0 ||
+        stats.idleDurationS > 0;
+    final int rideDurationS =
+        hasSegmentBreakdown ? stats.descentDurationS : stats.durationS;
+    final String liftDuration = hasSegmentBreakdown
+        ? formatSecondsAsDuration(stats.liftDurationS)
+        : '--';
+    final String idleDuration = hasSegmentBreakdown
+        ? formatSecondsAsDuration(stats.idleDurationS)
+        : '--';
+    final double rideDistanceM =
+        hasSegmentBreakdown ? stats.descentDistanceM : stats.distanceM;
+    final double rideAvgSpeedMps =
+        hasSegmentBreakdown ? stats.rideAvgSpeedMps : stats.avgSpeedMps;
+
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
+        _summaryCard('Session', formatSecondsAsDuration(stats.durationS)),
+        _summaryCard('Ride time', formatSecondsAsDuration(rideDurationS)),
+        _summaryCard('Lift', liftDuration),
+        _summaryCard('Idle', idleDuration),
         _summaryCard(
-            'Duration', formatSecondsAsDuration(session.activeDurationS)),
-        _summaryCard(
-            'Distance', distanceUnit.formatFromMeters(session.distanceM)),
-        _summaryCard(
-          'Max speed',
-          speedUnit.formatFromMetersPerSecond(session.maxSpeedMps),
+          'Ride distance',
+          distanceUnit.formatFromMeters(rideDistanceM),
         ),
         _summaryCard(
-          'Avg speed',
-          speedUnit.formatFromMetersPerSecond(session.avgSpeedMps),
+          'Total route',
+          distanceUnit.formatFromMeters(stats.distanceM),
+        ),
+        _summaryCard(
+          'Max speed',
+          speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps),
+        ),
+        _summaryCard(
+          'Ride avg',
+          speedUnit.formatFromMetersPerSecond(rideAvgSpeedMps),
         ),
       ],
     );
@@ -167,8 +195,11 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _mapReplay(List<LocalSessionPoint> points) {
-    if (points.isEmpty) {
+  Widget _mapReplay(SessionDetail detail) {
+    final List<LocalSessionPoint> routePoints = detail.acceptedPoints.isNotEmpty
+        ? detail.acceptedPoints
+        : detail.points;
+    if (routePoints.isEmpty) {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -177,11 +208,40 @@ class SessionDetailScreen extends ConsumerWidget {
       );
     }
 
-    final List<LatLng> route = points
+    final List<LatLng> route = routePoints
         .map(
-          (LocalSessionPoint point) => LatLng(point.latitude, point.longitude),
+          (LocalSessionPoint point) => LatLng(
+            point.filteredLatitude ?? point.latitude,
+            point.filteredLongitude ?? point.longitude,
+          ),
         )
         .toList(growable: false);
+    final List<Polyline> polylines = detail.timeline.isEmpty
+        ? <Polyline>[
+            Polyline(
+              points: route,
+              strokeWidth: 4,
+              color: const Color(0xFF59C3FF),
+            ),
+          ]
+        : detail.timeline
+            .where(
+                (SessionTimelineSegment segment) => segment.points.length >= 2)
+            .map(
+              (SessionTimelineSegment segment) => Polyline(
+                points: segment.points
+                    .map(
+                      (LocalSessionPoint point) => LatLng(
+                        point.filteredLatitude ?? point.latitude,
+                        point.filteredLongitude ?? point.longitude,
+                      ),
+                    )
+                    .toList(growable: false),
+                strokeWidth: 5,
+                color: _segmentColor(segment.type),
+              ),
+            )
+            .toList(growable: false);
 
     return SizedBox(
       height: 260,
@@ -196,13 +256,7 @@ class SessionDetailScreen extends ConsumerWidget {
               userAgentPackageName: 'com.goofyrider.mobile',
             ),
             PolylineLayer(
-              polylines: <Polyline>[
-                Polyline(
-                  points: route,
-                  strokeWidth: 4,
-                  color: const Color(0xFF59C3FF),
-                ),
-              ],
+              polylines: polylines,
             ),
             MarkerLayer(
               markers: <Marker>[
@@ -218,6 +272,71 @@ class SessionDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _timelineCard(SessionDetail detail, DistanceUnit distanceUnit) {
+    if (detail.timeline.isEmpty) {
+      return const Card(
+        child: ListTile(
+          title: Text('Timeline'),
+          subtitle: Text(
+            'Motion segments are not available for this session yet.',
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'Timeline',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            ...detail.timeline.map(
+              (SessionTimelineSegment segment) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Container(
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.only(top: 5, right: 10),
+                      decoration: BoxDecoration(
+                        color: _segmentColor(segment.type),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${segment.type.label}  ${segment.startedAt.toTimeLabel()} - ${segment.endedAt.toTimeLabel()}\n'
+                        '${formatSecondsAsDuration(segment.durationS)} | ${distanceUnit.formatFromMeters(segment.distanceM)}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _segmentColor(SessionActivityType type) {
+    switch (type) {
+      case SessionActivityType.descent:
+        return const Color(0xFF59C3FF);
+      case SessionActivityType.lift:
+        return const Color(0xFFFFB347);
+      case SessionActivityType.idle:
+        return const Color(0xFF94A3B8);
+    }
   }
 
   String _diagnosticLine(TrackingDiagnosticEvent event) {

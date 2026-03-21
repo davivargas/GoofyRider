@@ -36,10 +36,14 @@ class SessionDetail {
     required this.points,
     required this.acceptedPoints,
     required this.trackingDiagnostics,
+    this.stats = SessionStats.zero,
+    this.timeline = const <SessionTimelineSegment>[],
   });
 
   final LocalRideSession session;
   final List<LocalSessionPoint> points;
   final List<LocalSessionPoint> acceptedPoints;
   final List<TrackingDiagnosticEvent> trackingDiagnostics;
+  final SessionStats stats;
+  final List<SessionTimelineSegment> timeline;
 }
