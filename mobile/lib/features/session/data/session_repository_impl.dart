@@ -8,6 +8,7 @@ import '../../../core/network/api_error.dart';
 import '../../../core/storage/drift_local_database.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
+import '../domain/session_segmentation.dart';
 import '../domain/session_state_machine.dart';
 import 'session_api.dart';
 
@@ -361,12 +362,25 @@ class SessionRepositoryImpl implements SessionRepository {
         .toList(growable: false);
     final List<TrackingDiagnosticEvent> diagnostics =
         await _localDatabase.listTrackingDiagnostics(localSessionId);
+    final int effectiveDurationS = session.activeDurationS > 0
+        ? session.activeDurationS
+        : _computeActiveDurationSeconds(points);
+    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+      points: points,
+    );
+    final SessionStats stats = _buildSessionStats(
+      points: points,
+      durationS: effectiveDurationS,
+      analysis: analysis,
+    );
 
     return SessionDetail(
       session: session,
       points: points,
       acceptedPoints: accepted,
       trackingDiagnostics: diagnostics,
+      stats: stats,
+      timeline: analysis.segments,
     );
   }
 
@@ -640,12 +654,27 @@ class SessionRepositoryImpl implements SessionRepository {
     required List<LocalSessionPoint> points,
     required int activeDurationS,
   }) {
+    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+      points: points,
+    );
+    return _buildSessionStats(
+      points: points,
+      durationS: activeDurationS,
+      analysis: analysis,
+    );
+  }
+
+  SessionStats _buildSessionStats({
+    required List<LocalSessionPoint> points,
+    required int durationS,
+    required SessionTimelineAnalysis analysis,
+  }) {
     final List<LocalSessionPoint> accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     if (accepted.isEmpty) {
       return SessionStats(
-        durationS: activeDurationS,
+        durationS: durationS,
         distanceM: 0,
         maxSpeedMps: 0,
         avgSpeedMps: 0,
@@ -654,50 +683,26 @@ class SessionRepositoryImpl implements SessionRepository {
       );
     }
 
-    final double distanceM = _computeDistance(accepted);
     final double robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
     final (int? gain, int? loss) = _computeElevation(accepted);
     final double avgSpeedMps =
-        activeDurationS == 0 ? 0 : distanceM / activeDurationS;
+        durationS == 0 ? 0 : analysis.distanceM / durationS;
     final double maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
 
     return SessionStats(
-      durationS: activeDurationS,
-      distanceM: distanceM,
+      durationS: durationS,
+      distanceM: analysis.distanceM,
       maxSpeedMps: maxSpeedMps,
       avgSpeedMps: avgSpeedMps,
       elevationGainM: gain,
       elevationLossM: loss,
+      descentDurationS: analysis.descentDurationS,
+      liftDurationS: analysis.liftDurationS,
+      idleDurationS: analysis.idleDurationS,
+      descentDistanceM: analysis.descentDistanceM,
+      liftDistanceM: analysis.liftDistanceM,
+      idleDistanceM: analysis.idleDistanceM,
     );
-  }
-
-  double _computeDistance(List<LocalSessionPoint> points) {
-    double distanceM = 0;
-    LocalSessionPoint? previous;
-    for (final LocalSessionPoint point in points) {
-      if (point.distanceDeltaM != null && point.distanceDeltaM! > 0) {
-        distanceM += point.distanceDeltaM!;
-        previous = point;
-        continue;
-      }
-      if (previous == null) {
-        previous = point;
-        continue;
-      }
-
-      final double startLat = previous.filteredLatitude ?? previous.latitude;
-      final double startLng = previous.filteredLongitude ?? previous.longitude;
-      final double endLat = point.filteredLatitude ?? point.latitude;
-      final double endLng = point.filteredLongitude ?? point.longitude;
-
-      final double segmentDistance =
-          haversineDistanceMeters(startLat, startLng, endLat, endLng);
-      if (segmentDistance > 0) {
-        distanceM += segmentDistance;
-      }
-      previous = point;
-    }
-    return distanceM;
   }
 
   double _computeRobustMaxSpeed(List<LocalSessionPoint> points) {

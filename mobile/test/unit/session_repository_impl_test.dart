@@ -381,6 +381,92 @@ void main() {
     expect(stats.maxSpeedMps, greaterThan(0));
   });
 
+  test('getSessionDetail derives timeline segments and ride-only stats',
+      () async {
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer(
+      (_) async => _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        activeDurationS: 30,
+      ),
+    );
+    when(() => localDatabase.listPoints(1)).thenAnswer(
+      (_) async => <LocalSessionPoint>[
+        _buildPoint(
+          offsetMs: 0,
+          distanceDeltaM: 0,
+          motionState: 'active_descent',
+          latitude: 49.0,
+          longitude: -123.0,
+        ),
+        _buildPoint(
+          offsetMs: 5000,
+          distanceDeltaM: 40,
+          motionState: 'active_descent',
+          latitude: 49.0004,
+          longitude: -123.0002,
+        ),
+        _buildPoint(
+          offsetMs: 10000,
+          distanceDeltaM: 50,
+          motionState: 'active_descent',
+          latitude: 49.0008,
+          longitude: -123.0004,
+        ),
+        _buildPoint(
+          offsetMs: 15000,
+          distanceDeltaM: 20,
+          motionState: 'lift_uphill',
+          latitude: 49.0010,
+          longitude: -123.0002,
+        ),
+        _buildPoint(
+          offsetMs: 20000,
+          distanceDeltaM: 20,
+          motionState: 'lift_uphill',
+          latitude: 49.0012,
+          longitude: -123.0,
+        ),
+        _buildPoint(
+          offsetMs: 25000,
+          distanceDeltaM: 0,
+          speedMps: 0.1,
+          motionState: 'stopped_idle',
+          latitude: 49.0012,
+          longitude: -123.0,
+        ),
+        _buildPoint(
+          offsetMs: 30000,
+          distanceDeltaM: 0,
+          speedMps: 0.1,
+          motionState: 'stopped_idle',
+          latitude: 49.0012,
+          longitude: -123.0,
+        ),
+      ],
+    );
+    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+        .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
+
+    final SessionDetail detail = await repository.getSessionDetail(1);
+
+    expect(detail.stats.descentDurationS, 10);
+    expect(detail.stats.liftDurationS, 10);
+    expect(detail.stats.idleDurationS, 10);
+    expect(detail.stats.descentDistanceM, 90);
+    expect(
+      detail.timeline
+          .map((SessionTimelineSegment segment) => segment.type)
+          .toList(growable: false),
+      <SessionActivityType>[
+        SessionActivityType.descent,
+        SessionActivityType.lift,
+        SessionActivityType.idle,
+      ],
+    );
+    expect(detail.stats.rideAvgSpeedMps, greaterThan(detail.stats.avgSpeedMps));
+  });
 
   test('computeSessionStats resists single accepted max-speed spikes',
       () async {

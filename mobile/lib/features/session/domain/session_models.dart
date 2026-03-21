@@ -226,6 +226,47 @@ class NewSessionPoint {
   final String? motionState;
 }
 
+enum SessionActivityType {
+  descent,
+  lift,
+  idle,
+}
+
+extension SessionActivityTypePresentation on SessionActivityType {
+  String get label {
+    switch (this) {
+      case SessionActivityType.descent:
+        return 'Descent';
+      case SessionActivityType.lift:
+        return 'Lift';
+      case SessionActivityType.idle:
+        return 'Idle';
+    }
+  }
+}
+
+class SessionTimelineSegment {
+  const SessionTimelineSegment({
+    required this.type,
+    required this.startedAt,
+    required this.endedAt,
+    required this.startOffsetMs,
+    required this.endOffsetMs,
+    required this.durationS,
+    required this.distanceM,
+    required this.points,
+  });
+
+  final SessionActivityType type;
+  final DateTime startedAt;
+  final DateTime endedAt;
+  final int startOffsetMs;
+  final int endOffsetMs;
+  final int durationS;
+  final double distanceM;
+  final List<LocalSessionPoint> points;
+}
+
 class SessionStats {
   const SessionStats({
     required this.durationS,
@@ -234,6 +275,12 @@ class SessionStats {
     required this.avgSpeedMps,
     required this.elevationGainM,
     required this.elevationLossM,
+    this.descentDurationS = 0,
+    this.liftDurationS = 0,
+    this.idleDurationS = 0,
+    this.descentDistanceM = 0,
+    this.liftDistanceM = 0,
+    this.idleDistanceM = 0,
   });
 
   final int durationS;
@@ -242,6 +289,15 @@ class SessionStats {
   final double avgSpeedMps;
   final int? elevationGainM;
   final int? elevationLossM;
+  final int descentDurationS;
+  final int liftDurationS;
+  final int idleDurationS;
+  final double descentDistanceM;
+  final double liftDistanceM;
+  final double idleDistanceM;
+
+  double get rideAvgSpeedMps =>
+      descentDurationS == 0 ? 0 : descentDistanceM / descentDurationS;
 
   static const SessionStats zero = SessionStats(
     durationS: 0,
@@ -250,6 +306,12 @@ class SessionStats {
     avgSpeedMps: 0,
     elevationGainM: null,
     elevationLossM: null,
+    descentDurationS: 0,
+    liftDurationS: 0,
+    idleDurationS: 0,
+    descentDistanceM: 0,
+    liftDistanceM: 0,
+    idleDistanceM: 0,
   );
 }
 
