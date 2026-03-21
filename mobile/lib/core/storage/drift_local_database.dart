@@ -510,7 +510,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
         Variable<String>(LocalSessionState.synced.wireValue),
         const Variable<int>(0),
         const Variable<int>(0),
-        Variable<String>(null),
+        const Variable<String>(null),
         Variable<String>((createdAt ?? now).toUtc().toIso8601String()),
         Variable<String>(now.toIso8601String()),
       ],
