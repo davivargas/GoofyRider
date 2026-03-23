@@ -11,7 +11,19 @@ import 'features/session/presentation/session_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final DriftLocalDatabase localDatabase = await DriftLocalDatabase.open();
+  final DriftLocalDatabase localDatabase =
+      await DriftLocalDatabase.openOrFallback(
+    onPrimaryOpenError: (Object error, StackTrace stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'bootstrap',
+          context: ErrorDescription('while opening local storage'),
+        ),
+      );
+    },
+  );
 
   runApp(
     ProviderScope(
