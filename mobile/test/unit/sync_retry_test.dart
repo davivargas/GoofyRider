@@ -38,6 +38,11 @@ class FakeLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<String?> checkRecordingReadiness() async {
+    return null;
+  }
+
+  @override
   Stream<LocationSample> watchPosition() {
     return const Stream<LocationSample>.empty();
   }

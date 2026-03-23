@@ -69,6 +69,7 @@ abstract class LocationTrackingRepository {
   Future<bool> isServiceEnabled();
   Future<bool> openAppSettings();
   Future<bool> openLocationSettings();
+  Future<String?> checkRecordingReadiness();
   Future<LocationSample?> getCurrentLocationSample();
   Stream<LocationSample> watchPosition();
   Future<void> setTrackingMode(TrackingMode mode);

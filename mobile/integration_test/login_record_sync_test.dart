@@ -70,6 +70,9 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<bool> openLocationSettings() async => true;
 
   @override
+  Future<String?> checkRecordingReadiness() async => null;
+
+  @override
   Future<LocationSample?> getCurrentLocationSample() async {
     return LocationSample(
       timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),

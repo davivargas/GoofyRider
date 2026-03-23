@@ -2,15 +2,21 @@ import 'dart:async';
 
 import 'package:geolocator/geolocator.dart';
 
+import '../../../core/constants/session_constants.dart';
 import '../domain/location_tracking_repository.dart';
 import '../domain/tracking_mode_profiles.dart';
 
 class GeolocatorTrackingRepository implements LocationTrackingRepository {
-  GeolocatorTrackingRepository();
+  GeolocatorTrackingRepository({
+    DateTime Function()? nowUtc,
+  }) : _nowUtc = nowUtc ?? _defaultNowUtc;
 
   TrackingMode _trackingMode = TrackingMode.initializingFix;
   StreamController<LocationSample>? _controller;
   StreamSubscription<Position>? _positionSubscription;
+  final DateTime Function() _nowUtc;
+
+  static DateTime _defaultNowUtc() => DateTime.now().toUtc();
 
   @override
   Future<LocationPermissionState> checkPermissions() async {
@@ -31,7 +37,11 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
     }
 
     LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.whileInUse) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.whileInUse) {
       permission = await Geolocator.requestPermission();
     }
 
@@ -51,6 +61,23 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   @override
   Future<bool> openLocationSettings() {
     return Geolocator.openLocationSettings();
+  }
+
+  @override
+  Future<String?> checkRecordingReadiness() async {
+    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return 'Location services are turned off. Turn on GPS to record your session.';
+    }
+    final LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.whileInUse) {
+      return 'Location is set to "Allow only while using the app". Choose "Allow all the time" so recording works in the background.';
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return 'Location permission is required before recording.';
+    }
+    return null;
   }
 
   @override
@@ -107,11 +134,18 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   }
 
   Future<void> _startOrRestartPositionStream() async {
+    final DateTime streamStartedAtUtc = _nowUtc();
     await _positionSubscription?.cancel();
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: _locationSettingsForMode(_trackingMode),
     ).listen(
       (Position position) {
+        if (_isStalePreSessionSample(
+          position: position,
+          streamStartedAtUtc: streamStartedAtUtc,
+        )) {
+          return;
+        }
         _controller?.add(_toLocationSample(position));
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -123,6 +157,18 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   Future<void> _stopPositionStream() async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+  }
+
+  bool _isStalePreSessionSample({
+    required Position position,
+    required DateTime streamStartedAtUtc,
+  }) {
+    final DateTime sampleTimeUtc = position.timestamp.toUtc();
+    if (!sampleTimeUtc.isBefore(streamStartedAtUtc)) {
+      return false;
+    }
+    final Duration age = streamStartedAtUtc.difference(sampleTimeUtc);
+    return age.inSeconds >= SessionConstants.staleSampleThresholdSeconds;
   }
 
   LocationSettings _locationSettingsForMode(TrackingMode mode) {

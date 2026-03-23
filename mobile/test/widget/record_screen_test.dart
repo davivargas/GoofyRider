@@ -43,6 +43,9 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<bool> openLocationSettings() async => true;
 
   @override
+  Future<String?> checkRecordingReadiness() async => null;
+
+  @override
   Stream<LocationSample> watchPosition() =>
       const Stream<LocationSample>.empty();
 
