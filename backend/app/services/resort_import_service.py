@@ -57,6 +57,8 @@ class ResortImportService:
     def import_resorts(self) -> ResortImportSummary:
         imported_at = self._clock()
         external_resorts = self._resort_source.fetch_resorts()
+        if self._deactivate_missing:
+            _ensure_single_external_source(external_resorts)
 
         created_count = 0
         updated_count = 0
@@ -189,6 +191,18 @@ def _detect_external_source(external_resorts: list[ExternalResortRecord]) -> str
     if not external_resorts:
         return None
     return external_resorts[0].external_source
+
+
+def _ensure_single_external_source(external_resorts: list[ExternalResortRecord]) -> None:
+    external_sources = {resort.external_source for resort in external_resorts}
+    if len(external_sources) <= 1:
+        return
+
+    ordered_sources = ", ".join(sorted(external_sources))
+    raise ValueError(
+        "Mixed external sources are not supported when deactivate_missing is enabled: "
+        f"{ordered_sources}"
+    )
 
 
 def _prefer_external_value(external_value: T | None, existing_value: T | None) -> T | None:

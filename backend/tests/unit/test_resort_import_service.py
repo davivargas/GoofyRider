@@ -1,6 +1,8 @@
 from datetime import UTC
 from datetime import datetime
 
+import pytest
+
 from app.models.resort import Resort
 from app.services.resort_import_service import ResortImportService
 from app.services.ski_api_resort_source import ExternalResortRecord
@@ -153,9 +155,62 @@ def test_import_resorts_can_deactivate_missing_imported_resorts() -> None:
     assert existing.is_active is False
 
 
-def _build_external_resort(city: str | None = "Whistler") -> ExternalResortRecord:
-    return ExternalResortRecord(
+def test_import_resorts_with_mixed_sources_and_deactivate_missing_disabled_succeeds() -> None:
+    repository = FakeResortRepository()
+    service = ResortImportService(
+        resort_repository=repository,
+        resort_source=FakeResortSource(
+            [_build_external_resort(), _build_external_resort(external_source="partner_feed")]
+        ),
+        deactivate_missing=False,
+        clock=lambda: IMPORTED_AT,
+    )
+
+    summary = service.import_resorts()
+
+    assert summary.created_count == 2
+    assert summary.updated_count == 0
+    assert summary.deactivated_count == 0
+    assert repository.committed is True
+
+
+def test_import_resorts_with_mixed_sources_and_deactivate_missing_enabled_raises() -> None:
+    existing = Resort(
+        name="Legacy Resort",
+        country="Canada",
+        region="British Columbia",
+        city=None,
+        latitude=None,
+        longitude=None,
+        elevation_base_m=None,
+        elevation_top_m=None,
         external_source="ski_api",
+        external_id="legacy-resort",
+        is_active=True,
+    )
+    repository = FakeResortRepository(resorts=[existing])
+    service = ResortImportService(
+        resort_repository=repository,
+        resort_source=FakeResortSource(
+            [_build_external_resort(), _build_external_resort(external_source="partner_feed")]
+        ),
+        deactivate_missing=True,
+        clock=lambda: IMPORTED_AT,
+    )
+
+    with pytest.raises(ValueError, match="Mixed external sources are not supported"):
+        service.import_resorts()
+
+    assert repository.committed is False
+    assert existing.is_active is True
+
+
+def _build_external_resort(
+    city: str | None = "Whistler",
+    external_source: str = "ski_api",
+) -> ExternalResortRecord:
+    return ExternalResortRecord(
+        external_source=external_source,
         external_id="whistler-blackcomb",
         name="Whistler Blackcomb",
         country="Canada",
