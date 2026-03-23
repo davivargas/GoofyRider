@@ -9,7 +9,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         locationBridge = AndroidFusedLocationBridge(
-            context = this,
+            activity = this,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
     }

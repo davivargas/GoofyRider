@@ -28,8 +28,21 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
-  Future<LocationPermissionState> ensurePermissions() {
-    return _permissionsDelegate.ensurePermissions();
+  Future<LocationPermissionState> ensurePermissions() async {
+    final LocationPermissionState initialState =
+        await _permissionsDelegate.ensurePermissions();
+    if (initialState != LocationPermissionState.grantedForegroundOnly) {
+      return initialState;
+    }
+
+    try {
+      await _controlChannel.invokeMapMethod<Object?, Object?>(
+        'ensureBackgroundLocationPermission',
+      );
+      return _permissionsDelegate.checkPermissions();
+    } on PlatformException {
+      return initialState;
+    }
   }
 
   @override
@@ -48,6 +61,29 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
+
+  /// Prefers the native bridge's settings check, but falls back to the
+  /// geolocator-based readiness path when the bridge is unavailable.
+  Future<String?> checkRecordingReadiness() async {
+    try {
+      final Map<Object?, Object?>? response =
+          await _controlChannel.invokeMapMethod<Object?, Object?>(
+        'checkLocationSettings',
+      );
+      if (response?['ok'] == true) {
+        return null;
+      }
+      final String? message = response?['message'] as String?;
+      if (message != null && message.isNotEmpty) {
+        return message;
+      }
+    } on PlatformException {
+      // Fall back to the geolocator path if the native bridge is unavailable.
+    }
+    return _permissionsDelegate.checkRecordingReadiness();
+  }
+
+  @override
   Future<LocationSample?> getCurrentLocationSample() {
     return _permissionsDelegate.getCurrentLocationSample();
   }
@@ -55,10 +91,15 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   @override
   Stream<LocationSample> watchPosition() async* {
     await for (final dynamic event in _eventChannel.receiveBroadcastStream()) {
-      final List<Map<String, dynamic>> rawSamples = _extractRawSamples(event);
-      rawSamples.sort(_sampleSortComparator);
-      for (final Map<String, dynamic> raw in rawSamples) {
-        yield _mapSample(raw);
+      final List<LocationSample> samples = _extractRawSamples(event)
+          .map(_tryMapSample)
+          .whereType<LocationSample>()
+          .toList(growable: false);
+      // Drop malformed native payloads instead of coercing them into default
+      // coordinates/timestamps that would pollute analytics.
+      samples.sort(_sampleSortComparator);
+      for (final LocationSample sample in samples) {
+        yield sample;
       }
     }
   }
@@ -71,93 +112,121 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
       <String, dynamic>{
         'mode': mode.wireValue,
         'config': profile.toChannelPayload(),
-        'staleSampleThresholdSeconds':
-            SessionConstants.staleSampleThresholdSeconds,
+        'staleSampleThresholdSeconds': _staleSampleThresholdSeconds(profile),
       },
     );
   }
 
-  int _sampleSortComparator(Map<String, dynamic> a, Map<String, dynamic> b) {
-    final int? elapsedA = _asNullableInt(a['elapsedRealtimeNanos']);
-    final int? elapsedB = _asNullableInt(b['elapsedRealtimeNanos']);
+  int _staleSampleThresholdSeconds(TrackingModeProfile profile) {
+    final int expectedGapMs =
+        profile.maxDelayMs > 0 ? profile.maxDelayMs : profile.intervalMs;
+    final int thresholdMs = expectedGapMs + 15000;
+    return ((thresholdMs + 999) ~/ 1000).clamp(
+      SessionConstants.staleSampleThresholdSeconds,
+      120,
+    );
+  }
+
+  int _sampleSortComparator(LocationSample a, LocationSample b) {
+    final int? elapsedA = a.elapsedRealtimeNs;
+    final int? elapsedB = b.elapsedRealtimeNs;
     if (elapsedA != null && elapsedB != null) {
       return elapsedA.compareTo(elapsedB);
     }
-    final DateTime tsA = _parseTimestamp(a['timestampUtc']);
-    final DateTime tsB = _parseTimestamp(b['timestampUtc']);
-    return tsA.compareTo(tsB);
+    return a.timestamp.compareTo(b.timestamp);
   }
 
   List<Map<String, dynamic>> _extractRawSamples(dynamic event) {
     if (event is Map) {
-      final dynamic samples = event['samples'];
-      if (samples is List) {
+      final Map<String, dynamic> rawEvent = _normalizeMap(event);
+      if (rawEvent.containsKey('samples')) {
+        final dynamic samples = rawEvent['samples'];
+        if (samples is! List) {
+          return <Map<String, dynamic>>[];
+        }
         return samples
             .whereType<Map>()
-            .map(
-              (Map item) => item.map(
-                (dynamic key, dynamic value) => MapEntry(key.toString(), value),
-              ),
-            )
+            .map(_normalizeMap)
             .toList(growable: false);
       }
-      return <Map<String, dynamic>>[
-        event.map(
-          (dynamic key, dynamic value) => MapEntry(key.toString(), value),
-        ),
-      ];
+      return <Map<String, dynamic>>[rawEvent];
     }
 
     if (event is List) {
-      return event
-          .whereType<Map>()
-          .map(
-            (Map item) => item.map(
-              (dynamic key, dynamic value) => MapEntry(key.toString(), value),
-            ),
-          )
-          .toList(growable: false);
+      return event.whereType<Map>().map(_normalizeMap).toList(growable: false);
     }
 
     return <Map<String, dynamic>>[];
   }
 
-  LocationSample _mapSample(Map<String, dynamic> raw) {
-    return LocationSample(
-      timestamp: _parseTimestamp(raw['timestampUtc']),
-      latitude: _asDouble(raw['latitude']) ?? 0,
-      longitude: _asDouble(raw['longitude']) ?? 0,
-      accuracyM: _asDouble(raw['horizontalAccuracyM']),
-      altitudeM: _asDouble(raw['altitudeM']),
-      speedMps: _asDouble(raw['platformSpeedMps']),
-      headingDeg: _asDouble(raw['bearingDeg']),
-      elapsedRealtimeNs: _asNullableInt(raw['elapsedRealtimeNanos']),
-      verticalAccuracyM: _asDouble(raw['verticalAccuracyM']),
-      speedAccuracyMps: _asDouble(raw['speedAccuracyMps']),
-      bearingAccuracyDeg: _asDouble(raw['bearingAccuracyDeg']),
-      provider: raw['provider'] as String?,
-      isMocked: raw['isMocked'] as bool?,
+  Map<String, dynamic> _normalizeMap(Map event) {
+    return event.map(
+      (dynamic key, dynamic value) => MapEntry(key.toString(), value),
     );
   }
 
+  /// Parses one native payload and rejects the whole sample if any required
+  /// field is malformed or out of range.
+  LocationSample? _tryMapSample(Map<String, dynamic> raw) {
+    try {
+      return LocationSample(
+        timestamp: _parseTimestamp(raw['timestampUtc']),
+        latitude: _parseCoordinate(raw['latitude'], min: -90, max: 90),
+        longitude: _parseCoordinate(raw['longitude'], min: -180, max: 180),
+        accuracyM: _asNullableDouble(raw['horizontalAccuracyM']),
+        altitudeM: _asNullableDouble(raw['altitudeM']),
+        speedMps: _asNullableDouble(raw['platformSpeedMps']),
+        headingDeg: _asNullableDouble(raw['bearingDeg']),
+        elapsedRealtimeNs: _asNullableInt(raw['elapsedRealtimeNanos']),
+        verticalAccuracyM: _asNullableDouble(raw['verticalAccuracyM']),
+        speedAccuracyMps: _asNullableDouble(raw['speedAccuracyMps']),
+        bearingAccuracyDeg: _asNullableDouble(raw['bearingAccuracyDeg']),
+        provider: _asNullableString(raw['provider']),
+        isMocked: _asNullableBool(raw['isMocked']),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Accepts only explicit epoch millis or ISO-8601 strings so bad timestamps
+  /// cannot silently become "now" and reorder the stream.
   DateTime _parseTimestamp(dynamic value) {
     if (value is int) {
       return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
     }
     if (value is String) {
-      return DateTime.parse(value).toUtc();
+      try {
+        return DateTime.parse(value).toUtc();
+      } on FormatException {
+        throw const FormatException('Invalid timestamp');
+      }
     }
-    return DateTime.now().toUtc();
+    throw const FormatException('Invalid timestamp');
   }
 
-  double? _asDouble(dynamic value) {
+  /// Validates numeric coordinates and bounds before they enter the pipeline.
+  double _parseCoordinate(
+    dynamic value, {
+    required double min,
+    required double max,
+  }) {
+    final double? parsed = _tryParseFiniteDouble(value);
+    if (parsed == null || parsed < min || parsed > max) {
+      throw const FormatException('Invalid coordinate');
+    }
+    return parsed;
+  }
+
+  double? _asNullableDouble(dynamic value) {
     if (value == null) {
       return null;
     }
-    if (value is num) {
-      return value.toDouble();
+    final double? parsed = _tryParseFiniteDouble(value);
+    if (parsed == null) {
+      throw const FormatException('Invalid double');
     }
-    return double.tryParse(value.toString());
+    return parsed;
   }
 
   int? _asNullableInt(dynamic value) {
@@ -168,8 +237,47 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
       return value;
     }
     if (value is num) {
+      if (!value.isFinite || value.truncateToDouble() != value.toDouble()) {
+        throw const FormatException('Invalid int');
+      }
       return value.toInt();
     }
-    return int.tryParse(value.toString());
+    final int? parsed = int.tryParse(value.toString());
+    if (parsed == null) {
+      throw const FormatException('Invalid int');
+    }
+    return parsed;
+  }
+
+  String? _asNullableString(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is String) {
+      return value;
+    }
+    throw const FormatException('Invalid string');
+  }
+
+  bool? _asNullableBool(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is bool) {
+      return value;
+    }
+    throw const FormatException('Invalid bool');
+  }
+
+  double? _tryParseFiniteDouble(dynamic value) {
+    if (value is num) {
+      final double parsed = value.toDouble();
+      return parsed.isFinite ? parsed : null;
+    }
+    final double? parsed = double.tryParse(value.toString());
+    if (parsed == null || !parsed.isFinite) {
+      return null;
+    }
+    return parsed;
   }
 }

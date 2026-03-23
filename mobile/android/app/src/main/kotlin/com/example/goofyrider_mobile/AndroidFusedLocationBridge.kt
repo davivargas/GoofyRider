@@ -1,29 +1,38 @@
 package com.example.goofyrider_mobile
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
 import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.embedding.android.FlutterActivity
 
 class AndroidFusedLocationBridge(
-    private val context: Context,
+    private val activity: FlutterActivity,
     messenger: BinaryMessenger,
 ) : EventChannel.StreamHandler, MethodChannel.MethodCallHandler {
 
+    private val context: Context = activity
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
     private var eventSink: EventChannel.EventSink? = null
@@ -32,10 +41,35 @@ class AndroidFusedLocationBridge(
     private var currentConfig: TrackingConfig = TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
     private var staleSampleNanos: Long = DEFAULT_STALE_SAMPLE_NANOS
     private var lastElapsedRealtimeNanos: Long? = null
+    private val requestBackgroundPermissionLauncher: ActivityResultLauncher<String>
+    private val appSettingsLauncher: ActivityResultLauncher<Intent>
+    private var pendingBackgroundPermissionResult: MethodChannel.Result? = null
 
     init {
         EventChannel(messenger, EVENT_CHANNEL_NAME).setStreamHandler(this)
         MethodChannel(messenger, CONTROL_CHANNEL_NAME).setMethodCallHandler(this)
+        requestBackgroundPermissionLauncher = activity.registerForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            val status = if (granted || hasBackgroundLocationPermission()) "granted" else "denied"
+            completePendingBackgroundPermissionResult(
+                mapOf(
+                    "status" to status,
+                    "openedSettings" to false,
+                ),
+            )
+        }
+        appSettingsLauncher = activity.registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) {
+            val status = if (hasBackgroundLocationPermission()) "granted" else "needs_settings"
+            completePendingBackgroundPermissionResult(
+                mapOf(
+                    "status" to status,
+                    "openedSettings" to true,
+                ),
+            )
+        }
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -69,8 +103,119 @@ class AndroidFusedLocationBridge(
                 result.success(null)
             }
 
+            "checkLocationSettings" -> {
+                if (!hasFineLocationPermission()) {
+                    result.success(
+                        mapOf(
+                            "ok" to false,
+                            "message" to "Precise location is required for recording. Turn on precise location access for GoofyRider.",
+                        ),
+                    )
+                    return
+                }
+                if (!hasBackgroundLocationPermission()) {
+                    result.success(
+                        mapOf(
+                            "ok" to false,
+                            "message" to "Background location is required for recording. Set location access to Allow all the time.",
+                        ),
+                    )
+                    return
+                }
+                val settingsRequest = LocationSettingsRequest.Builder()
+                    .addLocationRequest(currentConfig.toLocationRequest())
+                    .build()
+                LocationServices.getSettingsClient(context)
+                    .checkLocationSettings(settingsRequest)
+                    .addOnSuccessListener {
+                        result.success(mapOf("ok" to true))
+                    }
+                    .addOnFailureListener { error ->
+                        val message = if (error is ResolvableApiException) {
+                            "Your phone's location settings are not ready for recording. Turn on location services, then try again."
+                        } else {
+                            error.message ?: "Location settings are not ready for recording."
+                        }
+                        result.success(
+                            mapOf(
+                                "ok" to false,
+                                "message" to message,
+                            ),
+                        )
+                    }
+            }
+
+            "ensureBackgroundLocationPermission" -> {
+                ensureBackgroundLocationPermission(result)
+            }
+
             else -> result.notImplemented()
         }
+    }
+
+    private fun ensureBackgroundLocationPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            result.success(
+                mapOf(
+                    "status" to "granted",
+                    "openedSettings" to false,
+                ),
+            )
+            return
+        }
+        if (!hasFineLocationPermission()) {
+            result.success(
+                mapOf(
+                    "status" to "fine_permission_required",
+                    "openedSettings" to false,
+                ),
+            )
+            return
+        }
+        if (hasBackgroundLocationPermission()) {
+            result.success(
+                mapOf(
+                    "status" to "granted",
+                    "openedSettings" to false,
+                ),
+            )
+            return
+        }
+        if (pendingBackgroundPermissionResult != null) {
+            result.error(
+                "request_in_progress",
+                "A background location permission request is already in progress.",
+                null,
+            )
+            return
+        }
+
+        pendingBackgroundPermissionResult = result
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+            requestBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            return
+        }
+
+        try {
+            val appSettingsIntent = Intent(
+                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null),
+            )
+            appSettingsLauncher.launch(appSettingsIntent)
+        } catch (_: ActivityNotFoundException) {
+            completePendingBackgroundPermissionResult(
+                mapOf(
+                    "status" to "settings_unavailable",
+                    "openedSettings" to false,
+                ),
+            )
+        }
+    }
+
+    private fun completePendingBackgroundPermissionResult(payload: Map<String, Any>) {
+        val pendingResult = pendingBackgroundPermissionResult
+        pendingBackgroundPermissionResult = null
+        pendingResult?.success(payload)
     }
 
     private fun restartLocationUpdates() {
@@ -79,8 +224,20 @@ class AndroidFusedLocationBridge(
     }
 
     private fun startLocationUpdates() {
-        if (!hasLocationPermission()) {
-            eventSink?.error("permission_denied", "Location permission is missing.", null)
+        if (!hasFineLocationPermission()) {
+            eventSink?.error(
+                "permission_denied",
+                "Precise location permission is required for recording.",
+                null,
+            )
+            return
+        }
+        if (!hasBackgroundLocationPermission()) {
+            eventSink?.error(
+                "permission_denied",
+                "Background location permission is required for recording. Set location access to Allow all the time.",
+                null,
+            )
             return
         }
         TrackingForegroundService.start(context)
@@ -153,16 +310,21 @@ class AndroidFusedLocationBridge(
         }
     }
 
-    private fun hasLocationPermission(): Boolean {
-        val fineGranted = ContextCompat.checkSelfPermission(
+    private fun hasFineLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION,
         ) == PackageManager.PERMISSION_GRANTED
-        val coarseGranted = ContextCompat.checkSelfPermission(
+    }
+
+    private fun hasBackgroundLocationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return true
+        }
+        return ContextCompat.checkSelfPermission(
             context,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
         ) == PackageManager.PERMISSION_GRANTED
-        return fineGranted || coarseGranted
     }
 
     private fun readStaleSampleNanos(call: MethodCall): Long {
