@@ -126,12 +126,9 @@ class SessionRepositoryImpl implements SessionRepository {
     final LocalRideSession original = await _requireSession(localSessionId);
 
     try {
-      await _localDatabase.updateSessionState(
-        localSessionId,
-        LocalSessionState.syncing,
-        lastSyncError: null,
-      );
-      await _localDatabase.incrementSyncAttempt(localSessionId);
+      // Claim the sync attempt up front so a failure anywhere in the remote
+      // lifecycle still leaves the local session in a consistent retry state.
+      await _localDatabase.beginSyncAttempt(localSessionId);
 
       final LocalRideSession syncing = await _requireSession(localSessionId);
 
@@ -222,12 +219,7 @@ class SessionRepositoryImpl implements SessionRepository {
       return _requireSession(localSessionId);
     } on DioException catch (exception) {
       final String message = mapDioException(exception).message;
-      await _localDatabase.updateSessionState(
-        localSessionId,
-        LocalSessionState.syncFailed,
-        lastSyncError: message,
-      );
-      await _localDatabase.incrementSyncAttempt(localSessionId, error: message);
+      await _localDatabase.markSyncFailed(localSessionId, error: message);
       return await _tryGetScopedSession(localSessionId) ?? original;
     }
   }
@@ -428,8 +420,13 @@ class SessionRepositoryImpl implements SessionRepository {
     return session;
   }
 
+  /// Falls back to an unscoped local lookup when auth context has already been
+  /// cleared, which lets sync error handling still surface the updated session.
   Future<LocalRideSession?> _tryGetScopedSession(int localSessionId) {
-    final String ownerUserId = _requireCurrentUserId();
+    final String? ownerUserId = _currentUserIdOrNull;
+    if (ownerUserId == null) {
+      return _localDatabase.getSessionByLocalId(localSessionId);
+    }
     return _localDatabase.getSessionById(
       localSessionId,
       ownerUserId: ownerUserId,

@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:goofyrider_mobile/core/network/api_error.dart';
+import 'package:goofyrider_mobile/core/network/auth_token_interceptor.dart';
 import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
 import 'package:goofyrider_mobile/features/session/data/session_api.dart';
 import 'package:goofyrider_mobile/features/session/data/session_repository_impl.dart';
@@ -13,6 +15,89 @@ import 'package:goofyrider_mobile/features/session/domain/session_repository.dar
 class MockDriftLocalDatabase extends Mock implements DriftLocalDatabase {}
 
 class MockSessionApi extends Mock implements SessionApi {}
+
+class _SessionSyncRetryBackendInterceptor extends Interceptor {
+  int uploadAttempts = 0;
+  int completeAttempts = 0;
+
+  @override
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    if (options.path == '/sessions/remote-1/points' &&
+        options.method.toUpperCase() == 'GET') {
+      handler.resolve(
+        Response<dynamic>(
+          requestOptions: options,
+          statusCode: 200,
+          data: <String, dynamic>{'items': <dynamic>[]},
+        ),
+      );
+      return;
+    }
+
+    if (options.path == '/sessions/remote-1/points:batch' &&
+        options.method.toUpperCase() == 'POST') {
+      uploadAttempts += 1;
+      final String? authorization = options.headers['Authorization'] as String?;
+      if (authorization == 'Bearer expired-access-token') {
+        handler.reject(_unauthorized(options), true);
+        return;
+      }
+      if (authorization == 'Bearer refreshed-access-token') {
+        handler.resolve(
+          Response<dynamic>(
+            requestOptions: options,
+            statusCode: 200,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (options.path == '/sessions/remote-1/complete' &&
+        options.method.toUpperCase() == 'POST') {
+      completeAttempts += 1;
+      final String? authorization = options.headers['Authorization'] as String?;
+      if (authorization == 'Bearer refreshed-access-token') {
+        handler.resolve(
+          Response<dynamic>(
+            requestOptions: options,
+            statusCode: 200,
+            data: <String, dynamic>{'id': 'remote-1'},
+          ),
+        );
+        return;
+      }
+    }
+
+    handler.reject(
+      DioException(
+        requestOptions: options,
+        response: Response<dynamic>(
+          requestOptions: options,
+          statusCode: 500,
+          data: <String, dynamic>{'detail': 'Unexpected test request.'},
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+      true,
+    );
+  }
+
+  DioException _unauthorized(RequestOptions options) {
+    return DioException(
+      requestOptions: options,
+      response: Response<dynamic>(
+        requestOptions: options,
+        statusCode: 401,
+        data: <String, dynamic>{'detail': 'Authentication required.'},
+      ),
+      type: DioExceptionType.badResponse,
+    );
+  }
+}
 
 class FakeNewSessionPoint extends Fake implements NewSessionPoint {}
 
@@ -25,6 +110,8 @@ LocalRideSession _buildSession({
   int activeDurationS = 120,
   double maxSpeedMps = 10,
   double avgSpeedMps = 8,
+  int syncAttemptCount = 0,
+  String? lastSyncError,
   DateTime? startedAt,
   DateTime? endedAt,
 }) {
@@ -45,12 +132,13 @@ LocalRideSession _buildSession({
     elevationLossM: 100,
     state: state,
     pointCount: 0,
-    syncAttemptCount: 0,
-    lastSyncError: null,
+    syncAttemptCount: syncAttemptCount,
+    lastSyncError: lastSyncError,
     createdAt: effectiveStartedAt,
     updatedAt: effectiveEndedAt,
   );
 }
+
 LocalSessionPoint _buildPoint({
   required int offsetMs,
   double speedMps = 7,
@@ -147,6 +235,9 @@ void main() {
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
     when(
+      () => localDatabase.beginSyncAttempt(any()),
+    ).thenAnswer((_) async {});
+    when(
       () => localDatabase.updateSessionState(
         any(),
         any(),
@@ -154,8 +245,6 @@ void main() {
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
     when(() => localDatabase.listPoints(any(),
         onlyAccepted: any(named: 'onlyAccepted'))).thenAnswer(
       (_) async => <LocalSessionPoint>[
@@ -201,28 +290,38 @@ void main() {
   });
 
   test('syncSession marks session as syncFailed when upload fails', () async {
-    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
-      <LocalRideSession?>[
-        _buildSession(
-            localId: 1,
-            state: LocalSessionState.syncPending,
-            remoteId: 'remote-1'),
-        _buildSession(
-            localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
-        _buildSession(
-            localId: 1,
-            state: LocalSessionState.syncFailed,
-            remoteId: 'remote-1'),
-      ],
-    );
     final DioException syncFailure = DioException(
       requestOptions: RequestOptions(path: '/sessions/remote-1/points:batch'),
       type: DioExceptionType.connectionError,
       message: 'Network unavailable',
     );
+    final String expectedMessage = mapDioException(syncFailure).message;
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncPending,
+            remoteId: 'remote-1',
+            syncAttemptCount: 0),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncing,
+            remoteId: 'remote-1',
+            syncAttemptCount: 1),
+        _buildSession(
+            localId: 1,
+            state: LocalSessionState.syncFailed,
+            remoteId: 'remote-1',
+            syncAttemptCount: 1,
+            lastSyncError: expectedMessage),
+      ],
+    );
 
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
+    when(
+      () => localDatabase.beginSyncAttempt(any()),
+    ).thenAnswer((_) async {});
     when(
       () => localDatabase.updateSessionState(
         any(),
@@ -231,8 +330,8 @@ void main() {
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
+    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
+        .thenAnswer((_) async {});
     when(() => localDatabase.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
@@ -246,29 +345,121 @@ void main() {
     final LocalRideSession result = await repository.syncSession(1);
 
     expect(result.state, LocalSessionState.syncFailed);
-    verify(
-      () => localDatabase.updateSessionState(
-        1,
-        LocalSessionState.syncFailed,
-        lastSyncError: any(named: 'lastSyncError'),
-      ),
-    ).called(1);
+    expect(result.syncAttemptCount, 1);
+    expect(result.lastSyncError, expectedMessage);
+    verify(() => localDatabase.beginSyncAttempt(1)).called(1);
+    verify(() => localDatabase.markSyncFailed(
+          1,
+          error: expectedMessage,
+        )).called(1);
   });
 
-  test('syncSession marks session as syncFailed when upload token is expired',
+  test('syncSession refreshes and retries preserved upload auth failures',
       () async {
+    String currentAccessToken = 'expired-access-token';
+    int refreshCallCount = 0;
+    final Dio dio = Dio();
+    final _SessionSyncRetryBackendInterceptor backend =
+        _SessionSyncRetryBackendInterceptor();
+    dio.interceptors.add(
+      AuthTokenInterceptor(
+        dio: dio,
+        accessTokenGetter: () async => currentAccessToken,
+        refreshTokenGetter: () async => 'refresh-token',
+        refreshCallback: (_) async {
+          refreshCallCount += 1;
+          currentAccessToken = 'refreshed-access-token';
+          return currentAccessToken;
+        },
+        onAuthReset: () async {
+          fail('Session sync should not reset auth for a recoverable 401.');
+        },
+      ),
+    );
+    dio.interceptors.add(backend);
+    final SessionRepositoryImpl retryingRepository = SessionRepositoryImpl(
+      localDatabase: localDatabase,
+      api: SessionApi(dio),
+      currentUserIdGetter: () => _ownerUserId,
+    );
     final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
       <LocalRideSession?>[
         _buildSession(
             localId: 1,
             state: LocalSessionState.syncPending,
-            remoteId: 'remote-1'),
-        _buildSession(
-            localId: 1, state: LocalSessionState.syncing, remoteId: 'remote-1'),
+            remoteId: 'remote-1',
+            syncAttemptCount: 0),
         _buildSession(
             localId: 1,
-            state: LocalSessionState.syncFailed,
-            remoteId: 'remote-1'),
+            state: LocalSessionState.syncing,
+            remoteId: 'remote-1',
+            syncAttemptCount: 1),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.synced,
+          remoteId: 'remote-1',
+          syncAttemptCount: 1,
+        ),
+      ],
+    );
+
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => sessions.removeFirst());
+    when(
+      () => localDatabase.beginSyncAttempt(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => localDatabase.updateSessionState(
+        any(),
+        any(),
+        remoteId: any(named: 'remoteId'),
+        lastSyncError: any(named: 'lastSyncError'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
+        .thenAnswer((_) async {});
+    when(() => localDatabase.listPoints(any(),
+            onlyAccepted: any(named: 'onlyAccepted')))
+        .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
+
+    final LocalRideSession result = await retryingRepository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    expect(result.syncAttemptCount, 1);
+    expect(result.lastSyncError, isNull);
+    expect(refreshCallCount, 1);
+    expect(backend.uploadAttempts, 2);
+    expect(backend.completeAttempts, 1);
+    verifyNever(
+      () => localDatabase.markSyncFailed(
+        any(),
+        error: any(named: 'error'),
+      ),
+    );
+  });
+
+  test('syncSession still returns the failed session when auth context drops',
+      () async {
+    String? currentUserId = _ownerUserId;
+    final SessionRepositoryImpl authDroppingRepository = SessionRepositoryImpl(
+      localDatabase: localDatabase,
+      api: api,
+      currentUserIdGetter: () => currentUserId,
+    );
+    final Queue<LocalRideSession?> scopedSessions =
+        Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncPending,
+          remoteId: 'remote-1',
+        ),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncing,
+          remoteId: 'remote-1',
+          syncAttemptCount: 1,
+        ),
       ],
     );
     final RequestOptions requestOptions =
@@ -282,19 +473,23 @@ void main() {
       ),
       type: DioExceptionType.badResponse,
     );
+    final LocalRideSession failedSnapshot = _buildSession(
+      localId: 1,
+      state: LocalSessionState.syncFailed,
+      remoteId: 'remote-1',
+      syncAttemptCount: 1,
+      lastSyncError: 'Authentication required.',
+    );
 
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
-        .thenAnswer((_) async => sessions.removeFirst());
-    when(
-      () => localDatabase.updateSessionState(
-        any(),
-        any(),
-        remoteId: any(named: 'remoteId'),
-        lastSyncError: any(named: 'lastSyncError'),
-      ),
-    ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
+        .thenAnswer((_) async => scopedSessions.removeFirst());
+    when(() => localDatabase.getSessionByLocalId(1))
+        .thenAnswer((_) async => failedSnapshot);
+    when(() => localDatabase.beginSyncAttempt(any())).thenAnswer((_) async {});
+    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
+        .thenAnswer((_) async {
+      currentUserId = null;
+    });
     when(() => localDatabase.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
@@ -305,16 +500,12 @@ void main() {
           points: any(named: 'points'),
         )).thenThrow(authFailure);
 
-    final LocalRideSession result = await repository.syncSession(1);
+    final LocalRideSession result = await authDroppingRepository.syncSession(1);
 
     expect(result.state, LocalSessionState.syncFailed);
-    verify(
-      () => localDatabase.updateSessionState(
-        1,
-        LocalSessionState.syncFailed,
-        lastSyncError: 'Authentication required.',
-      ),
-    ).called(1);
+    expect(result.syncAttemptCount, 1);
+    expect(result.lastSyncError, 'Authentication required.');
+    verify(() => localDatabase.getSessionByLocalId(1)).called(1);
   });
 
   test('appendLocationPoint persists enriched point payload as-is', () async {
@@ -349,6 +540,46 @@ void main() {
     ).thenAnswer((_) async {});
 
     await repository.appendLocationPoint(1, point);
+
+    verify(
+      () => localDatabase.insertPoint(
+        localSessionId: 1,
+        point: point,
+      ),
+    ).called(1);
+  });
+
+  test('appendLocationPoint falls back to local session lookup without auth',
+      () async {
+    final LocalRideSession recordingSession =
+        _buildSession(localId: 1, state: LocalSessionState.recording);
+    final SessionRepositoryImpl offlineRepository = SessionRepositoryImpl(
+      localDatabase: localDatabase,
+      api: api,
+      currentUserIdGetter: () => null,
+    );
+    final NewSessionPoint point = NewSessionPoint(
+      recordedAt: DateTime.utc(2026, 1, 1, 0, 0, 5),
+      tOffsetMs: 5000,
+      latitude: 49.1,
+      longitude: -123.1,
+      accuracyM: 6,
+      altitudeM: 520,
+      speedMps: 8,
+      headingDeg: 90,
+      acceptedForAnalytics: true,
+    );
+
+    when(() => localDatabase.getSessionByLocalId(1))
+        .thenAnswer((_) async => recordingSession);
+    when(
+      () => localDatabase.insertPoint(
+        localSessionId: any(named: 'localSessionId'),
+        point: any(named: 'point'),
+      ),
+    ).thenAnswer((_) async {});
+
+    await offlineRepository.appendLocationPoint(1, point);
 
     verify(
       () => localDatabase.insertPoint(
@@ -518,6 +749,9 @@ void main() {
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
     when(
+      () => localDatabase.beginSyncAttempt(any()),
+    ).thenAnswer((_) async {});
+    when(
       () => localDatabase.updateSessionState(
         any(),
         any(),
@@ -525,8 +759,6 @@ void main() {
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
     when(() => localDatabase.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
