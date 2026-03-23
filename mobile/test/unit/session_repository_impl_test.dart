@@ -218,6 +218,99 @@ void main() {
         )).called(1);
   });
 
+  test('finishLocalSession transitions directly to syncPending from recording',
+      () async {
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(localId: 1, state: LocalSessionState.recording),
+        _buildSession(localId: 1, state: LocalSessionState.syncPending),
+      ],
+    );
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => sessions.removeFirst());
+    when(() => localDatabase.listPoints(1))
+        .thenAnswer((_) async => const <LocalSessionPoint>[]);
+    when(
+      () => localDatabase.completeLocalSession(
+        localId: any(named: 'localId'),
+        endedAt: any(named: 'endedAt'),
+        stats: any(named: 'stats'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final LocalRideSession finished =
+        await repository.finishLocalSession(1, activeDurationS: 42);
+
+    expect(finished.state, LocalSessionState.syncPending);
+    final List<dynamic> captured = verify(
+      () => localDatabase.completeLocalSession(
+        localId: 1,
+        endedAt: any(named: 'endedAt'),
+        stats: captureAny(named: 'stats'),
+      ),
+    ).captured;
+    final SessionStats stats = captured.single as SessionStats;
+    expect(stats.durationS, 42);
+  });
+
+  test('finishLocalSession transitions directly to syncPending from paused',
+      () async {
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(localId: 1, state: LocalSessionState.paused),
+        _buildSession(localId: 1, state: LocalSessionState.syncPending),
+      ],
+    );
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => sessions.removeFirst());
+    when(() => localDatabase.listPoints(1))
+        .thenAnswer((_) async => const <LocalSessionPoint>[]);
+    when(
+      () => localDatabase.completeLocalSession(
+        localId: any(named: 'localId'),
+        endedAt: any(named: 'endedAt'),
+        stats: any(named: 'stats'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final LocalRideSession finished = await repository.finishLocalSession(1);
+
+    expect(finished.state, LocalSessionState.syncPending);
+  });
+
+  test(
+      'finishLocalSession canonicalizes legacy locallyCompleted into syncPending',
+      () async {
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(localId: 1, state: LocalSessionState.locallyCompleted),
+        _buildSession(localId: 1, state: LocalSessionState.syncPending),
+      ],
+    );
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => sessions.removeFirst());
+    when(() => localDatabase.listPoints(1))
+        .thenAnswer((_) async => const <LocalSessionPoint>[]);
+    when(
+      () => localDatabase.completeLocalSession(
+        localId: any(named: 'localId'),
+        endedAt: any(named: 'endedAt'),
+        stats: any(named: 'stats'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final LocalRideSession finished = await repository.finishLocalSession(1);
+
+    expect(finished.state, LocalSessionState.syncPending);
+  });
+
+  test('legacy locallyCompleted wire value maps into syncPending', () {
+    expect(
+      LocalSessionStateCodec.fromWire('locallyCompleted'),
+      LocalSessionState.syncPending,
+    );
+  });
+
   test('syncSession dedupes duplicate offsets before upload batches', () async {
     final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
       <LocalRideSession?>[
@@ -438,7 +531,7 @@ void main() {
     );
   });
 
-  test('syncSession still returns the failed session when auth context drops',
+  test('syncSession returns explicit failed snapshot when auth context drops',
       () async {
     String? currentUserId = _ownerUserId;
     final SessionRepositoryImpl authDroppingRepository = SessionRepositoryImpl(
@@ -473,18 +566,8 @@ void main() {
       ),
       type: DioExceptionType.badResponse,
     );
-    final LocalRideSession failedSnapshot = _buildSession(
-      localId: 1,
-      state: LocalSessionState.syncFailed,
-      remoteId: 'remote-1',
-      syncAttemptCount: 1,
-      lastSyncError: 'Authentication required.',
-    );
-
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => scopedSessions.removeFirst());
-    when(() => localDatabase.getSessionByLocalId(1))
-        .thenAnswer((_) async => failedSnapshot);
     when(() => localDatabase.beginSyncAttempt(any())).thenAnswer((_) async {});
     when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
         .thenAnswer((_) async {
@@ -505,7 +588,7 @@ void main() {
     expect(result.state, LocalSessionState.syncFailed);
     expect(result.syncAttemptCount, 1);
     expect(result.lastSyncError, 'Authentication required.');
-    verify(() => localDatabase.getSessionByLocalId(1)).called(1);
+    verifyNever(() => localDatabase.getSessionByLocalId(any()));
   });
 
   test('appendLocationPoint persists enriched point payload as-is', () async {
@@ -549,10 +632,8 @@ void main() {
     ).called(1);
   });
 
-  test('appendLocationPoint falls back to local session lookup without auth',
+  test('appendLocationPoint rejects access when auth context is missing',
       () async {
-    final LocalRideSession recordingSession =
-        _buildSession(localId: 1, state: LocalSessionState.recording);
     final SessionRepositoryImpl offlineRepository = SessionRepositoryImpl(
       localDatabase: localDatabase,
       api: api,
@@ -570,23 +651,17 @@ void main() {
       acceptedForAnalytics: true,
     );
 
-    when(() => localDatabase.getSessionByLocalId(1))
-        .thenAnswer((_) async => recordingSession);
-    when(
+    expect(
+      () => offlineRepository.appendLocationPoint(1, point),
+      throwsA(isA<StateError>()),
+    );
+    verifyNever(() => localDatabase.getSessionByLocalId(any()));
+    verifyNever(
       () => localDatabase.insertPoint(
         localSessionId: any(named: 'localSessionId'),
         point: any(named: 'point'),
       ),
-    ).thenAnswer((_) async {});
-
-    await offlineRepository.appendLocationPoint(1, point);
-
-    verify(
-      () => localDatabase.insertPoint(
-        localSessionId: 1,
-        point: point,
-      ),
-    ).called(1);
+    );
   });
 
   test('computeSessionStats preserves duration from sub-second accepted points',

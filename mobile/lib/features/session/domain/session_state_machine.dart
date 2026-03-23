@@ -1,4 +1,4 @@
-﻿import 'session_models.dart';
+import 'session_models.dart';
 
 class SessionStateMachine {
   const SessionStateMachine();
@@ -7,10 +7,13 @@ class SessionStateMachine {
     LocalSessionState current,
     LocalSessionState target,
   ) {
-    if (!_allowed(current).contains(target)) {
-      throw StateError('Invalid transition: ${current.wireValue} -> ${target.wireValue}');
+    final LocalSessionState canonicalCurrent = _canonical(current);
+    final LocalSessionState canonicalTarget = _canonical(target);
+    if (!_allowed(canonicalCurrent).contains(canonicalTarget)) {
+      throw StateError(
+          'Invalid transition: ${canonicalCurrent.wireValue} -> ${canonicalTarget.wireValue}');
     }
-    return target;
+    return canonicalTarget;
   }
 
   Set<LocalSessionState> _allowed(LocalSessionState current) {
@@ -20,15 +23,16 @@ class SessionStateMachine {
       case LocalSessionState.recording:
         return <LocalSessionState>{
           LocalSessionState.paused,
-          LocalSessionState.locallyCompleted,
+          LocalSessionState.syncPending,
         };
       case LocalSessionState.paused:
         return <LocalSessionState>{
           LocalSessionState.recording,
-          LocalSessionState.locallyCompleted,
+          LocalSessionState.syncPending,
         };
       case LocalSessionState.locallyCompleted:
-        return <LocalSessionState>{LocalSessionState.syncPending};
+        // Canonicalization absorbs this legacy value before transition checks.
+        return <LocalSessionState>{};
       case LocalSessionState.syncPending:
         return <LocalSessionState>{LocalSessionState.syncing};
       case LocalSessionState.syncing:
@@ -41,5 +45,12 @@ class SessionStateMachine {
       case LocalSessionState.synced:
         return <LocalSessionState>{};
     }
+  }
+
+  LocalSessionState _canonical(LocalSessionState value) {
+    if (value == LocalSessionState.locallyCompleted) {
+      return LocalSessionState.syncPending;
+    }
+    return value;
   }
 }

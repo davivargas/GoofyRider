@@ -4,6 +4,7 @@ enum LocalSessionState {
   idle,
   recording,
   paused,
+  // Legacy-only transient state kept for backward compatibility with old rows.
   locallyCompleted,
   syncPending,
   syncing,
@@ -34,10 +35,27 @@ extension LocalSessionStateCodec on LocalSessionState {
   }
 
   static LocalSessionState fromWire(String value) {
-    return LocalSessionState.values.firstWhere(
-      (LocalSessionState state) => state.wireValue == value,
-      orElse: () => LocalSessionState.idle,
-    );
+    switch (value) {
+      case 'idle':
+        return LocalSessionState.idle;
+      case 'recording':
+        return LocalSessionState.recording;
+      case 'paused':
+        return LocalSessionState.paused;
+      case 'locallyCompleted':
+        // Legacy rows are normalized into syncPending lifecycle.
+        return LocalSessionState.syncPending;
+      case 'syncPending':
+        return LocalSessionState.syncPending;
+      case 'syncing':
+        return LocalSessionState.syncing;
+      case 'synced':
+        return LocalSessionState.synced;
+      case 'syncFailed':
+        return LocalSessionState.syncFailed;
+      default:
+        return LocalSessionState.idle;
+    }
   }
 }
 
@@ -85,8 +103,7 @@ class LocalRideSession {
   bool get isUnsynced =>
       state == LocalSessionState.syncPending ||
       state == LocalSessionState.syncing ||
-      state == LocalSessionState.syncFailed ||
-      state == LocalSessionState.locallyCompleted;
+      state == LocalSessionState.syncFailed;
 
   bool get isInProgress =>
       state == LocalSessionState.recording || state == LocalSessionState.paused;

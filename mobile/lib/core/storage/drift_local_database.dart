@@ -38,6 +38,27 @@ class DriftLocalDatabase extends GeneratedDatabase {
     return database;
   }
 
+  static Future<DriftLocalDatabase> openInMemory() async {
+    final DatabaseConnection connection =
+        DatabaseConnection(NativeDatabase.memory());
+    final DriftLocalDatabase database = DriftLocalDatabase._(connection);
+    await database.initialize();
+    return database;
+  }
+
+  static Future<DriftLocalDatabase> openOrFallback({
+    Future<DriftLocalDatabase> Function()? primaryOpen,
+    Future<DriftLocalDatabase> Function()? fallbackOpen,
+    void Function(Object error, StackTrace stackTrace)? onPrimaryOpenError,
+  }) async {
+    try {
+      return await (primaryOpen ?? open)();
+    } on Object catch (error, stackTrace) {
+      onPrimaryOpenError?.call(error, stackTrace);
+      return (fallbackOpen ?? openInMemory)();
+    }
+  }
+
   Future<void> initialize() async {
     await customStatement('''
       CREATE TABLE IF NOT EXISTS local_ride_sessions (
@@ -123,6 +144,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
     await _migrateToV2();
     await _migrateToV3();
+    await _normalizeLegacySessionStates();
 
     await customStatement('''
       CREATE TABLE IF NOT EXISTS local_session_tracking_diagnostics (
@@ -207,6 +229,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
     String? remoteId,
     String? lastSyncError,
   }) async {
+    final LocalSessionState canonicalState = _canonicalPersistedState(newState);
     final DateTime now = DateTime.now().toUtc();
     await customUpdate(
       '''
@@ -218,7 +241,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       WHERE local_id = ?
       ''',
       variables: <Variable>[
-        Variable<String>(newState.wireValue),
+        Variable<String>(canonicalState.wireValue),
         Variable<String>(remoteId),
         Variable<String>(lastSyncError),
         Variable<String>(now.toIso8601String()),
@@ -631,7 +654,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       SELECT *
       FROM local_ride_sessions
       WHERE owner_user_id = ?
-      AND state IN ('locallyCompleted', 'syncPending', 'syncing', 'syncFailed')
+      AND state IN ('syncPending', 'syncing', 'syncFailed')
       ORDER BY updated_at DESC
       ''',
       variables: <Variable>[
@@ -650,7 +673,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       SELECT COUNT(*) AS count_value
       FROM local_ride_sessions
       WHERE owner_user_id = ?
-      AND state IN ('locallyCompleted', 'syncPending', 'syncing', 'syncFailed')
+      AND state IN ('syncPending', 'syncing', 'syncFailed')
       ''',
       variables: <Variable>[
         Variable<String>(ownerUserId),
@@ -673,6 +696,23 @@ class DriftLocalDatabase extends GeneratedDatabase {
       CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_state_updated
       ON local_ride_sessions(owner_user_id, state, updated_at DESC)
     ''');
+  }
+
+  Future<void> _normalizeLegacySessionStates() async {
+    await customStatement(
+      '''
+      UPDATE local_ride_sessions
+      SET state = 'syncPending'
+      WHERE state = 'locallyCompleted'
+      ''',
+    );
+  }
+
+  LocalSessionState _canonicalPersistedState(LocalSessionState state) {
+    if (state == LocalSessionState.locallyCompleted) {
+      return LocalSessionState.syncPending;
+    }
+    return state;
   }
 
   Future<List<LocalSessionPoint>> listPoints(

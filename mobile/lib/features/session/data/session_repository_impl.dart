@@ -79,7 +79,7 @@ class SessionRepositoryImpl implements SessionRepository {
     int? activeDurationS,
   }) async {
     final LocalRideSession session = await _requireSession(localSessionId);
-    _stateMachine.transition(session.state, LocalSessionState.locallyCompleted);
+    _stateMachine.transition(session.state, LocalSessionState.syncPending);
 
     final List<LocalSessionPoint> points =
         await _localDatabase.listPoints(localSessionId);
@@ -124,6 +124,7 @@ class SessionRepositoryImpl implements SessionRepository {
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
     final LocalRideSession original = await _requireSession(localSessionId);
+    LocalRideSession? syncingSnapshot;
 
     try {
       // Claim the sync attempt up front so a failure anywhere in the remote
@@ -131,6 +132,7 @@ class SessionRepositoryImpl implements SessionRepository {
       await _localDatabase.beginSyncAttempt(localSessionId);
 
       final LocalRideSession syncing = await _requireSession(localSessionId);
+      syncingSnapshot = syncing;
 
       String? remoteId = syncing.remoteId;
       if (remoteId == null || remoteId.isEmpty) {
@@ -220,7 +222,12 @@ class SessionRepositoryImpl implements SessionRepository {
     } on DioException catch (exception) {
       final String message = mapDioException(exception).message;
       await _localDatabase.markSyncFailed(localSessionId, error: message);
-      return await _tryGetScopedSession(localSessionId) ?? original;
+      final LocalRideSession? failed =
+          await _tryGetScopedSession(localSessionId);
+      if (failed != null) {
+        return failed;
+      }
+      return _buildSyncFailedSnapshot(syncingSnapshot ?? original, message);
     }
   }
 
@@ -420,16 +427,40 @@ class SessionRepositoryImpl implements SessionRepository {
     return session;
   }
 
-  /// Falls back to an unscoped local lookup when auth context has already been
-  /// cleared, which lets sync error handling still surface the updated session.
   Future<LocalRideSession?> _tryGetScopedSession(int localSessionId) {
     final String? ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null) {
-      return _localDatabase.getSessionByLocalId(localSessionId);
+      return Future<LocalRideSession?>.value(null);
     }
     return _localDatabase.getSessionById(
       localSessionId,
       ownerUserId: ownerUserId,
+    );
+  }
+
+  LocalRideSession _buildSyncFailedSnapshot(
+    LocalRideSession base,
+    String message,
+  ) {
+    return LocalRideSession(
+      localId: base.localId,
+      ownerUserId: base.ownerUserId,
+      remoteId: base.remoteId,
+      resortId: base.resortId,
+      startedAt: base.startedAt,
+      endedAt: base.endedAt,
+      activeDurationS: base.activeDurationS,
+      distanceM: base.distanceM,
+      maxSpeedMps: base.maxSpeedMps,
+      avgSpeedMps: base.avgSpeedMps,
+      elevationGainM: base.elevationGainM,
+      elevationLossM: base.elevationLossM,
+      state: LocalSessionState.syncFailed,
+      pointCount: base.pointCount,
+      syncAttemptCount: base.syncAttemptCount,
+      lastSyncError: message,
+      createdAt: base.createdAt,
+      updatedAt: base.updatedAt,
     );
   }
 
