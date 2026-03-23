@@ -161,12 +161,17 @@ class FakeSessionRepository implements SessionRepository {
     this.recoverySession,
     List<LocalSessionPoint>? recoveryAcceptedPoints,
     this.startLocalSessionCompleter,
-  }) : _recoveryAcceptedPoints =
-            recoveryAcceptedPoints ?? <LocalSessionPoint>[];
+    List<LocalRideSession>? pendingSyncSessions,
+  })  : _recoveryAcceptedPoints =
+            recoveryAcceptedPoints ?? <LocalSessionPoint>[],
+        pendingSyncSessions = pendingSyncSessions ?? <LocalRideSession>[];
 
   final LocalRideSession? recoverySession;
   final List<LocalSessionPoint> _recoveryAcceptedPoints;
   final Completer<void>? startLocalSessionCompleter;
+  final List<LocalRideSession> pendingSyncSessions;
+  final List<int> syncedSessionIds = <int>[];
+  final Set<int> syncSessionThrowIds = <int>{};
   final List<NewSessionPoint> appendedPoints = <NewSessionPoint>[];
   int listPendingSyncSessionsCalls = 0;
   int syncSessionCalls = 0;
@@ -233,7 +238,7 @@ class FakeSessionRepository implements SessionRepository {
   @override
   Future<List<LocalRideSession>> listPendingSyncSessions() async {
     listPendingSyncSessionsCalls += 1;
-    return <LocalRideSession>[];
+    return pendingSyncSessions;
   }
 
   @override
@@ -291,6 +296,10 @@ class FakeSessionRepository implements SessionRepository {
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
     syncSessionCalls += 1;
+    syncedSessionIds.add(localSessionId);
+    if (syncSessionThrowIds.contains(localSessionId)) {
+      throw StateError('Unexpected local sync failure.');
+    }
     return _buildSession(
       id: localSessionId,
       state: LocalSessionState.synced,
@@ -554,6 +563,40 @@ LocalSessionPoint _buildAcceptedPoint({
 }
 
 void main() {
+  test('tracking mode profiles derive stale thresholds from one contract path',
+      () {
+    expect(
+      TrackingModeProfiles.forMode(TrackingMode.initializingFix)
+          .staleSampleThresholdSeconds(),
+      30,
+    );
+    expect(
+      TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+          .staleSampleThresholdSeconds(),
+      30,
+    );
+    expect(
+      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
+          .staleSampleThresholdSeconds(),
+      30,
+    );
+    expect(
+      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
+          .staleSampleThresholdSeconds(),
+      60,
+    );
+    expect(
+      TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
+          .staleSampleThresholdSeconds(),
+      30,
+    );
+    expect(
+      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
+          .sampleWatchdogStaleThreshold(),
+      const Duration(seconds: 60),
+    );
+  });
+
   test('recovers in-progress recording after interruption', () async {
     final DateTime startedAt = DateTime.utc(2026, 1, 1, 8, 0, 0);
     final LocalRideSession recoverySession = _buildSession(
@@ -841,6 +884,35 @@ void main() {
       controller.state.lastSyncMessage,
       'Sync deferred until recording finishes.',
     );
+
+    controller.dispose();
+    await locationRepository.close();
+  });
+
+  test('continues pending sync pass after one session throws unexpectedly',
+      () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    repository.syncSessionThrowIds.add(12);
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    repository.pendingSyncSessions.addAll(<LocalRideSession>[
+      _buildSession(id: 11, state: LocalSessionState.syncPending),
+      _buildSession(id: 12, state: LocalSessionState.syncPending),
+      _buildSession(id: 13, state: LocalSessionState.syncPending),
+    ]);
+    await controller.retryPendingSyncs();
+
+    expect(repository.listPendingSyncSessionsCalls, greaterThanOrEqualTo(1));
+    expect(repository.syncSessionCalls, 3);
+    expect(repository.syncedSessionIds, <int>[11, 12, 13]);
+    expect(
+        controller.state.lastSyncMessage, 'Sync pass: 2/3 synced, 1 failed.');
 
     controller.dispose();
     await locationRepository.close();

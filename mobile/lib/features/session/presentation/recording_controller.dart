@@ -34,7 +34,6 @@ const String _openSettingsFailedMessage =
 const String _openLocationSettingsFailedMessage =
     'Could not open location settings. Please open settings manually.';
 const Duration _sampleWatchdogCheckInterval = Duration(seconds: 10);
-const Duration _sampleWatchdogStaleThreshold = Duration(seconds: 25);
 const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 20);
 const Duration _backgroundSyncRetryInterval = Duration(minutes: 2);
 const Duration _gpsSignalStaleThreshold = Duration(seconds: 15);
@@ -220,6 +219,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   int _sampleSequence = 0;
   int _recordingEpoch = 0;
   bool _phaseTransitionInFlight = false;
+
   /// Forces the next location callback to rebuild live progress from durable
   /// storage after a point write fails mid-recording.
   bool _needsPersistedProgressResync = false;
@@ -1276,7 +1276,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     final DateTime now = DateTime.now().toUtc();
     final Duration staleFor = now.difference(referenceTime);
     final Duration staleThreshold =
-        _sampleWatchdogThresholdForMode(_activeTrackingMode);
+        TrackingModeProfiles.forMode(_activeTrackingMode)
+            .sampleWatchdogThreshold;
     if (staleFor < staleThreshold) {
       return;
     }
@@ -1512,19 +1513,6 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     });
   }
 
-  /// Uses the active tracking profile to avoid declaring sparse background
-  /// modes stale on the same schedule as high-frequency modes.
-  Duration _sampleWatchdogThresholdForMode(TrackingMode mode) {
-    final TrackingModeProfile profile = TrackingModeProfiles.forMode(mode);
-    final int expectedGapMs =
-        profile.maxDelayMs > 0 ? profile.maxDelayMs : profile.intervalMs;
-    final Duration dynamicThreshold =
-        Duration(milliseconds: expectedGapMs + 15000);
-    return dynamicThreshold < _sampleWatchdogStaleThreshold
-        ? _sampleWatchdogStaleThreshold
-        : dynamicThreshold;
-  }
-
   Future<void> _runPendingSyncPass({
     bool showDebugStatus = false,
   }) async {
@@ -1561,11 +1549,15 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       int syncedCount = 0;
       int failedCount = 0;
       for (final LocalRideSession session in pending) {
-        final LocalRideSession result =
-            await _sessionRepository.syncSession(session.localId);
-        if (result.state == LocalSessionState.synced) {
-          syncedCount += 1;
-        } else if (result.state == LocalSessionState.syncFailed) {
+        try {
+          final LocalRideSession result =
+              await _sessionRepository.syncSession(session.localId);
+          if (result.state == LocalSessionState.synced) {
+            syncedCount += 1;
+          } else if (result.state == LocalSessionState.syncFailed) {
+            failedCount += 1;
+          }
+        } catch (_) {
           failedCount += 1;
         }
       }
