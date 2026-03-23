@@ -227,6 +227,27 @@ class DriftLocalDatabase extends GeneratedDatabase {
     );
   }
 
+  /// Moves a session into `syncing` and bumps the attempt counter in one write
+  /// so retry bookkeeping cannot drift between separate updates.
+  Future<void> beginSyncAttempt(int localId) async {
+    final DateTime now = DateTime.now().toUtc();
+    await customUpdate(
+      '''
+      UPDATE local_ride_sessions
+      SET state = ?,
+          sync_attempt_count = sync_attempt_count + 1,
+          last_sync_error = NULL,
+          updated_at = ?
+      WHERE local_id = ?
+      ''',
+      variables: <Variable>[
+        Variable<String>(LocalSessionState.syncing.wireValue),
+        Variable<String>(now.toIso8601String()),
+        Variable<int>(localId),
+      ],
+    );
+  }
+
   Future<void> incrementSyncAttempt(
     int localId, {
     String? error,
@@ -241,6 +262,30 @@ class DriftLocalDatabase extends GeneratedDatabase {
       WHERE local_id = ?
       ''',
       variables: <Variable>[
+        Variable<String>(error),
+        Variable<String>(now.toIso8601String()),
+        Variable<int>(localId),
+      ],
+    );
+  }
+
+  /// Records a failed sync without incrementing the counter again because the
+  /// attempt was already counted when `beginSyncAttempt` started it.
+  Future<void> markSyncFailed(
+    int localId, {
+    required String error,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    await customUpdate(
+      '''
+      UPDATE local_ride_sessions
+      SET state = ?,
+          last_sync_error = ?,
+          updated_at = ?
+      WHERE local_id = ?
+      ''',
+      variables: <Variable>[
+        Variable<String>(LocalSessionState.syncFailed.wireValue),
         Variable<String>(error),
         Variable<String>(now.toIso8601String()),
         Variable<int>(localId),
@@ -288,83 +333,84 @@ class DriftLocalDatabase extends GeneratedDatabase {
     required NewSessionPoint point,
   }) async {
     final DateTime now = DateTime.now().toUtc();
+    await transaction(() async {
+      await customInsert(
+        '''
+        INSERT INTO local_session_points (
+          local_session_id,
+          recorded_at,
+          t_offset_ms,
+          latitude,
+          longitude,
+          accuracy_m,
+          elapsed_realtime_ns,
+          altitude_m,
+          vertical_accuracy_m,
+          speed_mps,
+          speed_accuracy_mps,
+          heading_deg,
+          bearing_accuracy_deg,
+          provider,
+          is_mocked,
+          quality_class,
+          quality_score,
+          quality_reason,
+          filtered_latitude,
+          filtered_longitude,
+          filtered_altitude_m,
+          fused_speed_mps,
+          derived_speed_mps,
+          distance_delta_m,
+          motion_state,
+          accepted_for_analytics,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        variables: <Variable>[
+          Variable<int>(localSessionId),
+          Variable<String>(point.recordedAt.toUtc().toIso8601String()),
+          Variable<int>(point.tOffsetMs),
+          Variable<double>(point.latitude),
+          Variable<double>(point.longitude),
+          Variable<double>(point.accuracyM),
+          Variable<int>(point.elapsedRealtimeNs),
+          Variable<double>(point.altitudeM),
+          Variable<double>(point.verticalAccuracyM),
+          Variable<double>(point.speedMps),
+          Variable<double>(point.speedAccuracyMps),
+          Variable<double>(point.headingDeg),
+          Variable<double>(point.bearingAccuracyDeg),
+          Variable<String>(point.provider),
+          Variable<int>(
+              point.isMocked == null ? null : (point.isMocked! ? 1 : 0)),
+          Variable<String>(point.qualityClass),
+          Variable<double>(point.qualityScore),
+          Variable<String>(point.qualityReason),
+          Variable<double>(point.filteredLatitude),
+          Variable<double>(point.filteredLongitude),
+          Variable<double>(point.filteredAltitudeM),
+          Variable<double>(point.fusedSpeedMps),
+          Variable<double>(point.derivedSpeedMps),
+          Variable<double>(point.distanceDeltaM),
+          Variable<String>(point.motionState),
+          Variable<int>(point.acceptedForAnalytics ? 1 : 0),
+          Variable<String>(now.toIso8601String()),
+        ],
+      );
 
-    await customInsert(
-      '''
-      INSERT INTO local_session_points (
-        local_session_id,
-        recorded_at,
-        t_offset_ms,
-        latitude,
-        longitude,
-        accuracy_m,
-        elapsed_realtime_ns,
-        altitude_m,
-        vertical_accuracy_m,
-        speed_mps,
-        speed_accuracy_mps,
-        heading_deg,
-        bearing_accuracy_deg,
-        provider,
-        is_mocked,
-        quality_class,
-        quality_score,
-        quality_reason,
-        filtered_latitude,
-        filtered_longitude,
-        filtered_altitude_m,
-        fused_speed_mps,
-        derived_speed_mps,
-        distance_delta_m,
-        motion_state,
-        accepted_for_analytics,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ''',
-      variables: <Variable>[
-        Variable<int>(localSessionId),
-        Variable<String>(point.recordedAt.toUtc().toIso8601String()),
-        Variable<int>(point.tOffsetMs),
-        Variable<double>(point.latitude),
-        Variable<double>(point.longitude),
-        Variable<double>(point.accuracyM),
-        Variable<int>(point.elapsedRealtimeNs),
-        Variable<double>(point.altitudeM),
-        Variable<double>(point.verticalAccuracyM),
-        Variable<double>(point.speedMps),
-        Variable<double>(point.speedAccuracyMps),
-        Variable<double>(point.headingDeg),
-        Variable<double>(point.bearingAccuracyDeg),
-        Variable<String>(point.provider),
-        Variable<int>(
-            point.isMocked == null ? null : (point.isMocked! ? 1 : 0)),
-        Variable<String>(point.qualityClass),
-        Variable<double>(point.qualityScore),
-        Variable<String>(point.qualityReason),
-        Variable<double>(point.filteredLatitude),
-        Variable<double>(point.filteredLongitude),
-        Variable<double>(point.filteredAltitudeM),
-        Variable<double>(point.fusedSpeedMps),
-        Variable<double>(point.derivedSpeedMps),
-        Variable<double>(point.distanceDeltaM),
-        Variable<String>(point.motionState),
-        Variable<int>(point.acceptedForAnalytics ? 1 : 0),
-        Variable<String>(now.toIso8601String()),
-      ],
-    );
-
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET point_count = point_count + 1,
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localSessionId),
-      ],
-    );
+      await customUpdate(
+        '''
+        UPDATE local_ride_sessions
+        SET point_count = point_count + 1,
+            updated_at = ?
+        WHERE local_id = ?
+        ''',
+        variables: <Variable>[
+          Variable<String>(now.toIso8601String()),
+          Variable<int>(localSessionId),
+        ],
+      );
+    });
   }
 
   Future<LocalRideSession?> getSessionById(
@@ -381,6 +427,25 @@ class DriftLocalDatabase extends GeneratedDatabase {
       variables: <Variable>[
         Variable<int>(localId),
         Variable<String>(ownerUserId),
+      ],
+    ).get();
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _mapSession(rows.first);
+  }
+
+  Future<LocalRideSession?> getSessionByLocalId(int localId) async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT *
+      FROM local_ride_sessions
+      WHERE local_id = ?
+      LIMIT 1
+      ''',
+      variables: <Variable>[
+        Variable<int>(localId),
       ],
     ).get();
 
@@ -566,7 +631,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       SELECT *
       FROM local_ride_sessions
       WHERE owner_user_id = ?
-      AND state IN ('locallyCompleted', 'syncPending', 'syncFailed')
+      AND state IN ('locallyCompleted', 'syncPending', 'syncing', 'syncFailed')
       ORDER BY updated_at DESC
       ''',
       variables: <Variable>[
