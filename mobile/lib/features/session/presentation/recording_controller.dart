@@ -7,6 +7,7 @@ import '../../../core/constants/session_constants.dart';
 import '../domain/location_tracking_repository.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
+import '../domain/tracking_mode_profiles.dart';
 import '../domain/tracking_pipeline.dart';
 
 enum RecordScreenPhase {
@@ -217,6 +218,11 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   Completer<void>? _backgroundSyncCycleCompleter;
   bool _gpsSignalRefreshInFlight = false;
   int _sampleSequence = 0;
+  int _recordingEpoch = 0;
+  bool _phaseTransitionInFlight = false;
+  /// Forces the next location callback to rebuild live progress from durable
+  /// storage after a point write fails mid-recording.
+  bool _needsPersistedProgressResync = false;
 
   Future<void> bootstrap({String? preselectedResortId}) async {
     if (state.session?.isInProgress ?? false) {
@@ -262,6 +268,12 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   Future<void> refreshPermissionState() async {
     final LocationPermissionState permission =
         await _locationTrackingRepository.checkPermissions();
+    if (state.phase == RecordScreenPhase.recording &&
+        permission != LocationPermissionState.granted) {
+      await _pauseRecordingForPermissionLoss(permission);
+      await refreshGpsSignal();
+      return;
+    }
     state = state.copyWith(
       permissionState: permission,
       clearError: permission == LocationPermissionState.granted,
@@ -322,33 +334,48 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   }
 
   Future<void> requestRequiredLocationPermissions() async {
-    final RecordScreenPhase previousPhase = state.phase;
-    state = state.copyWith(
-      phase: RecordScreenPhase.requestingPermissions,
-      clearError: true,
-    );
-
-    final LocationPermissionState permission =
-        await _locationTrackingRepository.ensurePermissions();
-
-    final RecordScreenPhase nextPhase;
-    if (previousPhase == RecordScreenPhase.preRecord ||
-        previousPhase == RecordScreenPhase.requestingPermissions) {
-      nextPhase = RecordScreenPhase.ready;
-    } else if (previousPhase == RecordScreenPhase.recording &&
-        permission != LocationPermissionState.granted) {
-      nextPhase = RecordScreenPhase.paused;
-    } else {
-      nextPhase = previousPhase;
+    if (_phaseTransitionInFlight ||
+        state.phase == RecordScreenPhase.requestingPermissions ||
+        state.phase == RecordScreenPhase.finishing) {
+      return;
     }
 
-    state = state.copyWith(
-      phase: nextPhase,
-      permissionState: permission,
-      clearError: permission == LocationPermissionState.granted,
-      errorMessage: _permissionMessage(permission),
-    );
-    await refreshGpsSignal();
+    _phaseTransitionInFlight = true;
+    final RecordScreenPhase previousPhase = state.phase;
+    try {
+      state = state.copyWith(
+        phase: RecordScreenPhase.requestingPermissions,
+        clearError: true,
+      );
+
+      final LocationPermissionState permission =
+          await _locationTrackingRepository.ensurePermissions();
+
+      if (previousPhase == RecordScreenPhase.recording &&
+          permission != LocationPermissionState.granted) {
+        await _pauseRecordingForPermissionLoss(permission);
+        await refreshGpsSignal();
+        return;
+      }
+
+      final RecordScreenPhase nextPhase;
+      if (previousPhase == RecordScreenPhase.preRecord ||
+          previousPhase == RecordScreenPhase.requestingPermissions) {
+        nextPhase = RecordScreenPhase.ready;
+      } else {
+        nextPhase = previousPhase;
+      }
+
+      state = state.copyWith(
+        phase: nextPhase,
+        permissionState: permission,
+        clearError: permission == LocationPermissionState.granted,
+        errorMessage: _permissionMessage(permission),
+      );
+      await refreshGpsSignal();
+    } finally {
+      _phaseTransitionInFlight = false;
+    }
   }
 
   Future<void> openLocationPermissionSettings() async {
@@ -367,86 +394,124 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   }
 
   Future<void> resumeRecoveredSession() async {
-    final LocalRideSession? recovery = state.recoveryCandidate;
-    if (recovery == null) {
+    if (_phaseTransitionInFlight || state.recoveryCandidate == null) {
       return;
     }
 
-    final LocationPermissionState permission =
-        await _locationTrackingRepository.checkPermissions();
-    LocalRideSession effectiveRecovery = recovery;
-    if (recovery.state == LocalSessionState.recording &&
-        permission != LocationPermissionState.granted) {
-      effectiveRecovery = await _sessionRepository.pauseLocalSession(
-        recovery.localId,
+    _phaseTransitionInFlight = true;
+    final LocalRideSession? recovery = state.recoveryCandidate;
+    if (recovery == null) {
+      _phaseTransitionInFlight = false;
+      return;
+    }
+
+    try {
+      final LocationPermissionState permission =
+          await _locationTrackingRepository.checkPermissions();
+      LocalRideSession effectiveRecovery = recovery;
+      if (recovery.state == LocalSessionState.recording &&
+          permission != LocationPermissionState.granted) {
+        effectiveRecovery = await _sessionRepository.pauseLocalSession(
+          recovery.localId,
+        );
+      }
+
+      if (effectiveRecovery.state == LocalSessionState.recording) {
+        _beginNewRecordingEpoch();
+      } else {
+        _invalidateRecordingEpoch();
+      }
+
+      state = state.copyWith(
+        session: effectiveRecovery,
+        clearRecovery: true,
+        phase: effectiveRecovery.state == LocalSessionState.paused
+            ? RecordScreenPhase.paused
+            : RecordScreenPhase.recording,
+        permissionState: permission,
+        clearError: permission == LocationPermissionState.granted,
+        errorMessage: _permissionMessage(permission),
+        streamRestartCount: 0,
+        clearLastSampleAtUtc: true,
+        clearLastPersistedPointAtUtc: true,
       );
-    }
 
-    state = state.copyWith(
-      session: effectiveRecovery,
-      clearRecovery: true,
-      phase: effectiveRecovery.state == LocalSessionState.paused
-          ? RecordScreenPhase.paused
-          : RecordScreenPhase.recording,
-      permissionState: permission,
-      clearError: permission == LocationPermissionState.granted,
-      errorMessage: _permissionMessage(permission),
-      streamRestartCount: 0,
-      clearLastSampleAtUtc: true,
-      clearLastPersistedPointAtUtc: true,
-    );
+      final SessionDetail detail =
+          await _sessionRepository.getSessionDetail(effectiveRecovery.localId);
 
-    final SessionDetail detail =
-        await _sessionRepository.getSessionDetail(effectiveRecovery.localId);
+      final SessionStats stats = await _sessionRepository.computeSessionStats(
+        effectiveRecovery.localId,
+      );
+      _trackingPipeline.seedFromPersistedPoints(
+        points: detail.points,
+        stats: stats,
+      );
+      _activeTrackingMode = TrackingMode.initializingFix;
+      _elapsedBeforeActive = Duration(seconds: stats.durationS);
+      _activeSegmentStartedAtUtc = null;
 
-    final SessionStats stats =
-        await _sessionRepository.computeSessionStats(effectiveRecovery.localId);
-    _trackingPipeline.seedFromPersistedPoints(
-      points: detail.points,
-      stats: stats,
-    );
-    _activeTrackingMode = TrackingMode.initializingFix;
-    _elapsedBeforeActive = Duration(seconds: stats.durationS);
-    _activeSegmentStartedAtUtc = null;
+      if (effectiveRecovery.state == LocalSessionState.recording) {
+        _startActiveElapsedClock();
+      } else {
+        _stopElapsedTicker();
+      }
 
-    if (effectiveRecovery.state == LocalSessionState.recording) {
-      _startActiveElapsedClock();
-    } else {
-      _stopElapsedTicker();
-    }
+      state = state.copyWith(
+        liveStats: stats,
+        route: detail.points
+            .where((LocalSessionPoint point) => point.acceptedForAnalytics)
+            .map(
+              (LocalSessionPoint point) => LatLng(
+                point.filteredLatitude ?? point.latitude,
+                point.filteredLongitude ?? point.longitude,
+              ),
+            )
+            .toList(growable: false),
+        elapsed: _currentElapsedDuration(),
+        maxSpeedMps: stats.maxSpeedMps,
+      );
 
-    state = state.copyWith(
-      liveStats: stats,
-      route: detail.points
-          .where((LocalSessionPoint point) => point.acceptedForAnalytics)
-          .map(
-            (LocalSessionPoint point) => LatLng(
-              point.filteredLatitude ?? point.latitude,
-              point.filteredLongitude ?? point.longitude,
-            ),
-          )
-          .toList(growable: false),
-      elapsed: _currentElapsedDuration(),
-      maxSpeedMps: stats.maxSpeedMps,
-    );
+      _sampleSequence = 0;
+      _lastSampleReceivedAtUtc = null;
+      _lastPointPersistedAtUtc = null;
+      _lastWatchdogRestartAtUtc = null;
+      await _recordTrackingDiagnostic(
+        eventType: 'session_recovery_applied',
+        details: <String, dynamic>{
+          'phase': state.phase.name,
+          'permission': permission.name,
+          'accepted_points': detail.acceptedPoints.length,
+        },
+        localSessionId: effectiveRecovery.localId,
+      );
 
-    _sampleSequence = 0;
-    _lastSampleReceivedAtUtc = null;
-    _lastPointPersistedAtUtc = null;
-    _lastWatchdogRestartAtUtc = null;
-    await _recordTrackingDiagnostic(
-      eventType: 'session_recovery_applied',
-      details: <String, dynamic>{
-        'phase': state.phase.name,
-        'permission': permission.name,
-        'accepted_points': detail.acceptedPoints.length,
-      },
-      localSessionId: effectiveRecovery.localId,
-    );
-
-    if (state.phase == RecordScreenPhase.recording &&
-        permission == LocationPermissionState.granted) {
-      await _startLocationStream();
+      if (state.phase == RecordScreenPhase.recording &&
+          permission == LocationPermissionState.granted) {
+        final String? readinessError =
+            await _locationTrackingRepository.checkRecordingReadiness();
+        if (readinessError != null) {
+          _invalidateRecordingEpoch();
+          _pauseElapsedClock();
+          final LocalRideSession paused =
+              await _sessionRepository.pauseLocalSession(
+            effectiveRecovery.localId,
+          );
+          state = state.copyWith(
+            session: paused,
+            phase: RecordScreenPhase.paused,
+            errorMessage: readinessError,
+          );
+          await _recordTrackingDiagnostic(
+            eventType: 'recording_readiness_failed',
+            message: readinessError,
+            localSessionId: effectiveRecovery.localId,
+          );
+          return;
+        }
+        await _startLocationStream();
+      }
+    } finally {
+      _phaseTransitionInFlight = false;
     }
   }
 
@@ -455,127 +520,193 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   }
 
   Future<void> startRecording() async {
-    final LocationPermissionState permission =
-        await _locationTrackingRepository.ensurePermissions();
-    if (permission != LocationPermissionState.granted) {
-      state = state.copyWith(
-        permissionState: permission,
-        clearError: false,
-        errorMessage: _permissionMessage(permission),
-      );
+    if (_phaseTransitionInFlight ||
+        (state.phase != RecordScreenPhase.preRecord &&
+            state.phase != RecordScreenPhase.ready)) {
       return;
     }
 
-    final LocalRideSession? currentSession = state.session;
-    final bool hasInProgressSession = currentSession?.isInProgress ?? false;
+    _phaseTransitionInFlight = true;
+    try {
+      final LocationPermissionState permission =
+          await _locationTrackingRepository.ensurePermissions();
+      if (permission != LocationPermissionState.granted) {
+        state = state.copyWith(
+          permissionState: permission,
+          clearError: false,
+          errorMessage: _permissionMessage(permission),
+        );
+        return;
+      }
 
-    final LocalRideSession session = hasInProgressSession
-        ? currentSession!
-        : await _sessionRepository.startLocalSession(
-            resortId: state.preselectedResortId,
-          );
+      final String? readinessError =
+          await _locationTrackingRepository.checkRecordingReadiness();
+      if (readinessError != null) {
+        state = state.copyWith(errorMessage: readinessError);
+        await _recordTrackingDiagnostic(
+          eventType: 'recording_readiness_failed',
+          message: readinessError,
+        );
+        return;
+      }
 
-    if (!hasInProgressSession) {
-      _trackingPipeline.reset();
-      _elapsedBeforeActive = Duration.zero;
+      final LocalRideSession? currentSession = state.session;
+      final bool hasInProgressSession = currentSession?.isInProgress ?? false;
+
+      final LocalRideSession session = hasInProgressSession
+          ? currentSession!
+          : await _sessionRepository.startLocalSession(
+              resortId: state.preselectedResortId,
+            );
+
+      _beginNewRecordingEpoch();
+      if (!hasInProgressSession) {
+        _trackingPipeline.reset();
+        _elapsedBeforeActive = Duration.zero;
+      }
+      _activeTrackingMode = TrackingMode.initializingFix;
+      _sampleSequence = 0;
+      _lastSampleReceivedAtUtc = null;
+      _lastPointPersistedAtUtc = null;
+      _lastWatchdogRestartAtUtc = null;
+      _startActiveElapsedClock();
+
+      state = state.copyWith(
+        session: session,
+        phase: RecordScreenPhase.recording,
+        route: hasInProgressSession ? state.route : <LatLng>[],
+        liveStats: hasInProgressSession ? state.liveStats : SessionStats.zero,
+        currentSpeedMps: hasInProgressSession ? state.currentSpeedMps : 0,
+        maxSpeedMps: hasInProgressSession ? state.maxSpeedMps : 0,
+        elapsed: _currentElapsedDuration(),
+        permissionState: permission,
+        clearError: true,
+        clearSyncMessage: true,
+        streamRestartCount: 0,
+        clearLastSampleAtUtc: true,
+        clearLastPersistedPointAtUtc: true,
+      );
+
+      await _recordTrackingDiagnostic(
+        eventType: 'session_recording_started',
+        details: <String, dynamic>{
+          'reused_existing_session': hasInProgressSession,
+        },
+        localSessionId: session.localId,
+      );
+      await _startLocationStream();
+    } finally {
+      _phaseTransitionInFlight = false;
     }
-    _activeTrackingMode = TrackingMode.initializingFix;
-    _sampleSequence = 0;
-    _lastSampleReceivedAtUtc = null;
-    _lastPointPersistedAtUtc = null;
-    _lastWatchdogRestartAtUtc = null;
-    _startActiveElapsedClock();
-
-    state = state.copyWith(
-      session: session,
-      phase: RecordScreenPhase.recording,
-      route: hasInProgressSession ? state.route : <LatLng>[],
-      liveStats: hasInProgressSession ? state.liveStats : SessionStats.zero,
-      currentSpeedMps: hasInProgressSession ? state.currentSpeedMps : 0,
-      maxSpeedMps: hasInProgressSession ? state.maxSpeedMps : 0,
-      elapsed: _currentElapsedDuration(),
-      permissionState: permission,
-      clearError: true,
-      clearSyncMessage: true,
-      streamRestartCount: 0,
-      clearLastSampleAtUtc: true,
-      clearLastPersistedPointAtUtc: true,
-    );
-
-    await _recordTrackingDiagnostic(
-      eventType: 'session_recording_started',
-      details: <String, dynamic>{
-        'reused_existing_session': hasInProgressSession,
-      },
-      localSessionId: session.localId,
-    );
-    await _startLocationStream();
   }
 
   Future<void> pause() async {
-    final LocalRideSession? session = state.session;
-    if (session == null) {
+    if (_phaseTransitionInFlight ||
+        state.phase != RecordScreenPhase.recording) {
       return;
     }
 
-    _pauseElapsedClock();
-    await _stopLocationStream();
+    _phaseTransitionInFlight = true;
+    final LocalRideSession? session = state.session;
+    if (session == null) {
+      _phaseTransitionInFlight = false;
+      return;
+    }
 
-    final LocalRideSession updated =
-        await _sessionRepository.pauseLocalSession(session.localId);
+    try {
+      _invalidateRecordingEpoch();
+      _pauseElapsedClock();
+      await _stopLocationStream();
 
-    state = state.copyWith(
-      session: updated,
-      phase: RecordScreenPhase.paused,
-    );
-    await _recordTrackingDiagnostic(
-      eventType: 'session_paused',
-      localSessionId: updated.localId,
-    );
+      final LocalRideSession updated =
+          await _sessionRepository.pauseLocalSession(session.localId);
+
+      state = state.copyWith(
+        session: updated,
+        phase: RecordScreenPhase.paused,
+      );
+      await _recordTrackingDiagnostic(
+        eventType: 'session_paused',
+        localSessionId: updated.localId,
+      );
+    } finally {
+      _phaseTransitionInFlight = false;
+    }
   }
 
   Future<void> resume() async {
+    if (_phaseTransitionInFlight || state.phase != RecordScreenPhase.paused) {
+      return;
+    }
+
+    _phaseTransitionInFlight = true;
     final LocalRideSession? session = state.session;
     if (session == null) {
+      _phaseTransitionInFlight = false;
       return;
     }
 
-    final LocationPermissionState permission =
-        await _locationTrackingRepository.ensurePermissions();
-    if (permission != LocationPermissionState.granted) {
+    try {
+      final LocationPermissionState permission =
+          await _locationTrackingRepository.ensurePermissions();
+      if (permission != LocationPermissionState.granted) {
+        state = state.copyWith(
+          permissionState: permission,
+          clearError: false,
+          errorMessage: _permissionMessage(permission),
+        );
+        return;
+      }
+
+      final String? readinessError =
+          await _locationTrackingRepository.checkRecordingReadiness();
+      if (readinessError != null) {
+        state = state.copyWith(errorMessage: readinessError);
+        await _recordTrackingDiagnostic(
+          eventType: 'recording_readiness_failed',
+          message: readinessError,
+          localSessionId: session.localId,
+        );
+        return;
+      }
+
+      _beginNewRecordingEpoch();
+      _startActiveElapsedClock();
+      _lastSampleReceivedAtUtc = null;
+      _lastPointPersistedAtUtc = null;
+      _lastWatchdogRestartAtUtc = null;
+      final LocalRideSession updated =
+          await _sessionRepository.resumeLocalSession(session.localId);
       state = state.copyWith(
+        session: updated,
+        phase: RecordScreenPhase.recording,
         permissionState: permission,
-        clearError: false,
-        errorMessage: _permissionMessage(permission),
+        clearError: true,
+        clearLastSampleAtUtc: true,
+        clearLastPersistedPointAtUtc: true,
       );
-      return;
+
+      await _recordTrackingDiagnostic(
+        eventType: 'session_resumed',
+        localSessionId: updated.localId,
+      );
+      await _startLocationStream();
+    } finally {
+      _phaseTransitionInFlight = false;
     }
-
-    _startActiveElapsedClock();
-    _lastSampleReceivedAtUtc = null;
-    _lastPointPersistedAtUtc = null;
-    _lastWatchdogRestartAtUtc = null;
-    final LocalRideSession updated =
-        await _sessionRepository.resumeLocalSession(session.localId);
-    state = state.copyWith(
-      session: updated,
-      phase: RecordScreenPhase.recording,
-      permissionState: permission,
-      clearError: true,
-      clearLastSampleAtUtc: true,
-      clearLastPersistedPointAtUtc: true,
-    );
-
-    await _recordTrackingDiagnostic(
-      eventType: 'session_resumed',
-      localSessionId: updated.localId,
-    );
-    await _startLocationStream();
   }
 
   Future<void> finish() async {
+    if (_phaseTransitionInFlight ||
+        (state.phase != RecordScreenPhase.recording &&
+            state.phase != RecordScreenPhase.paused)) {
+      return;
+    }
+
+    _phaseTransitionInFlight = true;
     final LocalRideSession? session = state.session;
     if (session == null) {
+      _phaseTransitionInFlight = false;
       return;
     }
 
@@ -590,6 +721,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     );
 
     try {
+      _invalidateRecordingEpoch();
       _pauseElapsedClock();
       await _stopLocationStream();
 
@@ -640,6 +772,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         phase: RecordScreenPhase.paused,
         errorMessage: 'Could not finish session. Please try again.',
       );
+    } finally {
+      _phaseTransitionInFlight = false;
     }
   }
 
@@ -666,6 +800,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
   Future<void> _startLocationStream() async {
     final LocalRideSession? session = state.session;
+    final int recordingEpoch = _recordingEpoch;
+    final int? sessionId = session?.localId;
     if (session != null) {
       await _recordTrackingDiagnostic(
         eventType: 'stream_start_requested',
@@ -679,16 +815,39 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
     try {
       await _stopLocationStream();
+      if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+        return;
+      }
+      // Re-check after each await so a stale restart cannot replace a newer
+      // stream created by a later phase transition.
       _locationStreamStopping = false;
       _locationStreamRestartQueued = false;
       await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
+      if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+        return;
+      }
       _locationSubscription = _locationTrackingRepository
           .watchPosition()
-          .asyncMap(_onLocation)
+          .asyncMap(
+            (LocationSample sample) => _onLocation(
+              sample,
+              recordingEpoch: recordingEpoch,
+              sessionId: sessionId,
+            ),
+          )
           .listen(
             (_) {},
-            onError: _onLocationStreamError,
-            onDone: _onLocationStreamDone,
+            onError: (Object error, StackTrace stackTrace) =>
+                _onLocationStreamError(
+              error,
+              stackTrace,
+              recordingEpoch: recordingEpoch,
+              sessionId: sessionId,
+            ),
+            onDone: () => _onLocationStreamDone(
+              recordingEpoch: recordingEpoch,
+              sessionId: sessionId,
+            ),
             cancelOnError: false,
           );
       _currentStreamStartedAtUtc = DateTime.now().toUtc();
@@ -704,6 +863,9 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         );
       }
     } catch (error, stackTrace) {
+      if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+        return;
+      }
       await _recordTrackingDiagnostic(
         eventType: 'stream_start_failed',
         message: error.toString(),
@@ -716,7 +878,11 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         errorMessage: 'Could not start location tracking. Reconnecting...',
       );
       unawaited(
-        _restartLocationStreamIfNeeded(reason: 'stream_start_failed'),
+        _restartLocationStreamIfNeeded(
+          reason: 'stream_start_failed',
+          recordingEpoch: recordingEpoch,
+          sessionId: sessionId,
+        ),
       );
     }
   }
@@ -754,7 +920,15 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     }
   }
 
-  void _onLocationStreamError(Object error, StackTrace stackTrace) {
+  void _onLocationStreamError(
+    Object error,
+    StackTrace stackTrace, {
+    required int recordingEpoch,
+    required int? sessionId,
+  }) {
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+      return;
+    }
     unawaited(
       _recordTrackingDiagnostic(
         eventType: 'stream_error',
@@ -767,23 +941,43 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     state = state.copyWith(
       errorMessage: 'Location stream interrupted. Reconnecting...',
     );
-    unawaited(_restartLocationStreamIfNeeded(reason: 'stream_error'));
+    unawaited(
+      _restartLocationStreamIfNeeded(
+        reason: 'stream_error',
+        recordingEpoch: recordingEpoch,
+        sessionId: sessionId,
+      ),
+    );
   }
 
-  void _onLocationStreamDone() {
+  void _onLocationStreamDone({
+    required int recordingEpoch,
+    required int? sessionId,
+  }) {
     if (_locationStreamStopping) {
       _locationStreamStopping = false;
       return;
     }
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+      return;
+    }
     unawaited(_recordTrackingDiagnostic(eventType: 'stream_done'));
-    unawaited(_restartLocationStreamIfNeeded(reason: 'stream_done'));
+    unawaited(
+      _restartLocationStreamIfNeeded(
+        reason: 'stream_done',
+        recordingEpoch: recordingEpoch,
+        sessionId: sessionId,
+      ),
+    );
   }
 
   Future<void> _restartLocationStreamIfNeeded({
     required String reason,
+    required int recordingEpoch,
+    required int? sessionId,
   }) async {
     if (_locationStreamRestartQueued ||
-        state.phase != RecordScreenPhase.recording) {
+        !_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
       return;
     }
 
@@ -791,7 +985,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     await Future<void>.delayed(const Duration(seconds: 1));
     _locationStreamRestartQueued = false;
 
-    if (state.phase != RecordScreenPhase.recording) {
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
       return;
     }
     final int nextRestartCount = state.streamRestartCount + 1;
@@ -806,10 +1000,31 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     await _startLocationStream();
   }
 
-  Future<void> _onLocation(LocationSample sample) async {
-    final LocalRideSession? session = state.session;
-    if (session == null || state.phase != RecordScreenPhase.recording) {
+  Future<void> _onLocation(
+    LocationSample sample, {
+    required int recordingEpoch,
+    required int? sessionId,
+  }) async {
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
       return;
+    }
+
+    final LocalRideSession? session = state.session;
+    if (session == null || session.localId != sessionId) {
+      return;
+    }
+
+    if (_needsPersistedProgressResync) {
+      // Resume from the last committed point before processing another sample
+      // so transient write failures do not compound in-memory drift.
+      final bool restored = await _restorePersistedProgress(
+        session: session,
+        recordingEpoch: recordingEpoch,
+        sessionId: sessionId,
+      );
+      if (!restored) {
+        return;
+      }
     }
 
     _sampleSequence += 1;
@@ -850,10 +1065,16 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       rethrow;
     }
 
+    bool persisted = false;
     try {
+      if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+        return;
+      }
       await _sessionRepository.appendLocationPoint(
           session.localId, result.point);
+      persisted = true;
     } catch (error, stackTrace) {
+      _needsPersistedProgressResync = true;
       await _recordTrackingDiagnostic(
         eventType: 'point_persist_failed',
         message: error.toString(),
@@ -864,12 +1085,17 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         },
         localSessionId: session.localId,
       );
-      rethrow;
+      // Hold visible progress at the last durable state until the controller
+      // can reseed the pipeline from persisted points.
     }
 
-    _lastPointPersistedAtUtc = DateTime.now().toUtc();
-    if (_sampleSequence == 1 ||
-        _sampleSequence % _diagnosticHeartbeatEverySamples == 0) {
+    if (persisted) {
+      _needsPersistedProgressResync = false;
+      _lastPointPersistedAtUtc = DateTime.now().toUtc();
+    }
+    if (persisted &&
+        (_sampleSequence == 1 ||
+            _sampleSequence % _diagnosticHeartbeatEverySamples == 0)) {
       unawaited(
         _recordTrackingDiagnostic(
           eventType: 'point_persist_heartbeat',
@@ -884,6 +1110,23 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       );
     }
 
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+      return;
+    }
+    if (!persisted) {
+      // The UI keeps timing/signal updates flowing, but stats and route remain
+      // pinned to the last persisted snapshot until resync succeeds.
+      state = state.copyWith(
+        elapsed: _currentElapsedDuration(),
+        lowAccuracy: result.lowAccuracy,
+        gpsSignal: _gpsSignalFromSample(
+          sample,
+          permissionState: state.permissionState,
+        ),
+        lastPersistedPointAtUtc: _lastPointPersistedAtUtc,
+      );
+      return;
+    }
     final List<LatLng> updatedRoute = _buildUpdatedRouteFromResult(
       currentRoute: state.route,
       result: result,
@@ -894,6 +1137,9 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       _activeTrackingMode = result.trackingMode;
       try {
         await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
+        if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+          return;
+        }
         unawaited(
           _recordTrackingDiagnostic(
             eventType: 'tracking_mode_changed',
@@ -916,7 +1162,6 @@ class RecordingController extends StateNotifier<RecordingViewState> {
           },
           localSessionId: session.localId,
         );
-        rethrow;
       }
     }
 
@@ -932,6 +1177,72 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         permissionState: state.permissionState,
       ),
       lastPersistedPointAtUtc: _lastPointPersistedAtUtc,
+    );
+  }
+
+  /// Returns whether an async callback still belongs to the current recording
+  /// run for the same session.
+  ///
+  /// Starting, resuming, pausing, finishing, and recovery each advance the
+  /// epoch so late stream events cannot mutate a newer UI/session state.
+  bool _isActiveRecordingEpoch(
+    int recordingEpoch, {
+    required int? sessionId,
+  }) {
+    if (!mounted || recordingEpoch != _recordingEpoch) {
+      return false;
+    }
+    final LocalRideSession? session = state.session;
+    return state.phase == RecordScreenPhase.recording &&
+        session != null &&
+        session.localId == sessionId;
+  }
+
+  /// Starts a fresh recording epoch and clears any queued restart that was
+  /// scheduled for an older stream instance.
+  int _beginNewRecordingEpoch() {
+    _locationStreamRestartQueued = false;
+    _needsPersistedProgressResync = false;
+    _recordingEpoch += 1;
+    return _recordingEpoch;
+  }
+
+  /// Invalidates in-flight stream work before transitions such as pause,
+  /// finish, or permission-loss handling tear down the active stream.
+  void _invalidateRecordingEpoch() {
+    _locationStreamRestartQueued = false;
+    _needsPersistedProgressResync = false;
+    _recordingEpoch += 1;
+  }
+
+  /// Moves an active recording into the paused state when permissions/service
+  /// access disappear mid-session so background callbacks fail closed.
+  Future<void> _pauseRecordingForPermissionLoss(
+    LocationPermissionState permission,
+  ) async {
+    final LocalRideSession? session = state.session;
+    if (state.phase != RecordScreenPhase.recording || session == null) {
+      state = state.copyWith(
+        permissionState: permission,
+        clearError: permission == LocationPermissionState.granted,
+        errorMessage: _permissionMessage(permission),
+      );
+      return;
+    }
+
+    _invalidateRecordingEpoch();
+    _pauseElapsedClock();
+    await _stopLocationStream();
+    final LocalRideSession paused =
+        await _sessionRepository.pauseLocalSession(session.localId);
+    state = state.copyWith(
+      session: paused,
+      phase: RecordScreenPhase.paused,
+      permissionState: permission,
+      clearError: false,
+      errorMessage: _permissionMessage(permission),
+      clearLastSampleAtUtc: true,
+      clearLastPersistedPointAtUtc: true,
     );
   }
 
@@ -951,6 +1262,11 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     if (state.phase != RecordScreenPhase.recording) {
       return;
     }
+    final LocalRideSession? session = state.session;
+    if (session == null) {
+      return;
+    }
+    final int recordingEpoch = _recordingEpoch;
     final DateTime? referenceTime =
         _lastSampleReceivedAtUtc ?? _currentStreamStartedAtUtc;
     if (referenceTime == null) {
@@ -959,13 +1275,18 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
     final DateTime now = DateTime.now().toUtc();
     final Duration staleFor = now.difference(referenceTime);
-    if (staleFor < _sampleWatchdogStaleThreshold) {
+    final Duration staleThreshold =
+        _sampleWatchdogThresholdForMode(_activeTrackingMode);
+    if (staleFor < staleThreshold) {
       return;
     }
 
     final DateTime? lastRestart = _lastWatchdogRestartAtUtc;
     if (lastRestart != null &&
         now.difference(lastRestart) < _sampleWatchdogRestartCooldown) {
+      return;
+    }
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: session.localId)) {
       return;
     }
     _lastWatchdogRestartAtUtc = now;
@@ -984,10 +1305,16 @@ class RecordingController extends StateNotifier<RecordingViewState> {
           : 'sample_watchdog_stale',
       details: <String, dynamic>{
         'stale_for_seconds': staleFor.inSeconds,
+        'stale_threshold_seconds': staleThreshold.inSeconds,
+        'tracking_mode': _activeTrackingMode.wireValue,
         'restart_count': state.streamRestartCount,
       },
     );
-    await _restartLocationStreamIfNeeded(reason: 'sample_watchdog_stale');
+    await _restartLocationStreamIfNeeded(
+      reason: 'sample_watchdog_stale',
+      recordingEpoch: recordingEpoch,
+      sessionId: session.localId,
+    );
   }
 
   Future<void> _recordTrackingDiagnostic({
@@ -1019,6 +1346,78 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     return text.substring(0, index);
   }
 
+  /// Rehydrates the tracking pipeline and visible progress from persisted
+  /// points after an append failure left in-memory progress ahead of storage.
+  Future<bool> _restorePersistedProgress({
+    required LocalRideSession session,
+    required int recordingEpoch,
+    required int? sessionId,
+  }) async {
+    try {
+      final SessionDetail detail =
+          await _sessionRepository.getSessionDetail(session.localId);
+      final SessionStats stats =
+          await _sessionRepository.computeSessionStats(session.localId);
+      if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+        return false;
+      }
+      _trackingPipeline.seedFromPersistedPoints(
+        points: detail.points,
+        stats: stats,
+      );
+      state = state.copyWith(
+        liveStats: stats,
+        route: _buildPersistedRoute(detail.points),
+        currentSpeedMps: _currentSpeedFromPersistedPoints(detail.points),
+        maxSpeedMps: stats.maxSpeedMps,
+      );
+      _needsPersistedProgressResync = false;
+      return true;
+    } catch (error, stackTrace) {
+      await _recordTrackingDiagnostic(
+        eventType: 'persisted_progress_resync_failed',
+        message: error.toString(),
+        details: <String, dynamic>{
+          'stack': _firstStackLine(stackTrace),
+        },
+        localSessionId: session.localId,
+      );
+      return false;
+    }
+  }
+
+  List<LatLng> _buildPersistedRoute(List<LocalSessionPoint> points) {
+    final List<LatLng> route = points
+        .where((LocalSessionPoint point) => point.acceptedForAnalytics)
+        .map(
+          (LocalSessionPoint point) => LatLng(
+            point.filteredLatitude ?? point.latitude,
+            point.filteredLongitude ?? point.longitude,
+          ),
+        )
+        .toList(growable: false);
+    if (route.length <= SessionConstants.maxLiveRoutePoints) {
+      return route;
+    }
+    return route.sublist(
+      route.length - SessionConstants.maxLiveRoutePoints,
+    );
+  }
+
+  double _currentSpeedFromPersistedPoints(List<LocalSessionPoint> points) {
+    for (int index = points.length - 1; index >= 0; index -= 1) {
+      final LocalSessionPoint point = points[index];
+      if (!point.acceptedForAnalytics) {
+        continue;
+      }
+      return point.fusedSpeedMps ??
+          point.derivedSpeedMps ??
+          point.speedMps ??
+          0;
+    }
+    return 0;
+  }
+
   List<LatLng> _buildUpdatedRouteFromResult({
     required List<LatLng> currentRoute,
     required TrackingProcessResult result,
@@ -1040,6 +1439,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   }
 
   void _resetRecordingSurface() {
+    _invalidateRecordingEpoch();
     _elapsedBeforeActive = Duration.zero;
     _activeSegmentStartedAtUtc = null;
     _activeTrackingMode = TrackingMode.initializingFix;
@@ -1112,9 +1512,33 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     });
   }
 
+  /// Uses the active tracking profile to avoid declaring sparse background
+  /// modes stale on the same schedule as high-frequency modes.
+  Duration _sampleWatchdogThresholdForMode(TrackingMode mode) {
+    final TrackingModeProfile profile = TrackingModeProfiles.forMode(mode);
+    final int expectedGapMs =
+        profile.maxDelayMs > 0 ? profile.maxDelayMs : profile.intervalMs;
+    final Duration dynamicThreshold =
+        Duration(milliseconds: expectedGapMs + 15000);
+    return dynamicThreshold < _sampleWatchdogStaleThreshold
+        ? _sampleWatchdogStaleThreshold
+        : dynamicThreshold;
+  }
+
   Future<void> _runPendingSyncPass({
     bool showDebugStatus = false,
   }) async {
+    if (state.phase == RecordScreenPhase.recording) {
+      if (showDebugStatus && mounted) {
+        state = state.copyWith(
+          lastSyncMessage: 'Sync deferred until recording finishes.',
+        );
+      }
+      // Sync is deferred while recording so we do not contend with the session
+      // that is still appending points and updating local aggregates.
+      return;
+    }
+
     if (_backgroundSyncInFlight) {
       _backgroundSyncQueued = true;
       final Completer<void>? activeCycle = _backgroundSyncCycleCompleter;
