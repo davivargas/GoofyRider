@@ -55,6 +55,7 @@ void main() {
   late MockDriftLocalDatabase localDatabase;
   late MockResortsApi api;
   late FavoritesFailingResortRepository repository;
+  late ResortRepositoryImpl baseRepository;
 
   setUp(() {
     localDatabase = MockDriftLocalDatabase();
@@ -63,11 +64,17 @@ void main() {
       api: api,
       localDatabase: localDatabase,
     );
+    baseRepository = ResortRepositoryImpl(
+      api: api,
+      localDatabase: localDatabase,
+    );
 
     when(() => localDatabase.upsertCachedResort(any(), any()))
         .thenAnswer((_) async {});
     when(() => localDatabase.readCachedWeather(any()))
         .thenAnswer((_) async => null);
+    when(() => localDatabase.readCachedResorts())
+        .thenAnswer((_) async => <Map<String, dynamic>>[]);
   });
 
   test('searchResorts returns public payload when favorites lookup fails',
@@ -106,5 +113,77 @@ void main() {
     expect(result.isFavorite, isFalse);
     expect(result.isStale, isFalse);
     verify(() => localDatabase.upsertCachedResort('whistler', any())).called(1);
+  });
+
+  test('toggleFavoriteResort writes updated favorite state to cache', () async {
+    const ResortSummary resort = ResortSummary(
+      id: 'whistler',
+      name: 'Whistler Blackcomb',
+      country: 'Canada',
+      region: 'British Columbia',
+      city: 'Whistler',
+      latitude: 50.0,
+      longitude: -122.0,
+      elevationBaseM: 700,
+      elevationTopM: 2200,
+      isFavorite: true,
+      cachedWeatherText: null,
+      cachedWeatherTempC: null,
+      isStale: false,
+    );
+    when(() => api.removeFavorite('whistler')).thenAnswer((_) async {});
+
+    final ResortSummary updated =
+        await baseRepository.toggleFavoriteResort(resort);
+
+    expect(updated.isFavorite, isFalse);
+    final List<dynamic> captured = verify(
+      () => localDatabase.upsertCachedResort(captureAny(), captureAny()),
+    ).captured;
+    expect(captured, hasLength(2));
+    expect(captured[0], 'whistler');
+    expect((captured[1] as Map<String, dynamic>)['is_favorite'], isFalse);
+  });
+
+  test('listFavoriteResorts clears stale cached favorites not in payload',
+      () async {
+    when(() => api.listFavoriteResorts()).thenAnswer(
+      (_) async => <Map<String, dynamic>>[
+        _resortJson(id: 'whistler', name: 'Whistler Blackcomb'),
+      ],
+    );
+    when(() => localDatabase.readCachedResorts()).thenAnswer(
+      (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          ..._resortJson(id: 'whistler', name: 'Whistler Blackcomb'),
+          'is_favorite': true,
+        },
+        <String, dynamic>{
+          ..._resortJson(id: 'zermatt', name: 'Zermatt'),
+          'is_favorite': true,
+          'cached_fetched_at': '2026-03-22T00:00:00.000Z',
+        },
+      ],
+    );
+
+    final List<ResortSummary> favorites =
+        await baseRepository.listFavoriteResorts();
+
+    expect(favorites, hasLength(1));
+    expect(favorites.single.id, 'whistler');
+    expect(favorites.single.isFavorite, isTrue);
+
+    final List<dynamic> captured = verify(
+      () => localDatabase.upsertCachedResort(captureAny(), captureAny()),
+    ).captured;
+    expect(captured, hasLength(4));
+    expect(captured[0], 'whistler');
+    expect((captured[1] as Map<String, dynamic>)['is_favorite'], isTrue);
+    expect(captured[2], 'zermatt');
+    expect((captured[3] as Map<String, dynamic>)['is_favorite'], isFalse);
+    expect(
+      (captured[3] as Map<String, dynamic>).containsKey('cached_fetched_at'),
+      isFalse,
+    );
   });
 }

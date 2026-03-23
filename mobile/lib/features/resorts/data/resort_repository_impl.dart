@@ -99,7 +99,9 @@ class ResortRepositoryImpl implements ResortRepository {
       } else {
         await _api.addFavorite(resort.id);
       }
-      return resort.copyWith(isFavorite: !resort.isFavorite);
+      final ResortSummary updated = resort.copyWith(isFavorite: !resort.isFavorite);
+      await _localDatabase.upsertCachedResort(updated.id, updated.toJson());
+      return updated;
     } on DioException catch (exception) {
       throw mapDioException(exception);
     }
@@ -112,10 +114,13 @@ class ResortRepositoryImpl implements ResortRepository {
       final List<ResortSummary> resorts = payload
           .map((Map<String, dynamic> json) => ResortSummary.fromJson(json, isFavorite: true))
           .toList(growable: false);
+      final Set<String> favoriteIds =
+          resorts.map((ResortSummary resort) => resort.id).toSet();
 
       for (final ResortSummary resort in resorts) {
         await _localDatabase.upsertCachedResort(resort.id, resort.toJson());
       }
+      await _syncCachedFavorites(favoriteIds);
 
       return await _withCachedWeather(resorts);
     } on DioException {
@@ -124,6 +129,27 @@ class ResortRepositoryImpl implements ResortRepository {
           .map((Map<String, dynamic> raw) => _fromCached(raw, isStale: true))
           .where((ResortSummary resort) => resort.isFavorite)
           .toList(growable: false);
+    }
+  }
+
+  Future<void> _syncCachedFavorites(Set<String> favoriteIds) async {
+    final List<Map<String, dynamic>> cached = await _localDatabase.readCachedResorts();
+    for (final Map<String, dynamic> raw in cached) {
+      final String? id = raw['id'] as String?;
+      if (id == null || id.isEmpty) {
+        continue;
+      }
+
+      final bool shouldBeFavorite = favoriteIds.contains(id);
+      final bool isFavorite = raw['is_favorite'] as bool? ?? false;
+      if (isFavorite == shouldBeFavorite) {
+        continue;
+      }
+
+      final Map<String, dynamic> updated = Map<String, dynamic>.from(raw)
+        ..remove('cached_fetched_at')
+        ..['is_favorite'] = shouldBeFavorite;
+      await _localDatabase.upsertCachedResort(id, updated);
     }
   }
 
