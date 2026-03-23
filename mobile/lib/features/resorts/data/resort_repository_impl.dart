@@ -29,8 +29,7 @@ class ResortRepositoryImpl implements ResortRepository {
         region: region,
       );
 
-      final List<ResortSummary> favorites = await listFavoriteResorts();
-      final Set<String> favoriteIds = favorites.map((ResortSummary it) => it.id).toSet();
+      final Set<String> favoriteIds = await _favoriteIdsBestEffort();
 
       final List<dynamic> items = payload['items'] as List<dynamic>;
       final List<ResortSummary> resorts = items.map((dynamic raw) {
@@ -78,8 +77,7 @@ class ResortRepositoryImpl implements ResortRepository {
   Future<ResortSummary> getResortDetail(String resortId) async {
     try {
       final Map<String, dynamic> payload = await _api.getResortDetail(resortId);
-      final List<ResortSummary> favorites = await listFavoriteResorts();
-      final bool isFavorite = favorites.any((ResortSummary resort) => resort.id == resortId);
+      final bool isFavorite = await _isFavoriteBestEffort(resortId);
 
       final ResortSummary resort = ResortSummary.fromJson(payload, isFavorite: isFavorite);
       await _localDatabase.upsertCachedResort(resort.id, resort.toJson());
@@ -126,6 +124,24 @@ class ResortRepositoryImpl implements ResortRepository {
           .map((Map<String, dynamic> raw) => _fromCached(raw, isStale: true))
           .where((ResortSummary resort) => resort.isFavorite)
           .toList(growable: false);
+    }
+  }
+
+  Future<Set<String>> _favoriteIdsBestEffort() async {
+    try {
+      final List<ResortSummary> favorites = await listFavoriteResorts();
+      return favorites.map((ResortSummary resort) => resort.id).toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  Future<bool> _isFavoriteBestEffort(String resortId) async {
+    try {
+      final List<ResortSummary> favorites = await listFavoriteResorts();
+      return favorites.any((ResortSummary resort) => resort.id == resortId);
+    } catch (_) {
+      return false;
     }
   }
 
