@@ -58,36 +58,47 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     try {
-      final Map<String, dynamic> mePayload = await _authApi.me(
-        accessToken: storedTokens.accessToken,
-      );
-      return AuthSession(
+      return await _hydrateSessionFromAccessToken(
         accessToken: storedTokens.accessToken,
         refreshToken: storedTokens.refreshToken,
-        user: UserProfile.fromJson(mePayload),
       );
-    } on DioException {
+    } on DioException catch (exception) {
+      final bool allowOfflineFallback = _isConnectivityIssue(exception);
+      if (allowOfflineFallback && storedTokens.hasCachedUserProfile) {
+        return _sessionFromStoredTokens(storedTokens);
+      }
+
       final String? newAccessToken =
           await refreshAccessToken(storedTokens.refreshToken);
       if (newAccessToken == null) {
+        if (allowOfflineFallback) {
+          return storedTokens.hasCachedUserProfile
+              ? _sessionFromStoredTokens(storedTokens)
+              : null;
+        }
         await _tokenStorage.clear();
         return null;
       }
 
-      final Map<String, dynamic> mePayload =
-          await _authApi.me(accessToken: newAccessToken);
-      final AuthSession session = AuthSession(
-        accessToken: newAccessToken,
-        refreshToken: storedTokens.refreshToken,
-        user: UserProfile.fromJson(mePayload),
-      );
-      await _tokenStorage.write(
-        StoredTokens(
-          accessToken: session.accessToken,
-          refreshToken: session.refreshToken,
-        ),
-      );
-      return session;
+      try {
+        return await _hydrateSessionFromAccessToken(
+          accessToken: newAccessToken,
+          refreshToken: storedTokens.refreshToken,
+        );
+      } on DioException catch (refreshException) {
+        if (_isConnectivityIssue(refreshException) &&
+            storedTokens.hasCachedUserProfile) {
+          return _sessionFromStoredTokens(
+            storedTokens,
+            accessToken: newAccessToken,
+          );
+        }
+        if (_isConnectivityIssue(refreshException)) {
+          return null;
+        }
+        await _tokenStorage.clear();
+        return null;
+      }
     }
   }
 
@@ -117,6 +128,9 @@ class AuthRepositoryImpl implements AuthRepository {
             accessToken: accessToken,
             refreshToken:
                 payload['refresh_token'] as String? ?? existing.refreshToken,
+            userId: existing.userId,
+            email: existing.email,
+            displayName: existing.displayName,
           ),
         );
       }
@@ -142,6 +156,13 @@ class AuthRepositoryImpl implements AuthRepository {
     final String accessToken = tokenPayload['access_token'] as String;
     final String refreshToken = tokenPayload['refresh_token'] as String;
 
+    await _tokenStorage.write(
+      StoredTokens(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      ),
+    );
+
     final Map<String, dynamic> mePayload =
         await _authApi.me(accessToken: accessToken);
     final AuthSession session = AuthSession(
@@ -151,8 +172,61 @@ class AuthRepositoryImpl implements AuthRepository {
     );
 
     await _tokenStorage.write(
-      StoredTokens(accessToken: accessToken, refreshToken: refreshToken),
+      StoredTokens(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        userId: session.user.id,
+        email: session.user.email,
+        displayName: session.user.displayName,
+      ),
     );
     return session;
+  }
+
+  Future<AuthSession> _hydrateSessionFromAccessToken({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    final Map<String, dynamic> mePayload = await _authApi.me(
+      accessToken: accessToken,
+    );
+    final AuthSession session = AuthSession(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      user: UserProfile.fromJson(mePayload),
+    );
+
+    await _tokenStorage.write(
+      StoredTokens(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        userId: session.user.id,
+        email: session.user.email,
+        displayName: session.user.displayName,
+      ),
+    );
+    return session;
+  }
+
+  AuthSession _sessionFromStoredTokens(
+    StoredTokens tokens, {
+    String? accessToken,
+  }) {
+    return AuthSession(
+      accessToken: accessToken ?? tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: UserProfile(
+        id: tokens.userId!,
+        email: tokens.email!,
+        displayName: tokens.displayName!,
+      ),
+    );
+  }
+
+  bool _isConnectivityIssue(DioException exception) {
+    return exception.type == DioExceptionType.connectionError ||
+        exception.type == DioExceptionType.connectionTimeout ||
+        exception.type == DioExceptionType.sendTimeout ||
+        exception.type == DioExceptionType.receiveTimeout;
   }
 }
