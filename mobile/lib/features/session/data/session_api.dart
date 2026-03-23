@@ -1,9 +1,25 @@
 import 'package:dio/dio.dart';
 
+import '../../../core/network/auth_token_interceptor.dart';
+
 class SessionApi {
   SessionApi(this._dio);
 
   final Dio _dio;
+
+  /// Read-only session fetches preserve auth state if refresh/retry cannot
+  /// recover the request so the UI can decide when to prompt again.
+  static const Map<String, dynamic> _preserveAuthOnFailureExtra =
+      <String, dynamic>{
+    AuthTokenInterceptor.preserveAuthOnFailureExtraKey: true,
+  };
+  /// Session mutations opt into the preserved-auth retry path so a single
+  /// token refresh can replay the original write before surfacing failure.
+  static const Map<String, dynamic> _retryPreservedAuthOnFailureExtra =
+      <String, dynamic>{
+    AuthTokenInterceptor.preserveAuthOnFailureExtraKey: true,
+    AuthTokenInterceptor.retryPreservedAuthOnUnauthorizedExtraKey: true,
+  };
 
   Future<Map<String, dynamic>> createRemoteDraft({
     required String? resortId,
@@ -15,6 +31,7 @@ class SessionApi {
         'resort_id': resortId,
         'started_at': startedAt.toUtc().toIso8601String(),
       },
+      options: Options(extra: _retryPreservedAuthOnFailureExtra),
     );
     return response.data as Map<String, dynamic>;
   }
@@ -26,6 +43,7 @@ class SessionApi {
     await _dio.post<dynamic>(
       '/sessions/$remoteSessionId/points:batch',
       data: <String, dynamic>{'points': points},
+      options: Options(extra: _retryPreservedAuthOnFailureExtra),
     );
   }
 
@@ -50,6 +68,7 @@ class SessionApi {
         'elevation_gain_m': elevationGainM,
         'elevation_loss_m': elevationLossM,
       },
+      options: Options(extra: _retryPreservedAuthOnFailureExtra),
     );
     return response.data as Map<String, dynamic>;
   }
@@ -67,6 +86,7 @@ class SessionApi {
           'page': page,
           'page_size': pageSize,
         },
+        options: Options(extra: _preserveAuthOnFailureExtra),
       );
       final Map<String, dynamic> payload =
           response.data as Map<String, dynamic>;
@@ -88,15 +108,19 @@ class SessionApi {
   }
 
   Future<Map<String, dynamic>> getRemoteSession(String sessionId) async {
-    final Response<dynamic> response =
-        await _dio.get<dynamic>('/sessions/$sessionId');
+    final Response<dynamic> response = await _dio.get<dynamic>(
+      '/sessions/$sessionId',
+      options: Options(extra: _preserveAuthOnFailureExtra),
+    );
     return response.data as Map<String, dynamic>;
   }
 
   Future<List<Map<String, dynamic>>> getRemoteSessionPoints(
       String sessionId) async {
-    final Response<dynamic> response =
-        await _dio.get<dynamic>('/sessions/$sessionId/points');
+    final Response<dynamic> response = await _dio.get<dynamic>(
+      '/sessions/$sessionId/points',
+      options: Options(extra: _preserveAuthOnFailureExtra),
+    );
     final Map<String, dynamic> payload = response.data as Map<String, dynamic>;
     final List<dynamic> items =
         payload['items'] as List<dynamic>? ?? <dynamic>[];

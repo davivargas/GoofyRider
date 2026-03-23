@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:dio/dio.dart';
 
@@ -19,6 +19,17 @@ class AuthTokenInterceptor extends Interceptor {
         _refreshTokenGetter = refreshTokenGetter,
         _refreshCallback = refreshCallback,
         _onAuthReset = onAuthReset;
+
+  /// Keeps a request failure from clearing local auth state immediately.
+  ///
+  /// This is used for flows that can tolerate a surfaced server failure while
+  /// the app waits for the next authenticated retry opportunity.
+  static const String preserveAuthOnFailureExtraKey =
+      'preserve_auth_on_failure';
+  /// Opts a preserved-auth request into a single retry after token refresh even
+  /// when the original HTTP method is not inherently idempotent.
+  static const String retryPreservedAuthOnUnauthorizedExtraKey =
+      'retry_preserved_auth_on_unauthorized';
 
   final Dio _dio;
   final AccessTokenGetter _accessTokenGetter;
@@ -45,25 +56,32 @@ class AuthTokenInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    final RequestOptions original = err.requestOptions;
     final int? statusCode = err.response?.statusCode;
-    final bool isRefreshPath = err.requestOptions.path.endsWith('/auth/refresh');
+    final bool isRefreshPath = original.path.endsWith('/auth/refresh');
+    final bool preserveAuthOnFailure =
+        original.extra[preserveAuthOnFailureExtraKey] == true;
 
     if (statusCode != 401 || isRefreshPath) {
       handler.next(err);
       return;
     }
 
-    final RequestOptions original = err.requestOptions;
+    if (preserveAuthOnFailure && !_canRetryPreservedAuthFailure(original)) {
+      handler.next(err);
+      return;
+    }
+
     final bool alreadyRetried = original.extra['retry_after_refresh'] == true;
     if (alreadyRetried) {
-      await _onAuthReset();
+      await _resetAuthIfNeeded(preserveAuthOnFailure);
       handler.next(err);
       return;
     }
 
     final String? refreshToken = await _refreshTokenGetter();
     if (refreshToken == null || refreshToken.isEmpty) {
-      await _onAuthReset();
+      await _resetAuthIfNeeded(preserveAuthOnFailure);
       handler.next(err);
       return;
     }
@@ -74,7 +92,7 @@ class AuthTokenInterceptor extends Interceptor {
       _refreshInFlight = null;
 
       if (newAccessToken == null || newAccessToken.isEmpty) {
-        await _onAuthReset();
+        await _resetAuthIfNeeded(preserveAuthOnFailure);
         handler.next(err);
         return;
       }
@@ -94,8 +112,32 @@ class AuthTokenInterceptor extends Interceptor {
       handler.resolve(response);
     } catch (_) {
       _refreshInFlight = null;
-      await _onAuthReset();
+      await _resetAuthIfNeeded(preserveAuthOnFailure);
       handler.next(err);
     }
+  }
+
+  /// Limits preserved-auth refresh retries to safe methods unless a caller
+  /// explicitly opts in for one replay on `401 Unauthorized`.
+  bool _canRetryPreservedAuthFailure(RequestOptions options) {
+    if (options.extra[retryPreservedAuthOnUnauthorizedExtraKey] == true) {
+      return true;
+    }
+
+    switch (options.method.toUpperCase()) {
+      case 'GET':
+      case 'HEAD':
+      case 'OPTIONS':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> _resetAuthIfNeeded(bool preserveAuthOnFailure) async {
+    if (preserveAuthOnFailure) {
+      return;
+    }
+    await _onAuthReset();
   }
 }
