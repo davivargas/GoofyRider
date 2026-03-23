@@ -13,6 +13,8 @@ class ControlledLocationRepository implements LocationTrackingRepository {
     this.permissionState = LocationPermissionState.granted,
     this.canOpenAppSettings = true,
     this.canOpenLocationSettings = true,
+    this.readinessError,
+    this.ensurePermissionsCompleter,
   });
 
   final StreamController<LocationSample> _controller =
@@ -20,6 +22,9 @@ class ControlledLocationRepository implements LocationTrackingRepository {
   LocationPermissionState permissionState;
   bool canOpenAppSettings;
   bool canOpenLocationSettings;
+  String? readinessError;
+  Completer<LocationPermissionState>? ensurePermissionsCompleter;
+  int watchPositionCalls = 0;
 
   @override
   Future<LocationPermissionState> checkPermissions() async {
@@ -28,6 +33,11 @@ class ControlledLocationRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
+    final Completer<LocationPermissionState>? completer =
+        ensurePermissionsCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     return permissionState;
   }
 
@@ -47,6 +57,11 @@ class ControlledLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<String?> checkRecordingReadiness() async {
+    return readinessError;
+  }
+
+  @override
   Future<LocationSample?> getCurrentLocationSample() async {
     return LocationSample(
       timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
@@ -61,6 +76,7 @@ class ControlledLocationRepository implements LocationTrackingRepository {
 
   @override
   Stream<LocationSample> watchPosition() {
+    watchPositionCalls += 1;
     return _controller.stream;
   }
 
@@ -69,6 +85,10 @@ class ControlledLocationRepository implements LocationTrackingRepository {
 
   void emit(LocationSample sample) {
     _controller.add(sample);
+  }
+
+  void emitError(Object error, [StackTrace? stackTrace]) {
+    _controller.addError(error, stackTrace);
   }
 
   Future<void> close() async {
@@ -114,6 +134,11 @@ class HangingCancelLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<String?> checkRecordingReadiness() async {
+    return null;
+  }
+
+  @override
   Future<LocationSample?> getCurrentLocationSample() async {
     return null;
   }
@@ -135,12 +160,17 @@ class FakeSessionRepository implements SessionRepository {
   FakeSessionRepository({
     this.recoverySession,
     List<LocalSessionPoint>? recoveryAcceptedPoints,
+    this.startLocalSessionCompleter,
   }) : _recoveryAcceptedPoints =
             recoveryAcceptedPoints ?? <LocalSessionPoint>[];
 
   final LocalRideSession? recoverySession;
   final List<LocalSessionPoint> _recoveryAcceptedPoints;
+  final Completer<void>? startLocalSessionCompleter;
   final List<NewSessionPoint> appendedPoints = <NewSessionPoint>[];
+  int listPendingSyncSessionsCalls = 0;
+  int syncSessionCalls = 0;
+  int startLocalSessionCalls = 0;
 
   LocalRideSession? _activeSession;
 
@@ -202,6 +232,7 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<List<LocalRideSession>> listPendingSyncSessions() async {
+    listPendingSyncSessionsCalls += 1;
     return <LocalRideSession>[];
   }
 
@@ -244,6 +275,11 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<LocalRideSession> startLocalSession({String? resortId}) async {
+    startLocalSessionCalls += 1;
+    final Completer<void>? completer = startLocalSessionCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
     _activeSession = _buildSession(
       id: 1,
       state: LocalSessionState.recording,
@@ -254,6 +290,7 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
+    syncSessionCalls += 1;
     return _buildSession(
       id: localSessionId,
       state: LocalSessionState.synced,
@@ -275,10 +312,204 @@ class FakeSessionRepository implements SessionRepository {
   }) async {}
 }
 
+class FlakyPersistenceSessionRepository implements SessionRepository {
+  FlakyPersistenceSessionRepository();
+
+  final List<NewSessionPoint> appendedPoints = <NewSessionPoint>[];
+  bool _failedFirstAppend = false;
+  LocalRideSession? _activeSession;
+
+  @override
+  Future<void> appendLocationPoint(
+    int localSessionId,
+    NewSessionPoint point,
+  ) async {
+    if (!_failedFirstAppend) {
+      _failedFirstAppend = true;
+      throw StateError('Local write temporarily unavailable.');
+    }
+    appendedPoints.add(point);
+  }
+
+  @override
+  Future<SessionStats> computeSessionStats(int localSessionId) async {
+    final List<NewSessionPoint> acceptedPoints = appendedPoints
+        .where((NewSessionPoint point) => point.acceptedForAnalytics)
+        .toList(growable: false);
+    if (acceptedPoints.isEmpty) {
+      return SessionStats.zero;
+    }
+
+    double distanceM = 0;
+    for (int index = 1; index < acceptedPoints.length; index += 1) {
+      final NewSessionPoint previous = acceptedPoints[index - 1];
+      final NewSessionPoint current = acceptedPoints[index];
+      distanceM += haversineDistanceMeters(
+        previous.filteredLatitude ?? previous.latitude,
+        previous.filteredLongitude ?? previous.longitude,
+        current.filteredLatitude ?? current.latitude,
+        current.filteredLongitude ?? current.longitude,
+      );
+    }
+
+    double maxSpeedMps = 0;
+    for (final NewSessionPoint point in acceptedPoints) {
+      final double speed =
+          point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps ?? 0;
+      if (speed > maxSpeedMps) {
+        maxSpeedMps = speed;
+      }
+    }
+
+    return SessionStats(
+      durationS: (acceptedPoints.last.tOffsetMs / 1000).round(),
+      distanceM: distanceM,
+      maxSpeedMps: maxSpeedMps,
+      avgSpeedMps: 0,
+      elevationGainM: null,
+      elevationLossM: null,
+    );
+  }
+
+  @override
+  Future<LocalRideSession> finishLocalSession(
+    int localSessionId, {
+    int? activeDurationS,
+  }) async {
+    return _buildSession(
+        id: localSessionId, state: LocalSessionState.syncPending);
+  }
+
+  @override
+  Future<SessionDetail> getSessionDetail(int localSessionId) async {
+    final List<LocalSessionPoint> points = <LocalSessionPoint>[
+      for (int index = 0; index < appendedPoints.length; index += 1)
+        _buildLocalPoint(
+          id: index + 1,
+          localSessionId: localSessionId,
+          point: appendedPoints[index],
+        ),
+    ];
+    final List<LocalSessionPoint> acceptedPoints = points
+        .where((LocalSessionPoint point) => point.acceptedForAnalytics)
+        .toList(growable: false);
+    return SessionDetail(
+      session: _activeSession ??
+          _buildSession(id: localSessionId, state: LocalSessionState.recording),
+      points: points,
+      acceptedPoints: acceptedPoints,
+      trackingDiagnostics: const <TrackingDiagnosticEvent>[],
+    );
+  }
+
+  @override
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) async {
+    return const <TrackingDiagnosticEvent>[];
+  }
+
+  @override
+  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async {
+    return <LocalRideSession>[];
+  }
+
+  @override
+  Future<List<LocalRideSession>> listPendingSyncSessions() async {
+    return <LocalRideSession>[];
+  }
+
+  @override
+  Future<void> refreshRemoteSessionHistoryCache() async {}
+
+  @override
+  Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
+    _activeSession =
+        _buildSession(id: localSessionId, state: LocalSessionState.paused);
+    return _activeSession!;
+  }
+
+  @override
+  Future<LocalRideSession?> recoverInProgressSession() async => null;
+
+  @override
+  Future<void> recordTrackingDiagnostic(
+    int localSessionId, {
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) async {}
+
+  @override
+  Future<LocalRideSession> resumeLocalSession(int localSessionId) async {
+    _activeSession =
+        _buildSession(id: localSessionId, state: LocalSessionState.recording);
+    return _activeSession!;
+  }
+
+  @override
+  Future<LocalRideSession> retryFailedSync(int localSessionId) async {
+    return _buildSession(id: localSessionId, state: LocalSessionState.synced);
+  }
+
+  @override
+  Future<LocalRideSession> startLocalSession({String? resortId}) async {
+    _activeSession = _buildSession(id: 1, state: LocalSessionState.recording);
+    return _activeSession!;
+  }
+
+  @override
+  Future<LocalRideSession> syncSession(int localSessionId) async {
+    return _buildSession(id: localSessionId, state: LocalSessionState.synced);
+  }
+
+  @override
+  Future<int> unsyncedCount() async {
+    return 0;
+  }
+}
+
+LocalSessionPoint _buildLocalPoint({
+  required int id,
+  required int localSessionId,
+  required NewSessionPoint point,
+}) {
+  return LocalSessionPoint(
+    id: id,
+    localSessionId: localSessionId,
+    recordedAt: point.recordedAt,
+    tOffsetMs: point.tOffsetMs,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    accuracyM: point.accuracyM,
+    altitudeM: point.altitudeM,
+    speedMps: point.speedMps,
+    headingDeg: point.headingDeg,
+    acceptedForAnalytics: point.acceptedForAnalytics,
+    elapsedRealtimeNs: point.elapsedRealtimeNs,
+    verticalAccuracyM: point.verticalAccuracyM,
+    speedAccuracyMps: point.speedAccuracyMps,
+    bearingAccuracyDeg: point.bearingAccuracyDeg,
+    provider: point.provider,
+    isMocked: point.isMocked,
+    qualityClass: point.qualityClass,
+    qualityScore: point.qualityScore,
+    qualityReason: point.qualityReason,
+    filteredLatitude: point.filteredLatitude,
+    filteredLongitude: point.filteredLongitude,
+    filteredAltitudeM: point.filteredAltitudeM,
+    fusedSpeedMps: point.fusedSpeedMps,
+    derivedSpeedMps: point.derivedSpeedMps,
+    distanceDeltaM: point.distanceDeltaM,
+    motionState: point.motionState,
+  );
+}
+
 LocalRideSession _buildSession({
   required int id,
   required LocalSessionState state,
-  required DateTime startedAt,
+  DateTime? startedAt,
 }) {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
@@ -286,7 +517,7 @@ LocalRideSession _buildSession({
     ownerUserId: 'user-1',
     remoteId: null,
     resortId: null,
-    startedAt: startedAt,
+    startedAt: startedAt ?? now,
     endedAt: null,
     activeDurationS: 0,
     distanceM: 0,
@@ -421,6 +652,38 @@ void main() {
     await locationRepository.close();
   });
 
+  test('ignores overlapping start requests', () async {
+    final Completer<void> startGate = Completer<void>();
+    final FakeSessionRepository repository = FakeSessionRepository(
+      startLocalSessionCompleter: startGate,
+    );
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+
+    final Future<void> firstStart = controller.startRecording();
+    final Future<void> secondStart = controller.startRecording();
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    expect(repository.startLocalSessionCalls, 1);
+    expect(controller.state.phase, RecordScreenPhase.ready);
+
+    startGate.complete();
+    await Future.wait(<Future<void>>[firstStart, secondStart]);
+
+    expect(controller.state.phase, RecordScreenPhase.recording);
+    expect(controller.state.session, isNotNull);
+    expect(repository.startLocalSessionCalls, 1);
+
+    controller.dispose();
+    await locationRepository.close();
+  });
+
   test('surfaces a clear message when app settings cannot be opened', () async {
     final RecordingController controller = RecordingController(
       sessionRepository: FakeSessionRepository(),
@@ -470,5 +733,223 @@ void main() {
     expect(controller.state.elapsed, Duration.zero);
 
     controller.dispose();
+  });
+
+  test('pauses recording cleanly when permission is downgraded mid-session',
+      () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+        latitude: 49.0,
+        longitude: -123.0,
+        accuracyM: 5,
+        altitudeM: 100,
+        speedMps: 4,
+        headingDeg: 90,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(repository.appendedPoints, hasLength(1));
+
+    locationRepository.permissionState =
+        LocationPermissionState.grantedForegroundOnly;
+    await controller.refreshPermissionState();
+
+    expect(controller.state.phase, RecordScreenPhase.paused);
+    expect(controller.state.session?.state, LocalSessionState.paused);
+    expect(
+      controller.state.errorMessage,
+      contains('Allow all the time'),
+    );
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 2),
+        latitude: 49.0002,
+        longitude: -123.0002,
+        accuracyM: 5,
+        altitudeM: 101,
+        speedMps: 5,
+        headingDeg: 90,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(repository.appendedPoints, hasLength(1));
+
+    controller.dispose();
+    await locationRepository.close();
+  });
+
+  test('blocks recording when device location settings are not ready',
+      () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository(
+      readinessError: 'Enable high-accuracy location before recording.',
+    );
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    expect(controller.state.phase, RecordScreenPhase.ready);
+    expect(controller.state.session, isNull);
+    expect(
+      controller.state.errorMessage,
+      'Enable high-accuracy location before recording.',
+    );
+
+    controller.dispose();
+    await locationRepository.close();
+  });
+
+  test('defers background sync while a ride is actively recording', () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    repository.listPendingSyncSessionsCalls = 0;
+    repository.syncSessionCalls = 0;
+
+    await controller.retryPendingSyncs();
+
+    expect(repository.listPendingSyncSessionsCalls, 0);
+    expect(repository.syncSessionCalls, 0);
+    expect(
+      controller.state.lastSyncMessage,
+      'Sync deferred until recording finishes.',
+    );
+
+    controller.dispose();
+    await locationRepository.close();
+  });
+
+  test('continues recording after a transient local point persistence failure',
+      () async {
+    final FlakyPersistenceSessionRepository repository =
+        FlakyPersistenceSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+        latitude: 49.0,
+        longitude: -123.0,
+        accuracyM: 5,
+        altitudeM: 100,
+        speedMps: 4,
+        headingDeg: 90,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    expect(repository.appendedPoints, isEmpty);
+    expect(controller.state.route, isEmpty);
+    expect(controller.state.liveStats.distanceM, 0);
+    expect(controller.state.currentSpeedMps, 0);
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 2),
+        latitude: 49.0002,
+        longitude: -123.0002,
+        accuracyM: 5,
+        altitudeM: 101,
+        speedMps: 5,
+        headingDeg: 90,
+      ),
+    );
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 4),
+        latitude: 49.0004,
+        longitude: -123.0004,
+        accuracyM: 5,
+        altitudeM: 102,
+        speedMps: 6,
+        headingDeg: 90,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    final SessionStats persistedStats = await repository.computeSessionStats(1);
+
+    expect(controller.state.phase, RecordScreenPhase.recording);
+    expect(controller.state.streamRestartCount, 0);
+    expect(repository.appendedPoints, hasLength(2));
+    expect(controller.state.route.length, 2);
+    expect(controller.state.liveStats.distanceM,
+        closeTo(persistedStats.distanceM, 0.1));
+    expect(persistedStats.distanceM, greaterThan(0));
+    expect(controller.state.lastPersistedPointAtUtc, isNotNull);
+
+    controller.dispose();
+    await locationRepository.close();
+  });
+
+  test(
+      'ignores a queued reconnect from a finished session after a new recording starts',
+      () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+
+    await controller.bootstrap();
+    await controller.startRecording();
+    expect(locationRepository.watchPositionCalls, 1);
+
+    locationRepository.emitError(StateError('stream dropped'));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    await controller.finish();
+    await controller.startRecording();
+
+    expect(controller.state.phase, RecordScreenPhase.recording);
+    expect(controller.state.streamRestartCount, 0);
+    expect(locationRepository.watchPositionCalls, 2);
+
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+
+    expect(controller.state.phase, RecordScreenPhase.recording);
+    expect(controller.state.streamRestartCount, 0);
+    expect(locationRepository.watchPositionCalls, 2);
+
+    controller.dispose();
+    await locationRepository.close();
   });
 }
