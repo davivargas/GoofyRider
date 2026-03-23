@@ -39,7 +39,8 @@ class AndroidFusedLocationBridge(
     private var callback: LocationCallback? = null
     private var currentMode: TrackingMode = TrackingMode.INITIALIZING_FIX
     private var currentConfig: TrackingConfig = TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
-    private var staleSampleNanos: Long = DEFAULT_STALE_SAMPLE_NANOS
+    private var staleSampleNanos: Long =
+        defaultStaleSampleSecondsFor(TrackingMode.INITIALIZING_FIX) * 1_000_000_000L
     private var lastElapsedRealtimeNanos: Long? = null
     private val requestBackgroundPermissionLauncher: ActivityResultLauncher<String>
     private val appSettingsLauncher: ActivityResultLauncher<Intent>
@@ -96,7 +97,7 @@ class AndroidFusedLocationBridge(
                     call = call,
                     fallback = TrackingConfig.defaultsFor(parsedMode),
                 )
-                staleSampleNanos = readStaleSampleNanos(call)
+                staleSampleNanos = readStaleSampleNanos(call, parsedMode)
                 if (eventSink != null) {
                     restartLocationUpdates()
                 }
@@ -327,10 +328,18 @@ class AndroidFusedLocationBridge(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun readStaleSampleNanos(call: MethodCall): Long {
+    private fun readStaleSampleNanos(call: MethodCall, mode: TrackingMode): Long {
         val rawSeconds = call.argument<Number>("staleSampleThresholdSeconds")?.toLong()
-        val safeSeconds = (rawSeconds ?: DEFAULT_STALE_SAMPLE_SECONDS).coerceAtLeast(1L)
+        val safeSeconds = (rawSeconds ?: defaultStaleSampleSecondsFor(mode)).coerceAtLeast(1L)
         return safeSeconds * 1_000_000_000L
+    }
+
+    private fun defaultStaleSampleSecondsFor(mode: TrackingMode): Long {
+        val config = TrackingConfig.defaultsFor(mode)
+        val expectedGapMs = if (config.maxDelayMs > 0L) config.maxDelayMs else config.intervalMs
+        val thresholdMs = expectedGapMs + STALE_SAMPLE_SLACK_MS
+        val thresholdSeconds = (thresholdMs + 999L) / 1000L
+        return thresholdSeconds.coerceIn(MIN_STALE_SAMPLE_SECONDS, MAX_STALE_SAMPLE_SECONDS)
     }
 
     private fun Location.toPayload(): Map<String, Any?> {
@@ -500,7 +509,8 @@ class AndroidFusedLocationBridge(
     companion object {
         private const val EVENT_CHANNEL_NAME = "goofyrider/location_events"
         private const val CONTROL_CHANNEL_NAME = "goofyrider/location_control"
-        private const val DEFAULT_STALE_SAMPLE_SECONDS = 30L
-        private const val DEFAULT_STALE_SAMPLE_NANOS = DEFAULT_STALE_SAMPLE_SECONDS * 1_000_000_000L
+        private const val STALE_SAMPLE_SLACK_MS = 15_000L
+        private const val MIN_STALE_SAMPLE_SECONDS = 30L
+        private const val MAX_STALE_SAMPLE_SECONDS = 120L
     }
 }
