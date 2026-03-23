@@ -793,6 +793,9 @@ class TrackingPipelineEngine {
     return segmentDistanceM;
   }
 
+  /// Updates the smoothed altitude state, but only commits rejected samples to
+  /// the caller as zero delta so low-quality readings cannot skew later gain
+  /// and loss accumulation.
   _VerticalResult _updateVertical({
     required LocationSample sample,
     required _QualityDecision quality,
@@ -804,21 +807,28 @@ class TrackingPipelineEngine {
       );
     }
 
+    final double? previousFilteredAltitude = _lastFilteredAltitude;
     final double alpha = _verticalAlpha(sample.verticalAccuracyM);
-    final double filteredAltitude = _lastFilteredAltitude == null
+    final double filteredAltitude = previousFilteredAltitude == null
         ? sample.altitudeM!
-        : _lastFilteredAltitude! +
-            (alpha * (sample.altitudeM! - _lastFilteredAltitude!));
+        : previousFilteredAltitude +
+            (alpha * (sample.altitudeM! - previousFilteredAltitude));
 
-    final double delta = _lastFilteredAltitude == null
+    final bool acceptedForVerticalState =
+        quality.qualityClass != TrackingQualityClass.reject;
+    if (!acceptedForVerticalState) {
+      return _VerticalResult(
+        filteredAltitudeM: previousFilteredAltitude,
+        deltaM: 0,
+      );
+    }
+
+    final double delta = previousFilteredAltitude == null
         ? 0
-        : filteredAltitude - _lastFilteredAltitude!;
+        : filteredAltitude - previousFilteredAltitude;
     _lastFilteredAltitude = filteredAltitude;
 
-    final bool canAccumulate =
-        quality.qualityClass != TrackingQualityClass.reject &&
-            _isVerticalReliable(sample.verticalAccuracyM);
-    if (!canAccumulate) {
+    if (!_isVerticalReliable(sample.verticalAccuracyM)) {
       return _VerticalResult(
           filteredAltitudeM: filteredAltitude, deltaM: delta);
     }

@@ -25,6 +25,11 @@ class SessionTimelineAnalysis {
   final double idleDistanceM;
 }
 
+/// Rebuilds user-facing timeline segments from accepted analytics points.
+///
+/// When a stored `distanceDeltaM` is present, it is treated as authoritative,
+/// including explicit zeroes from the pipeline. That keeps stationary accepted
+/// intervals from being re-inflated by a fallback haversine recomputation.
 SessionTimelineAnalysis analyzeSessionTimeline({
   required List<LocalSessionPoint> points,
 }) {
@@ -232,12 +237,14 @@ bool _isStableMotionState(String? motionState) {
       motionState == 'stopped_idle';
 }
 
+/// Uses the persisted distance delta when available so replayed segmentation
+/// matches the pipeline's accepted movement, including zero-distance intervals.
 double _intervalDistanceMeters({
   required LocalSessionPoint previous,
   required LocalSessionPoint current,
 }) {
-  if (current.distanceDeltaM != null && current.distanceDeltaM! > 0) {
-    return current.distanceDeltaM!;
+  if (current.distanceDeltaM != null) {
+    return current.distanceDeltaM! > 0 ? current.distanceDeltaM! : 0;
   }
 
   final double startLat = previous.filteredLatitude ?? previous.latitude;

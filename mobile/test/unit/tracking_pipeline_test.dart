@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
+import 'package:goofyrider_mobile/features/session/domain/session_segmentation.dart';
 import 'package:goofyrider_mobile/features/session/domain/tracking_pipeline.dart';
 
 LocationSample _sample({
@@ -145,6 +146,68 @@ void main() {
     );
 
     expect(afterRecovery.stats.maxSpeedMps, lessThan(25));
+  });
+
+  test('rejected altitude spikes do not pollute the vertical filter', () {
+    final TrackingPipelineEngine engine = TrackingPipelineEngine();
+    final DateTime sessionStart = DateTime.utc(2026, 1, 2, 6, 0, 0);
+
+    engine.processSample(
+      sample: _sample(
+        timestamp: sessionStart,
+        latitude: 50.0,
+        longitude: -122.0,
+        altitudeM: 2000,
+        speedMps: 6,
+        speedAccuracyMps: 0.8,
+      ),
+      sessionStartedAtUtc: sessionStart,
+      activeDurationS: 0,
+    );
+
+    engine.processSample(
+      sample: _sample(
+        timestamp: sessionStart.add(const Duration(seconds: 1)),
+        latitude: 50.00008,
+        longitude: -122.00008,
+        altitudeM: 2002,
+        speedMps: 6,
+        speedAccuracyMps: 0.8,
+      ),
+      sessionStartedAtUtc: sessionStart,
+      activeDurationS: 1,
+    );
+
+    final TrackingProcessResult rejected = engine.processSample(
+      sample: _sample(
+        timestamp: sessionStart.add(const Duration(seconds: 2)),
+        latitude: 50.00016,
+        longitude: -122.00016,
+        altitudeM: 2200,
+        speedMps: 6,
+        speedAccuracyMps: 0.8,
+        accuracyM: 95,
+      ),
+      sessionStartedAtUtc: sessionStart,
+      activeDurationS: 2,
+    );
+
+    final TrackingProcessResult resumed = engine.processSample(
+      sample: _sample(
+        timestamp: sessionStart.add(const Duration(seconds: 3)),
+        latitude: 50.00024,
+        longitude: -122.00024,
+        altitudeM: 2004,
+        speedMps: 6,
+        speedAccuracyMps: 0.8,
+      ),
+      sessionStartedAtUtc: sessionStart,
+      activeDurationS: 3,
+    );
+
+    expect(rejected.point.qualityClass, 'reject');
+    expect(resumed.point.filteredAltitudeM, closeTo(2001.7, 0.3));
+    expect(resumed.stats.elevationLossM, isNull);
   });
 
   test(
@@ -1155,5 +1218,57 @@ void main() {
     );
 
     expect(result.motionState, MotionState.activeDescent);
+  });
+
+  test('timeline analysis honors stored zero distance deltas', () {
+    final DateTime start = DateTime.utc(2026, 1, 18, 8, 0, 0);
+    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+      points: <LocalSessionPoint>[
+        LocalSessionPoint(
+          id: 1,
+          localSessionId: 1,
+          recordedAt: start,
+          tOffsetMs: 0,
+          latitude: 49.0,
+          longitude: -123.0,
+          accuracyM: 8,
+          altitudeM: 1800,
+          speedMps: 0.1,
+          headingDeg: 90,
+          acceptedForAnalytics: true,
+          qualityClass: 'accept',
+          filteredLatitude: 49.0,
+          filteredLongitude: -123.0,
+          filteredAltitudeM: 1800,
+          fusedSpeedMps: 0.1,
+          distanceDeltaM: 0,
+          motionState: 'stopped_idle',
+        ),
+        LocalSessionPoint(
+          id: 2,
+          localSessionId: 1,
+          recordedAt: start.add(const Duration(seconds: 5)),
+          tOffsetMs: 5000,
+          latitude: 49.00005,
+          longitude: -123.00005,
+          accuracyM: 8,
+          altitudeM: 1800,
+          speedMps: 0.1,
+          headingDeg: 90,
+          acceptedForAnalytics: true,
+          qualityClass: 'accept',
+          filteredLatitude: 49.00005,
+          filteredLongitude: -123.00005,
+          filteredAltitudeM: 1800,
+          fusedSpeedMps: 0.1,
+          distanceDeltaM: 0,
+          motionState: 'stopped_idle',
+        ),
+      ],
+    );
+
+    expect(analysis.distanceM, 0);
+    expect(analysis.idleDistanceM, 0);
+    expect(analysis.segments.single.distanceM, 0);
   });
 }
