@@ -1,4 +1,8 @@
+import '../../../core/constants/session_constants.dart';
 import 'location_tracking_repository.dart';
+
+const int _staleSampleSlackMs = 15000;
+const int _maxStaleSampleThresholdSeconds = 120;
 
 enum TrackingModePriority {
   highAccuracy,
@@ -21,6 +25,19 @@ class TrackingModeProfile {
   final int maxDelayMs;
   final double minDistanceM;
   final bool waitForAccurate;
+
+  int get expectedUpdateGapMs => maxDelayMs > 0 ? maxDelayMs : intervalMs;
+
+  int get staleSampleThresholdSeconds {
+    final int thresholdMs = expectedUpdateGapMs + _staleSampleSlackMs;
+    return ((thresholdMs + 999) ~/ 1000).clamp(
+      SessionConstants.staleSampleThresholdSeconds,
+      _maxStaleSampleThresholdSeconds,
+    );
+  }
+
+  Duration get sampleWatchdogThreshold =>
+      Duration(seconds: staleSampleThresholdSeconds);
 
   Map<String, dynamic> toChannelPayload() {
     return <String, dynamic>{
