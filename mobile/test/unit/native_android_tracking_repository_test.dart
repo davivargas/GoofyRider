@@ -1,9 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/constants/session_constants.dart';
 import 'package:goofyrider_mobile/features/session/data/geolocator_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/data/native_android_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:goofyrider_mobile/features/session/domain/tracking_mode_profiles.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -73,7 +73,8 @@ void main() {
     expect(activeDescentConfig['waitForAccurate'], isFalse);
     expect(
       activeDescentPayload['staleSampleThresholdSeconds'],
-      SessionConstants.staleSampleThresholdSeconds,
+      TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+          .staleSampleThresholdSeconds(),
     );
 
     final Map<String, dynamic> liftPayload =
@@ -87,7 +88,8 @@ void main() {
     expect(liftConfig['minDistanceM'], 6.0);
     expect(
       liftPayload['staleSampleThresholdSeconds'],
-      SessionConstants.staleSampleThresholdSeconds,
+      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
+          .staleSampleThresholdSeconds(),
     );
 
     final Map<String, dynamic> stoppedPayload =
@@ -98,7 +100,11 @@ void main() {
     expect(stoppedConfig['minIntervalMs'], 8000);
     expect(stoppedConfig['maxDelayMs'], 45000);
     expect(stoppedConfig['waitForAccurate'], isFalse);
-    expect(stoppedPayload['staleSampleThresholdSeconds'], 60);
+    expect(
+      stoppedPayload['staleSampleThresholdSeconds'],
+      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
+          .staleSampleThresholdSeconds(),
+    );
 
     final Map<String, dynamic> recoveryPayload =
         Map<String, dynamic>.from(byMode['low_confidence_recovery'] as Map);
@@ -111,7 +117,44 @@ void main() {
     expect(recoveryConfig['waitForAccurate'], isTrue);
     expect(
       recoveryPayload['staleSampleThresholdSeconds'],
-      SessionConstants.staleSampleThresholdSeconds,
+      TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
+          .staleSampleThresholdSeconds(),
+    );
+  });
+
+  test('setTrackingMode falls back to geolocator delegate when bridge fails',
+      () async {
+    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+        _FakeGeolocatorTrackingRepository(
+      ensureResult: LocationPermissionState.granted,
+      checkResult: LocationPermissionState.granted,
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(controlChannel, (MethodCall call) async {
+      methodCalls.add(call);
+      if (call.method == 'setTrackingMode') {
+        throw PlatformException(code: 'not_available');
+      }
+      return null;
+    });
+
+    final NativeAndroidTrackingRepository repository =
+        NativeAndroidTrackingRepository(
+      eventChannel: eventChannel,
+      controlChannel: controlChannel,
+      permissionsDelegate: permissionsDelegate,
+    );
+
+    await repository.setTrackingMode(TrackingMode.activeDescent);
+
+    expect(methodCalls.map((MethodCall call) => call.method), <String>[
+      'setTrackingMode',
+    ]);
+    expect(permissionsDelegate.setTrackingModeCallCount, 1);
+    expect(
+      permissionsDelegate.lastTrackingMode,
+      TrackingMode.activeDescent,
     );
   });
 
@@ -185,6 +228,50 @@ void main() {
     expect(samples[1].latitude, 49.30);
     expect(samples[1].longitude, -123.30);
     expect(samples[1].accuracyM, 4.5);
+  });
+
+  test('watchPosition falls back to geolocator delegate when bridge fails',
+      () async {
+    final LocationSample fallbackSample = LocationSample(
+      timestamp: DateTime.fromMillisecondsSinceEpoch(5000, isUtc: true),
+      latitude: 49.50,
+      longitude: -123.50,
+      accuracyM: 3.0,
+      altitudeM: null,
+      speedMps: null,
+      headingDeg: null,
+    );
+    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+        _FakeGeolocatorTrackingRepository(
+      ensureResult: LocationPermissionState.granted,
+      checkResult: LocationPermissionState.granted,
+      watchSamples: <LocationSample>[fallbackSample],
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      eventChannel,
+      MockStreamHandler.inline(
+        onListen: (Object? arguments, MockStreamHandlerEventSink events) {},
+      ),
+    );
+
+    final NativeAndroidTrackingRepository repository =
+        NativeAndroidTrackingRepository(
+      eventChannel: eventChannel,
+      controlChannel: controlChannel,
+      permissionsDelegate: permissionsDelegate,
+      nativeStreamStartupTimeout: const Duration(milliseconds: 20),
+    );
+
+    final List<LocationSample> samples =
+        await repository.watchPosition().take(1).toList();
+
+    expect(permissionsDelegate.watchPositionCallCount, 1);
+    expect(samples, hasLength(1));
+    expect(samples.first.timestamp, fallbackSample.timestamp);
+    expect(samples.first.latitude, fallbackSample.latitude);
+    expect(samples.first.longitude, fallbackSample.longitude);
   });
 
   test('checkRecordingReadiness returns native permission readiness message',
@@ -290,6 +377,85 @@ void main() {
   });
 
   test(
+      'ensurePermissions re-checks permission state after native settings handoff remains incomplete',
+      () async {
+    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+        _FakeGeolocatorTrackingRepository(
+      ensureResult: LocationPermissionState.grantedForegroundOnly,
+      checkResult: LocationPermissionState.grantedForegroundOnly,
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(controlChannel, (MethodCall call) async {
+      methodCalls.add(call);
+      if (call.method == 'ensureBackgroundLocationPermission') {
+        return <String, Object?>{
+          'status': 'needs_settings',
+          'openedSettings': true,
+        };
+      }
+      return null;
+    });
+
+    final NativeAndroidTrackingRepository repository =
+        NativeAndroidTrackingRepository(
+      eventChannel: eventChannel,
+      controlChannel: controlChannel,
+      permissionsDelegate: permissionsDelegate,
+    );
+
+    final LocationPermissionState state = await repository.ensurePermissions();
+
+    expect(state, LocationPermissionState.grantedForegroundOnly);
+    expect(permissionsDelegate.ensureCallCount, 1);
+    expect(permissionsDelegate.checkCallCount, 1);
+    expect(permissionsDelegate.openAppSettingsCallCount, 0);
+    expect(methodCalls.map((MethodCall call) => call.method), <String>[
+      'ensureBackgroundLocationPermission',
+    ]);
+  });
+
+  test(
+      'ensurePermissions opens app settings fallback when native settings deep-link is unavailable',
+      () async {
+    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+        _FakeGeolocatorTrackingRepository(
+      ensureResult: LocationPermissionState.grantedForegroundOnly,
+      checkResult: LocationPermissionState.grantedForegroundOnly,
+      openAppSettingsResult: true,
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(controlChannel, (MethodCall call) async {
+      methodCalls.add(call);
+      if (call.method == 'ensureBackgroundLocationPermission') {
+        return <String, Object?>{
+          'status': 'settings_unavailable',
+          'openedSettings': false,
+        };
+      }
+      return null;
+    });
+
+    final NativeAndroidTrackingRepository repository =
+        NativeAndroidTrackingRepository(
+      eventChannel: eventChannel,
+      controlChannel: controlChannel,
+      permissionsDelegate: permissionsDelegate,
+    );
+
+    final LocationPermissionState state = await repository.ensurePermissions();
+
+    expect(state, LocationPermissionState.grantedForegroundOnly);
+    expect(permissionsDelegate.ensureCallCount, 1);
+    expect(permissionsDelegate.openAppSettingsCallCount, 1);
+    expect(permissionsDelegate.checkCallCount, 1);
+    expect(methodCalls.map((MethodCall call) => call.method), <String>[
+      'ensureBackgroundLocationPermission',
+    ]);
+  });
+
+  test(
       'ensurePermissions skips native handoff when delegate does not return foreground-only',
       () async {
     final _FakeGeolocatorTrackingRepository permissionsDelegate =
@@ -318,13 +484,21 @@ class _FakeGeolocatorTrackingRepository extends GeolocatorTrackingRepository {
   _FakeGeolocatorTrackingRepository({
     required this.ensureResult,
     required this.checkResult,
+    this.watchSamples = const <LocationSample>[],
+    this.openAppSettingsResult = true,
   });
 
   final LocationPermissionState ensureResult;
   final LocationPermissionState checkResult;
+  final List<LocationSample> watchSamples;
+  final bool openAppSettingsResult;
 
   int ensureCallCount = 0;
   int checkCallCount = 0;
+  int setTrackingModeCallCount = 0;
+  int watchPositionCallCount = 0;
+  int openAppSettingsCallCount = 0;
+  TrackingMode? lastTrackingMode;
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
@@ -336,5 +510,23 @@ class _FakeGeolocatorTrackingRepository extends GeolocatorTrackingRepository {
   Future<LocationPermissionState> checkPermissions() async {
     checkCallCount += 1;
     return checkResult;
+  }
+
+  @override
+  Future<void> setTrackingMode(TrackingMode mode) async {
+    setTrackingModeCallCount += 1;
+    lastTrackingMode = mode;
+  }
+
+  @override
+  Future<bool> openAppSettings() async {
+    openAppSettingsCallCount += 1;
+    return openAppSettingsResult;
+  }
+
+  @override
+  Stream<LocationSample> watchPosition() {
+    watchPositionCallCount += 1;
+    return Stream<LocationSample>.fromIterable(watchSamples);
   }
 }

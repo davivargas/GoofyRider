@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
-import '../../../core/constants/session_constants.dart';
 import '../domain/location_tracking_repository.dart';
 import '../domain/tracking_mode_profiles.dart';
 import 'geolocator_tracking_repository.dart';
@@ -10,10 +11,12 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     EventChannel eventChannel = const EventChannel(_eventChannelName),
     MethodChannel controlChannel = const MethodChannel(_controlChannelName),
     GeolocatorTrackingRepository? permissionsDelegate,
+    Duration nativeStreamStartupTimeout = const Duration(seconds: 2),
   })  : _eventChannel = eventChannel,
         _controlChannel = controlChannel,
         _permissionsDelegate =
-            permissionsDelegate ?? GeolocatorTrackingRepository();
+            permissionsDelegate ?? GeolocatorTrackingRepository(),
+        _nativeStreamStartupTimeout = nativeStreamStartupTimeout;
 
   static const String _eventChannelName = 'goofyrider/location_events';
   static const String _controlChannelName = 'goofyrider/location_control';
@@ -21,6 +24,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   final EventChannel _eventChannel;
   final MethodChannel _controlChannel;
   final GeolocatorTrackingRepository _permissionsDelegate;
+  final Duration _nativeStreamStartupTimeout;
 
   @override
   Future<LocationPermissionState> checkPermissions() {
@@ -36,11 +40,26 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     }
 
     try {
-      await _controlChannel.invokeMapMethod<Object?, Object?>(
+      final Map<Object?, Object?>? response =
+          await _controlChannel.invokeMapMethod<Object?, Object?>(
         'ensureBackgroundLocationPermission',
       );
+      final String? status = response?['status'] as String?;
+      switch (status) {
+        case 'granted':
+        case 'needs_settings':
+        case 'fine_permission_required':
+          return _permissionsDelegate.checkPermissions();
+        case 'settings_unavailable':
+          await _permissionsDelegate.openAppSettings();
+          return _permissionsDelegate.checkPermissions();
+        case 'denied':
+          return initialState;
+      }
       return _permissionsDelegate.checkPermissions();
     } on PlatformException {
+      return initialState;
+    } on MissingPluginException {
       return initialState;
     }
   }
@@ -90,41 +109,53 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
 
   @override
   Stream<LocationSample> watchPosition() async* {
-    await for (final dynamic event in _eventChannel.receiveBroadcastStream()) {
-      final List<LocationSample> samples = _extractRawSamples(event)
-          .map(_tryMapSample)
-          .whereType<LocationSample>()
-          .toList(growable: false);
-      // Drop malformed native payloads instead of coercing them into default
-      // coordinates/timestamps that would pollute analytics.
-      samples.sort(_sampleSortComparator);
-      for (final LocationSample sample in samples) {
+    StreamIterator<dynamic>? iterator;
+    try {
+      iterator =
+          StreamIterator<dynamic>(_eventChannel.receiveBroadcastStream());
+      final bool hasFirstEvent = await iterator
+          .moveNext()
+          .timeout(_nativeStreamStartupTimeout, onTimeout: () => false);
+      if (!hasFirstEvent) {
+        throw TimeoutException('Native stream startup timed out');
+      }
+
+      for (final LocationSample sample in _mapSamples(iterator.current)) {
         yield sample;
       }
+      while (await iterator.moveNext()) {
+        for (final LocationSample sample in _mapSamples(iterator.current)) {
+          yield sample;
+        }
+      }
+    } on MissingPluginException {
+      yield* _permissionsDelegate.watchPosition();
+    } on PlatformException {
+      yield* _permissionsDelegate.watchPosition();
+    } on TimeoutException {
+      yield* _permissionsDelegate.watchPosition();
+    } finally {
+      await iterator?.cancel();
     }
   }
 
   @override
   Future<void> setTrackingMode(TrackingMode mode) async {
     final TrackingModeProfile profile = TrackingModeProfiles.forMode(mode);
-    await _controlChannel.invokeMethod<void>(
-      'setTrackingMode',
-      <String, dynamic>{
-        'mode': mode.wireValue,
-        'config': profile.toChannelPayload(),
-        'staleSampleThresholdSeconds': _staleSampleThresholdSeconds(profile),
-      },
-    );
-  }
-
-  int _staleSampleThresholdSeconds(TrackingModeProfile profile) {
-    final int expectedGapMs =
-        profile.maxDelayMs > 0 ? profile.maxDelayMs : profile.intervalMs;
-    final int thresholdMs = expectedGapMs + 15000;
-    return ((thresholdMs + 999) ~/ 1000).clamp(
-      SessionConstants.staleSampleThresholdSeconds,
-      120,
-    );
+    try {
+      await _controlChannel.invokeMethod<void>(
+        'setTrackingMode',
+        <String, dynamic>{
+          'mode': mode.wireValue,
+          'config': profile.toChannelPayload(),
+          'staleSampleThresholdSeconds': profile.staleSampleThresholdSeconds,
+        },
+      );
+    } on MissingPluginException {
+      await _permissionsDelegate.setTrackingMode(mode);
+    } on PlatformException {
+      await _permissionsDelegate.setTrackingMode(mode);
+    }
   }
 
   int _sampleSortComparator(LocationSample a, LocationSample b) {
@@ -134,6 +165,17 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
       return elapsedA.compareTo(elapsedB);
     }
     return a.timestamp.compareTo(b.timestamp);
+  }
+
+  List<LocationSample> _mapSamples(dynamic event) {
+    final List<LocationSample> samples = _extractRawSamples(event)
+        .map(_tryMapSample)
+        .whereType<LocationSample>()
+        .toList(growable: false);
+    // Drop malformed native payloads instead of coercing them into default
+    // coordinates/timestamps that would pollute analytics.
+    samples.sort(_sampleSortComparator);
+    return samples;
   }
 
   List<Map<String, dynamic>> _extractRawSamples(dynamic event) {
