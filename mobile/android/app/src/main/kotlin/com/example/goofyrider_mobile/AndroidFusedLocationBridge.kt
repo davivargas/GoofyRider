@@ -10,8 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -42,35 +41,11 @@ class AndroidFusedLocationBridge(
     private var staleSampleNanos: Long =
         defaultStaleSampleSecondsFor(TrackingMode.INITIALIZING_FIX) * 1_000_000_000L
     private var lastElapsedRealtimeNanos: Long? = null
-    private val requestBackgroundPermissionLauncher: ActivityResultLauncher<String>
-    private val appSettingsLauncher: ActivityResultLauncher<Intent>
     private var pendingBackgroundPermissionResult: MethodChannel.Result? = null
 
     init {
         EventChannel(messenger, EVENT_CHANNEL_NAME).setStreamHandler(this)
         MethodChannel(messenger, CONTROL_CHANNEL_NAME).setMethodCallHandler(this)
-        requestBackgroundPermissionLauncher = activity.registerForActivityResult(
-            ActivityResultContracts.RequestPermission(),
-        ) { granted ->
-            val status = if (granted || hasBackgroundLocationPermission()) "granted" else "denied"
-            completePendingBackgroundPermissionResult(
-                mapOf(
-                    "status" to status,
-                    "openedSettings" to false,
-                ),
-            )
-        }
-        appSettingsLauncher = activity.registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult(),
-        ) {
-            val status = if (hasBackgroundLocationPermission()) "granted" else "needs_settings"
-            completePendingBackgroundPermissionResult(
-                mapOf(
-                    "status" to status,
-                    "openedSettings" to true,
-                ),
-            )
-        }
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -193,7 +168,11 @@ class AndroidFusedLocationBridge(
 
         pendingBackgroundPermissionResult = result
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
-            requestBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+                REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION,
+            )
             return
         }
 
@@ -202,7 +181,7 @@ class AndroidFusedLocationBridge(
                 android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.fromParts("package", context.packageName, null),
             )
-            appSettingsLauncher.launch(appSettingsIntent)
+            activity.startActivityForResult(appSettingsIntent, REQUEST_CODE_APP_SETTINGS)
         } catch (_: ActivityNotFoundException) {
             completePendingBackgroundPermissionResult(
                 mapOf(
@@ -217,6 +196,45 @@ class AndroidFusedLocationBridge(
         val pendingResult = pendingBackgroundPermissionResult
         pendingBackgroundPermissionResult = null
         pendingResult?.success(payload)
+    }
+
+    fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ): Boolean {
+        if (requestCode != REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION) {
+            return false
+        }
+
+        val granted =
+            permissions.indices.any { index ->
+                permissions[index] == Manifest.permission.ACCESS_BACKGROUND_LOCATION &&
+                    grantResults.getOrNull(index) == PackageManager.PERMISSION_GRANTED
+            }
+        val status = if (granted || hasBackgroundLocationPermission()) "granted" else "denied"
+        completePendingBackgroundPermissionResult(
+            mapOf(
+                "status" to status,
+                "openedSettings" to false,
+            ),
+        )
+        return true
+    }
+
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode != REQUEST_CODE_APP_SETTINGS) {
+            return false
+        }
+
+        val status = if (hasBackgroundLocationPermission()) "granted" else "needs_settings"
+        completePendingBackgroundPermissionResult(
+            mapOf(
+                "status" to status,
+                "openedSettings" to true,
+            ),
+        )
+        return true
     }
 
     private fun restartLocationUpdates() {
@@ -509,6 +527,8 @@ class AndroidFusedLocationBridge(
     companion object {
         private const val EVENT_CHANNEL_NAME = "goofyrider/location_events"
         private const val CONTROL_CHANNEL_NAME = "goofyrider/location_control"
+        private const val REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION = 2001
+        private const val REQUEST_CODE_APP_SETTINGS = 2002
         private const val STALE_SAMPLE_SLACK_MS = 15_000L
         private const val MIN_STALE_SAMPLE_SECONDS = 30L
         private const val MAX_STALE_SAMPLE_SECONDS = 120L
