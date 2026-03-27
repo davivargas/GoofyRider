@@ -1,4 +1,4 @@
-# goofyrider_mobile
+# GoofyRider
 
 A new Flutter project.
 
