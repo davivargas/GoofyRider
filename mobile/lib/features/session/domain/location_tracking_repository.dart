@@ -42,6 +42,7 @@ enum TrackingMode {
   initializingFix,
   activeDescent,
   liftUphill,
+  walkingSlow,
   stoppedIdle,
   lowConfidenceRecovery,
 }
@@ -55,6 +56,8 @@ extension TrackingModeWire on TrackingMode {
         return 'active_descent';
       case TrackingMode.liftUphill:
         return 'lift_uphill';
+      case TrackingMode.walkingSlow:
+        return 'walking_slow';
       case TrackingMode.stoppedIdle:
         return 'stopped_idle';
       case TrackingMode.lowConfidenceRecovery:

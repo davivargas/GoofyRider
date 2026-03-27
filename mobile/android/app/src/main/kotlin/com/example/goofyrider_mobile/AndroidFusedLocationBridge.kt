@@ -38,8 +38,9 @@ class AndroidFusedLocationBridge(
     private var callback: LocationCallback? = null
     private var currentMode: TrackingMode = TrackingMode.INITIALIZING_FIX
     private var currentConfig: TrackingConfig = TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
-    private var staleSampleNanos: Long =
-        defaultStaleSampleSecondsFor(TrackingMode.INITIALIZING_FIX) * 1_000_000_000L
+    private var maxAcceptedSampleAgeNanos: Long =
+        TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
+            .watchdogThresholdMs * 1_000_000L
     private var lastElapsedRealtimeNanos: Long? = null
     private var pendingBackgroundPermissionResult: MethodChannel.Result? = null
 
@@ -72,7 +73,7 @@ class AndroidFusedLocationBridge(
                     call = call,
                     fallback = TrackingConfig.defaultsFor(parsedMode),
                 )
-                staleSampleNanos = readStaleSampleNanos(call, parsedMode)
+                maxAcceptedSampleAgeNanos = readStaleSampleNanos(call, currentConfig)
                 if (eventSink != null) {
                     restartLocationUpdates()
                 }
@@ -307,7 +308,7 @@ class AndroidFusedLocationBridge(
                 if (previous != null && elapsedRealtimeNanos <= previous) {
                     continue
                 }
-                if (nowRealtimeNanos - elapsedRealtimeNanos > staleSampleNanos) {
+                if (nowRealtimeNanos - elapsedRealtimeNanos > maxAcceptedSampleAgeNanos) {
                     continue
                 }
                 lastElapsedRealtimeNanos = elapsedRealtimeNanos
@@ -346,18 +347,17 @@ class AndroidFusedLocationBridge(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun readStaleSampleNanos(call: MethodCall, mode: TrackingMode): Long {
-        val rawSeconds = call.argument<Number>("staleSampleThresholdSeconds")?.toLong()
-        val safeSeconds = (rawSeconds ?: defaultStaleSampleSecondsFor(mode)).coerceAtLeast(1L)
-        return safeSeconds * 1_000_000_000L
-    }
+    private fun readStaleSampleNanos(call: MethodCall, fallback: TrackingConfig): Long {
+        val rawMs =
+            call.argument<Map<String, Any?>>("config")
+                ?.get("watchdogThresholdMs")
+                ?.let { TrackingConfig.numberToLongForInternalUse(it) }
 
-    private fun defaultStaleSampleSecondsFor(mode: TrackingMode): Long {
-        val config = TrackingConfig.defaultsFor(mode)
-        val expectedGapMs = if (config.maxDelayMs > 0L) config.maxDelayMs else config.intervalMs
-        val thresholdMs = expectedGapMs + STALE_SAMPLE_SLACK_MS
-        val thresholdSeconds = (thresholdMs + 999L) / 1000L
-        return thresholdSeconds.coerceIn(MIN_STALE_SAMPLE_SECONDS, MAX_STALE_SAMPLE_SECONDS)
+        val safeMs = (rawMs ?: fallback.watchdogThresholdMs)
+            .coerceAtLeast(1_000L)
+            .coerceAtMost(120_000L)
+
+        return safeMs * 1_000_000L
     }
 
     private fun Location.toPayload(): Map<String, Any?> {
@@ -401,6 +401,7 @@ class AndroidFusedLocationBridge(
         ACTIVE_DESCENT("active_descent"),
         LIFT_UPHILL("lift_uphill"),
         STOPPED_IDLE("stopped_idle"),
+        WALKING_SLOW("walking_slow"),
         LOW_CONFIDENCE_RECOVERY("low_confidence_recovery");
 
         companion object {
@@ -417,6 +418,7 @@ class AndroidFusedLocationBridge(
         val maxDelayMs: Long,
         val minDistanceM: Float,
         val waitForAccurate: Boolean,
+        val watchdogThresholdMs: Long,
     ) {
         fun toLocationRequest(): LocationRequest {
             return LocationRequest.Builder(priority, intervalMs)
@@ -437,6 +439,7 @@ class AndroidFusedLocationBridge(
                         maxDelayMs = 0,
                         minDistanceM = 0f,
                         waitForAccurate = true,
+                        watchdogThresholdMs = 5_000,
                     )
 
                     TrackingMode.ACTIVE_DESCENT -> TrackingConfig(
@@ -444,26 +447,39 @@ class AndroidFusedLocationBridge(
                         intervalMs = 900,
                         minIntervalMs = 250,
                         maxDelayMs = 900,
-                        minDistanceM = 1f,
+                        minDistanceM = 5f,
                         waitForAccurate = false,
+                        watchdogThresholdMs = 4_000,
                     )
 
                     TrackingMode.LIFT_UPHILL -> TrackingConfig(
-                        priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                        intervalMs = 4_000,
-                        minIntervalMs = 2_500,
-                        maxDelayMs = 12_000,
-                        minDistanceM = 6f,
+                        priority = Priority.PRIORITY_HIGH_ACCURACY,
+                        intervalMs = 2_500,
+                        minIntervalMs = 1_500,
+                        maxDelayMs = 2_500,
+                        minDistanceM = 10f,
                         waitForAccurate = false,
+                        watchdogThresholdMs = 7_000,
+                    )
+
+                    TrackingMode.WALKING_SLOW -> TrackingConfig(
+                        priority = Priority.PRIORITY_HIGH_ACCURACY,
+                        intervalMs = 3_000,
+                        minIntervalMs = 1_500,
+                        maxDelayMs = 3_000,
+                        minDistanceM = 8f,
+                        waitForAccurate = false,
+                        watchdogThresholdMs = 8_000,
                     )
 
                     TrackingMode.STOPPED_IDLE -> TrackingConfig(
                         priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                        intervalMs = 12_000,
-                        minIntervalMs = 8_000,
-                        maxDelayMs = 45_000,
-                        minDistanceM = 10f,
+                        intervalMs = 15_000,
+                        minIntervalMs = 10_000,
+                        maxDelayMs = 15_000,
+                        minDistanceM = 25f,
                         waitForAccurate = false,
+                        watchdogThresholdMs = 25_000,
                     )
 
                     TrackingMode.LOW_CONFIDENCE_RECOVERY -> TrackingConfig(
@@ -473,6 +489,7 @@ class AndroidFusedLocationBridge(
                         maxDelayMs = 0,
                         minDistanceM = 0f,
                         waitForAccurate = true,
+                        watchdogThresholdMs = 5_000,
                     )
                 }
             }
@@ -495,6 +512,8 @@ class AndroidFusedLocationBridge(
                     numberToFloat(rawConfig["minDistanceM"]) ?: fallback.minDistanceM
                 val parsedWaitForAccurate =
                     (rawConfig["waitForAccurate"] as? Boolean) ?: fallback.waitForAccurate
+                val parsedWatchdogThresholdMs =
+                    numberToLong(rawConfig["watchdogThresholdMs"]) ?: fallback.watchdogThresholdMs
 
                 return TrackingConfig(
                     priority = parsedPriority,
@@ -503,6 +522,7 @@ class AndroidFusedLocationBridge(
                     maxDelayMs = parsedMaxDelayMs.coerceAtLeast(0L),
                     minDistanceM = parsedMinDistanceM.coerceAtLeast(0f),
                     waitForAccurate = parsedWaitForAccurate,
+                    watchdogThresholdMs = parsedWatchdogThresholdMs.coerceAtLeast(1_000L)
                 )
             }
 
@@ -512,6 +532,10 @@ class AndroidFusedLocationBridge(
                     is String -> value.toLongOrNull()
                     else -> null
                 }
+            }
+
+            internal fun numberToLongForInternalUse(value: Any?): Long? {
+                return numberToLong(value)
             }
 
             private fun numberToFloat(value: Any?): Float? {
@@ -529,8 +553,5 @@ class AndroidFusedLocationBridge(
         private const val CONTROL_CHANNEL_NAME = "goofyrider/location_control"
         private const val REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION = 2001
         private const val REQUEST_CODE_APP_SETTINGS = 2002
-        private const val STALE_SAMPLE_SLACK_MS = 15_000L
-        private const val MIN_STALE_SAMPLE_SECONDS = 30L
-        private const val MAX_STALE_SAMPLE_SECONDS = 120L
     }
 }
