@@ -30,9 +30,9 @@ const String _locationDeniedForeverMessage =
 const String _locationServiceDisabledMessage =
     'Location services are turned off. Turn on GPS to record your session.';
 const String _openSettingsFailedMessage =
-    'Could not open app settings. Please open settings manually.';
+    'Could not open app settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
 const String _openLocationSettingsFailedMessage =
-    'Could not open location settings. Please open settings manually.';
+    'Could not open location settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
 const Duration _sampleWatchdogCheckInterval = Duration(seconds: 10);
 const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 20);
 const Duration _backgroundSyncRetryInterval = Duration(minutes: 2);
