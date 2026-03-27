@@ -33,7 +33,6 @@ const String _openSettingsFailedMessage =
     'Could not open app settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
 const String _openLocationSettingsFailedMessage =
     'Could not open location settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
-const Duration _sampleWatchdogCheckInterval = Duration(seconds: 10);
 const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 20);
 const Duration _backgroundSyncRetryInterval = Duration(minutes: 2);
 const Duration _gpsSignalStaleThreshold = Duration(seconds: 15);
@@ -201,7 +200,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
   StreamSubscription<void>? _locationSubscription;
   Timer? _elapsedTicker;
-  Timer? _sampleWatchdogTicker;
+  Timer? _sampleWatchdogTimer;
+  int _consecutiveWatchdogStaleEvents = 0;
   Timer? _backgroundSyncTicker;
   Duration _elapsedBeforeActive = Duration.zero;
   DateTime? _activeSegmentStartedAtUtc;
@@ -475,6 +475,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       _lastSampleReceivedAtUtc = null;
       _lastPointPersistedAtUtc = null;
       _lastWatchdogRestartAtUtc = null;
+      _consecutiveWatchdogStaleEvents = 0;
       await _recordTrackingDiagnostic(
         eventType: 'session_recovery_applied',
         details: <String, dynamic>{
@@ -569,6 +570,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       _lastSampleReceivedAtUtc = null;
       _lastPointPersistedAtUtc = null;
       _lastWatchdogRestartAtUtc = null;
+      _consecutiveWatchdogStaleEvents = 0;
       _startActiveElapsedClock();
 
       state = state.copyWith(
@@ -675,6 +677,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       _lastSampleReceivedAtUtc = null;
       _lastPointPersistedAtUtc = null;
       _lastWatchdogRestartAtUtc = null;
+      _consecutiveWatchdogStaleEvents = 0;
       final LocalRideSession updated =
           await _sessionRepository.resumeLocalSession(session.localId);
       state = state.copyWith(
@@ -851,6 +854,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
             cancelOnError: false,
           );
       _currentStreamStartedAtUtc = DateTime.now().toUtc();
+      _consecutiveWatchdogStaleEvents = 0;
       _startSampleWatchdog();
 
       if (session != null) {
@@ -878,7 +882,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         errorMessage: 'Could not start location tracking. Reconnecting...',
       );
       unawaited(
-        _restartLocationStreamIfNeeded(
+        _queueLocationStreamRestart(
           reason: 'stream_start_failed',
           recordingEpoch: recordingEpoch,
           sessionId: sessionId,
@@ -942,7 +946,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       errorMessage: 'Location stream interrupted. Reconnecting...',
     );
     unawaited(
-      _restartLocationStreamIfNeeded(
+      _queueLocationStreamRestart(
         reason: 'stream_error',
         recordingEpoch: recordingEpoch,
         sessionId: sessionId,
@@ -963,7 +967,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     }
     unawaited(_recordTrackingDiagnostic(eventType: 'stream_done'));
     unawaited(
-      _restartLocationStreamIfNeeded(
+      _queueLocationStreamRestart(
         reason: 'stream_done',
         recordingEpoch: recordingEpoch,
         sessionId: sessionId,
@@ -971,7 +975,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     );
   }
 
-  Future<void> _restartLocationStreamIfNeeded({
+  Future<void> _queueLocationStreamRestart({
     required String reason,
     required int recordingEpoch,
     required int? sessionId,
@@ -982,22 +986,41 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     }
 
     _locationStreamRestartQueued = true;
-    await Future<void>.delayed(const Duration(seconds: 1));
-    _locationStreamRestartQueued = false;
+    try {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      
+      if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
+        return;
+      }
 
-    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
-      return;
+      final DateTime? lastSampleAtUtc = _lastSampleReceivedAtUtc;
+      final Duration staleThreshold =
+          TrackingModeProfiles.forMode(_activeTrackingMode).sampleWatchdogThreshold;
+
+      if (lastSampleAtUtc != null &&
+          DateTime.now().toUtc().difference(lastSampleAtUtc) < staleThreshold) {
+        return;
+      }
+
+      // Increment the restart count even if the start ultimately fails so the
+      // diagnostic record accurately reflects the number of attempts, not successes.
+      final int nextRestartCount = state.streamRestartCount + 1;
+      state = state.copyWith(streamRestartCount: nextRestartCount);
+      try {
+        await _recordTrackingDiagnostic(
+          eventType: 'stream_restart_attempt',
+          details: <String, dynamic>{
+            'reason': reason,
+            'restart_count': nextRestartCount,
+          },
+        );
+      } catch (_) {
+        // Swallow diagnostic failure so recovery can continue.
+      }
+      await _startLocationStream();
+    } finally {
+    _locationStreamRestartQueued = false;
     }
-    final int nextRestartCount = state.streamRestartCount + 1;
-    state = state.copyWith(streamRestartCount: nextRestartCount);
-    await _recordTrackingDiagnostic(
-      eventType: 'stream_restart_attempt',
-      details: <String, dynamic>{
-        'reason': reason,
-        'restart_count': nextRestartCount,
-      },
-    );
-    await _startLocationStream();
   }
 
   Future<void> _onLocation(
@@ -1029,6 +1052,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
     _sampleSequence += 1;
     _lastSampleReceivedAtUtc = DateTime.now().toUtc();
+    _consecutiveWatchdogStaleEvents = 0;
+    _rescheduleSampleWatchdog();
     state = state.copyWith(lastSampleAtUtc: _lastSampleReceivedAtUtc);
     if (_sampleSequence == 1 ||
         _sampleSequence % _diagnosticHeartbeatEverySamples == 0) {
@@ -1137,6 +1162,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       _activeTrackingMode = result.trackingMode;
       try {
         await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
+        _rescheduleSampleWatchdog();
         if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
           return;
         }
@@ -1247,25 +1273,59 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   }
 
   void _startSampleWatchdog() {
-    _sampleWatchdogTicker?.cancel();
-    _sampleWatchdogTicker = Timer.periodic(_sampleWatchdogCheckInterval, (_) {
-      unawaited(_checkSampleWatchdog());
-    });
+    _rescheduleSampleWatchdog();
   }
 
   void _stopSampleWatchdog() {
-    _sampleWatchdogTicker?.cancel();
-    _sampleWatchdogTicker = null;
+    _sampleWatchdogTimer?.cancel();
+    _sampleWatchdogTimer = null;
+  }
+
+  void _rescheduleSampleWatchdog() {
+    _sampleWatchdogTimer?.cancel();
+    _sampleWatchdogTimer = null;
+
+    if (state.phase != RecordScreenPhase.recording) {
+      return;
+    }
+
+    final LocalRideSession? session = state.session;
+    if (session == null) {
+      return;
+    }
+
+    final DateTime? referenceTime = 
+        _lastSampleReceivedAtUtc ?? _currentStreamStartedAtUtc;
+    if (referenceTime == null) {
+      return;
+    }
+
+    final Duration staleThreshold =
+        TrackingModeProfiles.forMode(_activeTrackingMode).sampleWatchdogThreshold;
+    final DateTime deadline = referenceTime.add(staleThreshold);
+    final DateTime now = DateTime.now().toUtc();
+    final Duration delay = deadline.difference(now);
+
+    if (delay <= Duration.zero) {
+      unawaited(_checkSampleWatchdog());
+      return;
+    }
+
+    _sampleWatchdogTimer = Timer(delay, () {
+      unawaited(_checkSampleWatchdog());
+    });
   }
 
   Future<void> _checkSampleWatchdog() async {
     if (state.phase != RecordScreenPhase.recording) {
       return;
     }
+
     final LocalRideSession? session = state.session;
     if (session == null) {
       return;
     }
+
     final int recordingEpoch = _recordingEpoch;
     final DateTime? referenceTime =
         _lastSampleReceivedAtUtc ?? _currentStreamStartedAtUtc;
@@ -1276,20 +1336,81 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     final DateTime now = DateTime.now().toUtc();
     final Duration staleFor = now.difference(referenceTime);
     final Duration staleThreshold =
-        TrackingModeProfiles.forMode(_activeTrackingMode)
-            .sampleWatchdogThreshold;
+        TrackingModeProfiles.forMode(_activeTrackingMode).sampleWatchdogThreshold;
+
     if (staleFor < staleThreshold) {
+      _rescheduleSampleWatchdog();
+      return;
+    }
+
+    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: session.localId)) {
       return;
     }
 
     final DateTime? lastRestart = _lastWatchdogRestartAtUtc;
-    if (lastRestart != null &&
-        now.difference(lastRestart) < _sampleWatchdogRestartCooldown) {
+    final bool restartCoolingDown =
+        lastRestart != null &&
+        now.difference(lastRestart) < _sampleWatchdogRestartCooldown;
+
+    _consecutiveWatchdogStaleEvents += 1;
+
+    final bool shouldAttemptRecoveryMode =
+        _activeTrackingMode != TrackingMode.lowConfidenceRecovery &&
+        _consecutiveWatchdogStaleEvents == 1;
+
+    if (shouldAttemptRecoveryMode) {
+      final TrackingMode previousMode = _activeTrackingMode;
+      _activeTrackingMode = TrackingMode.lowConfidenceRecovery;
+
+      try {
+        await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
+        if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: session.localId)) {
+          return;
+        }
+
+        state = state.copyWith(
+          errorMessage:
+              'Location updates stalled for ${staleFor.inSeconds}s. Recovering GPS...',
+          gpsSignal: const GpsSignalState(
+            bars: 0,
+            description: 'Searching',
+          ),
+        );
+
+        await _recordTrackingDiagnostic(
+          eventType: _lastSampleReceivedAtUtc == null
+              ? 'sample_watchdog_no_initial_sample'
+              : 'sample_watchdog_recovery_mode',
+          details: <String, dynamic>{
+            'stale_for_seconds': staleFor.inSeconds,
+            'stale_threshold_seconds': staleThreshold.inSeconds,
+            'from_mode': previousMode.wireValue,
+            'to_mode': _activeTrackingMode.wireValue,
+            'restart_count': state.streamRestartCount,
+          },
+        );
+
+        _rescheduleSampleWatchdog();
+        return;
+      } catch (error, stackTrace) {
+        await _recordTrackingDiagnostic(
+          eventType: 'sample_watchdog_recovery_mode_failed',
+          message: error.toString(),
+          details: <String, dynamic>{
+            'stack': _firstStackLine(stackTrace),
+            'stale_for_seconds': staleFor.inSeconds,
+          },
+          localSessionId: session.localId,
+        );
+        // Fall through to stream restart below.
+      }
+    }
+
+    if (restartCoolingDown) {
+      _rescheduleSampleWatchdog();
       return;
     }
-    if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: session.localId)) {
-      return;
-    }
+
     _lastWatchdogRestartAtUtc = now;
 
     state = state.copyWith(
@@ -1300,18 +1421,22 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         description: 'Searching',
       ),
     );
+
     await _recordTrackingDiagnostic(
       eventType: _lastSampleReceivedAtUtc == null
           ? 'sample_watchdog_no_initial_sample'
-          : 'sample_watchdog_stale',
+          : 'sample_watchdog_restart',
       details: <String, dynamic>{
         'stale_for_seconds': staleFor.inSeconds,
         'stale_threshold_seconds': staleThreshold.inSeconds,
         'tracking_mode': _activeTrackingMode.wireValue,
         'restart_count': state.streamRestartCount,
+        'consecutive_stale_events': _consecutiveWatchdogStaleEvents,
       },
+      localSessionId: session.localId,
     );
-    await _restartLocationStreamIfNeeded(
+
+    await _queueLocationStreamRestart(
       reason: 'sample_watchdog_stale',
       recordingEpoch: recordingEpoch,
       sessionId: session.localId,
@@ -1449,6 +1574,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     _lastPointPersistedAtUtc = null;
     _currentStreamStartedAtUtc = null;
     _lastWatchdogRestartAtUtc = null;
+    _consecutiveWatchdogStaleEvents = 0;
     _stopElapsedTicker();
     _stopSampleWatchdog();
   }
@@ -1687,7 +1813,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
   @override
   void dispose() {
     _elapsedTicker?.cancel();
-    _sampleWatchdogTicker?.cancel();
+    _sampleWatchdogTimer?.cancel();
     _backgroundSyncTicker?.cancel();
     _locationSubscription?.cancel();
     super.dispose();

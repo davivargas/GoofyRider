@@ -133,6 +133,7 @@ class TrackingModeProfile {
       'maxDelayMs': maxDelayMs,
       'minDistanceM': minDistanceM,
       'waitForAccurate': waitForAccurate,
+      'watchdogThresholdMs': watchdogThresholdMs,
     };
   }
 }
