@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/features/session/data/geolocator_tracking_repository.dart';
@@ -69,41 +71,41 @@ void main() {
     expect(activeDescentConfig['intervalMs'], 900);
     expect(activeDescentConfig['minIntervalMs'], 250);
     expect(activeDescentConfig['maxDelayMs'], 900);
-    expect(activeDescentConfig['minDistanceM'], 1.0);
+    expect(activeDescentConfig['minDistanceM'], 5.0);
     expect(activeDescentConfig['waitForAccurate'], isFalse);
     expect(
       activeDescentPayload['staleSampleThresholdSeconds'],
       TrackingModeProfiles.forMode(TrackingMode.activeDescent)
-          .staleSampleThresholdSeconds(),
+          .staleSampleThresholdSeconds,
     );
 
     final Map<String, dynamic> liftPayload =
         Map<String, dynamic>.from(byMode['lift_uphill'] as Map);
     final Map<String, dynamic> liftConfig =
         Map<String, dynamic>.from(liftPayload['config'] as Map);
-    expect(liftConfig['priority'], 'balanced_power');
-    expect(liftConfig['intervalMs'], 4000);
-    expect(liftConfig['minIntervalMs'], 2500);
-    expect(liftConfig['maxDelayMs'], 12000);
-    expect(liftConfig['minDistanceM'], 6.0);
+    expect(liftConfig['priority'], 'high_accuracy');
+    expect(liftConfig['intervalMs'], 2500);
+    expect(liftConfig['minIntervalMs'], 1500);
+    expect(liftConfig['maxDelayMs'], 2500);
+    expect(liftConfig['minDistanceM'], 10.0);
     expect(
       liftPayload['staleSampleThresholdSeconds'],
       TrackingModeProfiles.forMode(TrackingMode.liftUphill)
-          .staleSampleThresholdSeconds(),
+          .staleSampleThresholdSeconds,
     );
 
     final Map<String, dynamic> stoppedPayload =
         Map<String, dynamic>.from(byMode['stopped_idle'] as Map);
     final Map<String, dynamic> stoppedConfig =
         Map<String, dynamic>.from(stoppedPayload['config'] as Map);
-    expect(stoppedConfig['intervalMs'], 12000);
-    expect(stoppedConfig['minIntervalMs'], 8000);
-    expect(stoppedConfig['maxDelayMs'], 45000);
+    expect(stoppedConfig['intervalMs'], 15000);
+    expect(stoppedConfig['minIntervalMs'], 10000);
+    expect(stoppedConfig['maxDelayMs'], 15000);
     expect(stoppedConfig['waitForAccurate'], isFalse);
     expect(
       stoppedPayload['staleSampleThresholdSeconds'],
       TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .staleSampleThresholdSeconds(),
+          .staleSampleThresholdSeconds,
     );
 
     final Map<String, dynamic> recoveryPayload =
@@ -118,7 +120,7 @@ void main() {
     expect(
       recoveryPayload['staleSampleThresholdSeconds'],
       TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
-          .staleSampleThresholdSeconds(),
+          .staleSampleThresholdSeconds,
     );
   });
 
@@ -230,7 +232,8 @@ void main() {
     expect(samples[1].accuracyM, 4.5);
   });
 
-  test('watchPosition falls back to geolocator delegate when bridge fails',
+  test(
+      'watchPosition keeps waiting for native startup when first sample is slow',
       () async {
     final LocationSample fallbackSample = LocationSample(
       timestamp: DateTime.fromMillisecondsSinceEpoch(5000, isUtc: true),
@@ -247,12 +250,32 @@ void main() {
       checkResult: LocationPermissionState.granted,
       watchSamples: <LocationSample>[fallbackSample],
     );
+    final List<String> fallbackReasons = <String>[];
+    final LocationSample nativeSample = LocationSample(
+      timestamp: DateTime.fromMillisecondsSinceEpoch(1234, isUtc: true),
+      latitude: 49.12,
+      longitude: -123.12,
+      accuracyM: 2.0,
+      altitudeM: null,
+      speedMps: null,
+      headingDeg: null,
+    );
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockStreamHandler(
       eventChannel,
       MockStreamHandler.inline(
-        onListen: (Object? arguments, MockStreamHandlerEventSink events) {},
+        onListen: (Object? arguments, MockStreamHandlerEventSink events) {
+          Timer(const Duration(milliseconds: 35), () {
+            events.success(<String, Object?>{
+              'timestampUtc': nativeSample.timestamp.millisecondsSinceEpoch,
+              'latitude': nativeSample.latitude,
+              'longitude': nativeSample.longitude,
+              'horizontalAccuracyM': nativeSample.accuracyM,
+            });
+            events.endOfStream();
+          });
+        },
       ),
     );
 
@@ -262,16 +285,72 @@ void main() {
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
       nativeStreamStartupTimeout: const Duration(milliseconds: 20),
+      onFallbackActivated: (String reason, Object? error) {
+        fallbackReasons.add(reason);
+      },
+    );
+
+    final List<LocationSample> samples =
+        await repository.watchPosition().toList();
+
+    expect(permissionsDelegate.watchPositionCallCount, 0);
+    expect(fallbackReasons, isEmpty);
+    expect(samples, hasLength(1));
+    expect(samples.first.timestamp, nativeSample.timestamp);
+    expect(samples.first.latitude, nativeSample.latitude);
+    expect(samples.first.longitude, nativeSample.longitude);
+  });
+
+  test(
+      'watchPosition reports fallback reason when native stream closes before first event',
+      () async {
+    final LocationSample fallbackSample = LocationSample(
+      timestamp: DateTime.fromMillisecondsSinceEpoch(5000, isUtc: true),
+      latitude: 49.50,
+      longitude: -123.50,
+      accuracyM: 3.0,
+      altitudeM: null,
+      speedMps: null,
+      headingDeg: null,
+    );
+    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+        _FakeGeolocatorTrackingRepository(
+      ensureResult: LocationPermissionState.granted,
+      checkResult: LocationPermissionState.granted,
+      watchSamples: <LocationSample>[fallbackSample],
+    );
+    final List<String> fallbackReasons = <String>[];
+    Object? fallbackError;
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      eventChannel,
+      MockStreamHandler.inline(
+        onListen: (Object? arguments, MockStreamHandlerEventSink events) {
+          events.endOfStream();
+        },
+      ),
+    );
+
+    final NativeAndroidTrackingRepository repository =
+        NativeAndroidTrackingRepository(
+      eventChannel: eventChannel,
+      controlChannel: controlChannel,
+      permissionsDelegate: permissionsDelegate,
+      onFallbackActivated: (String reason, Object? error) {
+        fallbackReasons.add(reason);
+        fallbackError = error;
+      },
     );
 
     final List<LocationSample> samples =
         await repository.watchPosition().take(1).toList();
 
     expect(permissionsDelegate.watchPositionCallCount, 1);
+    expect(fallbackReasons, <String>['native_stream_closed_before_first_event']);
+    expect(fallbackError, isNull);
     expect(samples, hasLength(1));
     expect(samples.first.timestamp, fallbackSample.timestamp);
-    expect(samples.first.latitude, fallbackSample.latitude);
-    expect(samples.first.longitude, fallbackSample.longitude);
   });
 
   test('checkRecordingReadiness returns native permission readiness message',

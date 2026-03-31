@@ -33,7 +33,10 @@ const String _openSettingsFailedMessage =
     'Could not open app settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
 const String _openLocationSettingsFailedMessage =
     'Could not open location settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
-const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 20);
+const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 30);
+const Duration _locationStreamRestartQueueDelay = Duration(seconds: 2);
+const Duration _sampleWatchdogInitialSampleRestartGrace = Duration(seconds: 12);
+const int _recoveryModeStaleEventsBeforeRestart = 3;
 const Duration _backgroundSyncRetryInterval = Duration(minutes: 2);
 const Duration _gpsSignalStaleThreshold = Duration(seconds: 15);
 const Duration _streamCancelTimeout = Duration(seconds: 4);
@@ -987,15 +990,16 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
     _locationStreamRestartQueued = true;
     try {
-      await Future<void>.delayed(const Duration(seconds: 1));
-      
+      await Future<void>.delayed(_locationStreamRestartQueueDelay);
+
       if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: sessionId)) {
         return;
       }
 
       final DateTime? lastSampleAtUtc = _lastSampleReceivedAtUtc;
       final Duration staleThreshold =
-          TrackingModeProfiles.forMode(_activeTrackingMode).sampleWatchdogThreshold;
+          TrackingModeProfiles.forMode(_activeTrackingMode)
+              .sampleWatchdogThreshold;
 
       if (lastSampleAtUtc != null &&
           DateTime.now().toUtc().difference(lastSampleAtUtc) < staleThreshold) {
@@ -1019,7 +1023,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       }
       await _startLocationStream();
     } finally {
-    _locationStreamRestartQueued = false;
+      _locationStreamRestartQueued = false;
     }
   }
 
@@ -1281,6 +1285,13 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     _sampleWatchdogTimer = null;
   }
 
+  void _scheduleSampleWatchdogAfter(Duration delay) {
+    _sampleWatchdogTimer?.cancel();
+    _sampleWatchdogTimer = Timer(delay, () {
+      unawaited(_checkSampleWatchdog());
+    });
+  }
+
   void _rescheduleSampleWatchdog() {
     _sampleWatchdogTimer?.cancel();
     _sampleWatchdogTimer = null;
@@ -1294,14 +1305,15 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       return;
     }
 
-    final DateTime? referenceTime = 
+    final DateTime? referenceTime =
         _lastSampleReceivedAtUtc ?? _currentStreamStartedAtUtc;
     if (referenceTime == null) {
       return;
     }
 
     final Duration staleThreshold =
-        TrackingModeProfiles.forMode(_activeTrackingMode).sampleWatchdogThreshold;
+        TrackingModeProfiles.forMode(_activeTrackingMode)
+            .sampleWatchdogThreshold;
     final DateTime deadline = referenceTime.add(staleThreshold);
     final DateTime now = DateTime.now().toUtc();
     final Duration delay = deadline.difference(now);
@@ -1311,9 +1323,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       return;
     }
 
-    _sampleWatchdogTimer = Timer(delay, () {
-      unawaited(_checkSampleWatchdog());
-    });
+    _scheduleSampleWatchdogAfter(delay);
   }
 
   Future<void> _checkSampleWatchdog() async {
@@ -1336,7 +1346,9 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     final DateTime now = DateTime.now().toUtc();
     final Duration staleFor = now.difference(referenceTime);
     final Duration staleThreshold =
-        TrackingModeProfiles.forMode(_activeTrackingMode).sampleWatchdogThreshold;
+        TrackingModeProfiles.forMode(_activeTrackingMode)
+            .sampleWatchdogThreshold;
+    final bool hasReceivedSample = _lastSampleReceivedAtUtc != null;
 
     if (staleFor < staleThreshold) {
       _rescheduleSampleWatchdog();
@@ -1348,15 +1360,14 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     }
 
     final DateTime? lastRestart = _lastWatchdogRestartAtUtc;
-    final bool restartCoolingDown =
-        lastRestart != null &&
+    final bool restartCoolingDown = lastRestart != null &&
         now.difference(lastRestart) < _sampleWatchdogRestartCooldown;
 
     _consecutiveWatchdogStaleEvents += 1;
 
     final bool shouldAttemptRecoveryMode =
         _activeTrackingMode != TrackingMode.lowConfidenceRecovery &&
-        _consecutiveWatchdogStaleEvents == 1;
+            _consecutiveWatchdogStaleEvents == 1;
 
     if (shouldAttemptRecoveryMode) {
       final TrackingMode previousMode = _activeTrackingMode;
@@ -1364,7 +1375,8 @@ class RecordingController extends StateNotifier<RecordingViewState> {
 
       try {
         await _locationTrackingRepository.setTrackingMode(_activeTrackingMode);
-        if (!_isActiveRecordingEpoch(recordingEpoch, sessionId: session.localId)) {
+        if (!_isActiveRecordingEpoch(recordingEpoch,
+            sessionId: session.localId)) {
           return;
         }
 
@@ -1378,10 +1390,11 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         );
 
         await _recordTrackingDiagnostic(
-          eventType: _lastSampleReceivedAtUtc == null
-              ? 'sample_watchdog_no_initial_sample'
-              : 'sample_watchdog_recovery_mode',
+          eventType: hasReceivedSample
+              ? 'sample_watchdog_recovery_mode'
+              : 'sample_watchdog_no_initial_sample',
           details: <String, dynamic>{
+            'watchdog_phase': hasReceivedSample ? 'mid_session' : 'initial_fix',
             'stale_for_seconds': staleFor.inSeconds,
             'stale_threshold_seconds': staleThreshold.inSeconds,
             'from_mode': previousMode.wireValue,
@@ -1390,7 +1403,10 @@ class RecordingController extends StateNotifier<RecordingViewState> {
           },
         );
 
-        _rescheduleSampleWatchdog();
+        final Duration recoveryThreshold = TrackingModeProfiles.forMode(
+          _activeTrackingMode,
+        ).sampleWatchdogThreshold;
+        _scheduleSampleWatchdogAfter(recoveryThreshold);
         return;
       } catch (error, stackTrace) {
         await _recordTrackingDiagnostic(
@@ -1406,8 +1422,67 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       }
     }
 
+    final bool shouldKeepWaitingForInitialSample = !hasReceivedSample &&
+        staleFor < staleThreshold + _sampleWatchdogInitialSampleRestartGrace;
+    if (shouldKeepWaitingForInitialSample) {
+      state = state.copyWith(
+        errorMessage:
+            'Still waiting for initial GPS fix (${staleFor.inSeconds}s). Continuing recovery...',
+        gpsSignal: const GpsSignalState(
+          bars: 0,
+          description: 'Searching',
+        ),
+      );
+      await _recordTrackingDiagnostic(
+        eventType: 'sample_watchdog_waiting_initial_sample',
+        details: <String, dynamic>{
+          'stale_for_seconds': staleFor.inSeconds,
+          'stale_threshold_seconds': staleThreshold.inSeconds,
+          'initial_sample_grace_seconds':
+              _sampleWatchdogInitialSampleRestartGrace.inSeconds,
+          'tracking_mode': _activeTrackingMode.wireValue,
+          'restart_count': state.streamRestartCount,
+        },
+      );
+      _scheduleSampleWatchdogAfter(staleThreshold);
+      return;
+    }
+
+    final bool shouldDelayRestartAfterRecovery = _activeTrackingMode ==
+            TrackingMode.lowConfidenceRecovery &&
+        _consecutiveWatchdogStaleEvents < _recoveryModeStaleEventsBeforeRestart;
+    if (shouldDelayRestartAfterRecovery) {
+      await _recordTrackingDiagnostic(
+        eventType: 'sample_watchdog_recovery_wait',
+        details: <String, dynamic>{
+          'stale_for_seconds': staleFor.inSeconds,
+          'stale_threshold_seconds': staleThreshold.inSeconds,
+          'consecutive_stale_events': _consecutiveWatchdogStaleEvents,
+          'required_stale_events_for_restart':
+              _recoveryModeStaleEventsBeforeRestart,
+          'tracking_mode': _activeTrackingMode.wireValue,
+        },
+      );
+      _scheduleSampleWatchdogAfter(staleThreshold);
+      return;
+    }
+
     if (restartCoolingDown) {
-      _rescheduleSampleWatchdog();
+      final int cooldownRemainingSeconds =
+          _sampleWatchdogRestartCooldown.inSeconds -
+              now.difference(lastRestart!).inSeconds;
+      await _recordTrackingDiagnostic(
+        eventType: 'sample_watchdog_restart_cooldown',
+        details: <String, dynamic>{
+          'stale_for_seconds': staleFor.inSeconds,
+          'stale_threshold_seconds': staleThreshold.inSeconds,
+          'cooldown_remaining_seconds': cooldownRemainingSeconds.clamp(0, 600),
+          'tracking_mode': _activeTrackingMode.wireValue,
+          'consecutive_stale_events': _consecutiveWatchdogStaleEvents,
+        },
+        localSessionId: session.localId,
+      );
+      _scheduleSampleWatchdogAfter(staleThreshold);
       return;
     }
 
@@ -1423,10 +1498,11 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     );
 
     await _recordTrackingDiagnostic(
-      eventType: _lastSampleReceivedAtUtc == null
-          ? 'sample_watchdog_no_initial_sample'
-          : 'sample_watchdog_restart',
+      eventType: hasReceivedSample
+          ? 'sample_watchdog_restart'
+          : 'sample_watchdog_no_initial_sample',
       details: <String, dynamic>{
+        'watchdog_phase': hasReceivedSample ? 'mid_session' : 'initial_fix',
         'stale_for_seconds': staleFor.inSeconds,
         'stale_threshold_seconds': staleThreshold.inSeconds,
         'tracking_mode': _activeTrackingMode.wireValue,

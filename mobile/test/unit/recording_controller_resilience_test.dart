@@ -25,6 +25,7 @@ class ControlledLocationRepository implements LocationTrackingRepository {
   String? readinessError;
   Completer<LocationPermissionState>? ensurePermissionsCompleter;
   int watchPositionCalls = 0;
+  final List<TrackingMode> requestedTrackingModes = <TrackingMode>[];
 
   @override
   Future<LocationPermissionState> checkPermissions() async {
@@ -81,7 +82,9 @@ class ControlledLocationRepository implements LocationTrackingRepository {
   }
 
   @override
-  Future<void> setTrackingMode(TrackingMode mode) async {}
+  Future<void> setTrackingMode(TrackingMode mode) async {
+    requestedTrackingModes.add(mode);
+  }
 
   void emit(LocationSample sample) {
     _controller.add(sample);
@@ -173,9 +176,12 @@ class FakeSessionRepository implements SessionRepository {
   final List<int> syncedSessionIds = <int>[];
   final Set<int> syncSessionThrowIds = <int>{};
   final List<NewSessionPoint> appendedPoints = <NewSessionPoint>[];
+  final List<TrackingDiagnosticEvent> recordedDiagnostics =
+      <TrackingDiagnosticEvent>[];
   int listPendingSyncSessionsCalls = 0;
   int syncSessionCalls = 0;
   int startLocalSessionCalls = 0;
+  int _nextDiagnosticId = 1;
 
   LocalRideSession? _activeSession;
 
@@ -218,7 +224,9 @@ class FakeSessionRepository implements SessionRepository {
       session: session,
       points: _recoveryAcceptedPoints,
       acceptedPoints: _recoveryAcceptedPoints,
-      trackingDiagnostics: const <TrackingDiagnosticEvent>[],
+      trackingDiagnostics: List<TrackingDiagnosticEvent>.from(
+        recordedDiagnostics,
+      ),
     );
   }
 
@@ -227,7 +235,7 @@ class FakeSessionRepository implements SessionRepository {
     int localSessionId, {
     int limit = 120,
   }) async {
-    return const <TrackingDiagnosticEvent>[];
+    return List<TrackingDiagnosticEvent>.from(recordedDiagnostics);
   }
 
   @override
@@ -318,7 +326,20 @@ class FakeSessionRepository implements SessionRepository {
     required String eventType,
     String? message,
     Map<String, dynamic>? details,
-  }) async {}
+  }) async {
+    recordedDiagnostics.add(
+      TrackingDiagnosticEvent(
+        id: _nextDiagnosticId,
+        localSessionId: localSessionId,
+        occurredAt: DateTime.now().toUtc(),
+        eventType: eventType,
+        message: message,
+        details:
+            Map<String, dynamic>.from(details ?? const <String, dynamic>{}),
+      ),
+    );
+    _nextDiagnosticId += 1;
+  }
 }
 
 class FlakyPersistenceSessionRepository implements SessionRepository {
@@ -563,37 +584,38 @@ LocalSessionPoint _buildAcceptedPoint({
 }
 
 void main() {
-  test('tracking mode profiles derive stale thresholds from one contract path',
-      () {
+  test('tracking mode profiles expose tuned watchdog thresholds', () {
     expect(
       TrackingModeProfiles.forMode(TrackingMode.initializingFix)
-          .staleSampleThresholdSeconds(),
-      30,
+          .sampleWatchdogThreshold,
+      const Duration(seconds: 5),
     );
     expect(
       TrackingModeProfiles.forMode(TrackingMode.activeDescent)
-          .staleSampleThresholdSeconds(),
-      30,
+          .sampleWatchdogThreshold,
+      const Duration(seconds: 9),
     );
     expect(
       TrackingModeProfiles.forMode(TrackingMode.liftUphill)
-          .staleSampleThresholdSeconds(),
-      30,
+          .sampleWatchdogThreshold,
+      const Duration(seconds: 10),
     );
     expect(
       TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .staleSampleThresholdSeconds(),
-      60,
+          .sampleWatchdogThreshold,
+      const Duration(seconds: 25),
     );
     expect(
       TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
-          .staleSampleThresholdSeconds(),
-      30,
+          .sampleWatchdogThreshold,
+      const Duration(seconds: 11),
     );
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .sampleWatchdogStaleThreshold(),
-      const Duration(seconds: 60),
+      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
+              .sampleWatchdogThreshold >
+          TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+              .sampleWatchdogThreshold,
+      isTrue,
     );
   });
 
@@ -988,6 +1010,138 @@ void main() {
 
     controller.dispose();
     await locationRepository.close();
+  });
+
+  test('watchdog waits for delayed initial sample before restarting', () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await locationRepository.close();
+    });
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    await Future<void>.delayed(const Duration(seconds: 17));
+
+    expect(controller.state.phase, RecordScreenPhase.recording);
+    expect(controller.state.streamRestartCount, 0);
+    expect(locationRepository.watchPositionCalls, 1);
+    expect(
+      repository.recordedDiagnostics.any(
+        (TrackingDiagnosticEvent event) =>
+            event.eventType == 'sample_watchdog_no_initial_sample',
+      ),
+      isTrue,
+    );
+    expect(
+      repository.recordedDiagnostics.any(
+        (TrackingDiagnosticEvent event) =>
+            event.eventType == 'sample_watchdog_waiting_initial_sample',
+      ),
+      isTrue,
+    );
+    expect(
+      repository.recordedDiagnostics.any(
+        (TrackingDiagnosticEvent event) =>
+            event.eventType == 'sample_watchdog_restart',
+      ),
+      isFalse,
+    );
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 17),
+        latitude: 49.0,
+        longitude: -123.0,
+        accuracyM: 6,
+        altitudeM: 500,
+        speedMps: 0,
+        headingDeg: 0,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+
+    expect(controller.state.streamRestartCount, 0);
+    expect(locationRepository.watchPositionCalls, 1);
+  });
+
+  test('watchdog enters recovery before restarting a stalled live stream',
+      () async {
+    final FakeSessionRepository repository = FakeSessionRepository();
+    final ControlledLocationRepository locationRepository =
+        ControlledLocationRepository();
+    final RecordingController controller = RecordingController(
+      sessionRepository: repository,
+      locationTrackingRepository: locationRepository,
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await locationRepository.close();
+    });
+
+    await controller.bootstrap();
+    await controller.startRecording();
+
+    locationRepository.emit(
+      LocationSample(
+        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
+        latitude: 49.0,
+        longitude: -123.0,
+        accuracyM: 5,
+        altitudeM: 100,
+        speedMps: 4,
+        headingDeg: 90,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    final int diagnosticBaseline = repository.recordedDiagnostics.length;
+    await Future<void>.delayed(const Duration(seconds: 22));
+
+    final List<TrackingDiagnosticEvent> watchdogDiagnostics =
+        repository.recordedDiagnostics
+            .skip(diagnosticBaseline)
+            .where(
+              (TrackingDiagnosticEvent event) =>
+                  event.eventType.startsWith('sample_watchdog_'),
+            )
+            .toList(growable: false);
+
+    expect(controller.state.phase, RecordScreenPhase.recording);
+    expect(controller.state.streamRestartCount, 0);
+    expect(locationRepository.watchPositionCalls, 1);
+    expect(
+      locationRepository.requestedTrackingModes,
+      contains(TrackingMode.lowConfidenceRecovery),
+    );
+    expect(
+      watchdogDiagnostics.any(
+        (TrackingDiagnosticEvent event) =>
+            event.eventType == 'sample_watchdog_recovery_mode',
+      ),
+      isTrue,
+    );
+    expect(
+      watchdogDiagnostics.any(
+        (TrackingDiagnosticEvent event) =>
+            event.eventType == 'sample_watchdog_recovery_wait',
+      ),
+      isTrue,
+    );
+    expect(
+      watchdogDiagnostics.any(
+        (TrackingDiagnosticEvent event) =>
+            event.eventType == 'sample_watchdog_restart',
+      ),
+      isFalse,
+    );
   });
 
   test(

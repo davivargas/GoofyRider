@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/location_tracking_repository.dart';
@@ -11,12 +12,14 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     EventChannel eventChannel = const EventChannel(_eventChannelName),
     MethodChannel controlChannel = const MethodChannel(_controlChannelName),
     GeolocatorTrackingRepository? permissionsDelegate,
-    Duration nativeStreamStartupTimeout = const Duration(seconds: 2),
+    Duration nativeStreamStartupTimeout = const Duration(seconds: 12),
+    void Function(String reason, Object? error)? onFallbackActivated,
   })  : _eventChannel = eventChannel,
         _controlChannel = controlChannel,
         _permissionsDelegate =
             permissionsDelegate ?? GeolocatorTrackingRepository(),
-        _nativeStreamStartupTimeout = nativeStreamStartupTimeout;
+        _nativeStreamStartupTimeout = nativeStreamStartupTimeout,
+        _onFallbackActivated = onFallbackActivated;
 
   static const String _eventChannelName = 'goofyrider/location_events';
   static const String _controlChannelName = 'goofyrider/location_control';
@@ -25,6 +28,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   final MethodChannel _controlChannel;
   final GeolocatorTrackingRepository _permissionsDelegate;
   final Duration _nativeStreamStartupTimeout;
+  final void Function(String reason, Object? error)? _onFallbackActivated;
 
   @override
   Future<LocationPermissionState> checkPermissions() {
@@ -113,11 +117,26 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     try {
       iterator =
           StreamIterator<dynamic>(_eventChannel.receiveBroadcastStream());
-      final bool hasFirstEvent = await iterator
-          .moveNext()
-          .timeout(_nativeStreamStartupTimeout, onTimeout: () => false);
+      final Future<bool> firstEventFuture = iterator.moveNext();
+      bool hasFirstEvent;
+      try {
+        hasFirstEvent =
+            await firstEventFuture.timeout(_nativeStreamStartupTimeout);
+      } on TimeoutException {
+        debugPrint(
+          'NativeAndroidTrackingRepository: native startup exceeded '
+          '${_nativeStreamStartupTimeout.inMilliseconds}ms; continuing to wait '
+          'without geolocator fallback.',
+        );
+        hasFirstEvent = await firstEventFuture;
+      }
+
       if (!hasFirstEvent) {
-        throw TimeoutException('Native stream startup timed out');
+        _activateGeolocatorFallback(
+          reason: 'native_stream_closed_before_first_event',
+        );
+        yield* _permissionsDelegate.watchPosition();
+        return;
       }
 
       for (final LocationSample sample in _mapSamples(iterator.current)) {
@@ -128,11 +147,11 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
           yield sample;
         }
       }
-    } on MissingPluginException {
+    } on MissingPluginException catch (error) {
+      _activateGeolocatorFallback(reason: 'missing_plugin', error: error);
       yield* _permissionsDelegate.watchPosition();
-    } on PlatformException {
-      yield* _permissionsDelegate.watchPosition();
-    } on TimeoutException {
+    } on PlatformException catch (error) {
+      _activateGeolocatorFallback(reason: 'platform_exception', error: error);
       yield* _permissionsDelegate.watchPosition();
     } finally {
       await iterator?.cancel();
@@ -321,5 +340,16 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
       return null;
     }
     return parsed;
+  }
+
+  void _activateGeolocatorFallback({
+    required String reason,
+    Object? error,
+  }) {
+    debugPrint(
+      'NativeAndroidTrackingRepository: activating geolocator fallback '
+      '($reason).',
+    );
+    _onFallbackActivated?.call(reason, error);
   }
 }

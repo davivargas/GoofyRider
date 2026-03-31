@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.common.api.ResolvableApiException
@@ -38,11 +39,20 @@ class AndroidFusedLocationBridge(
     private var callback: LocationCallback? = null
     private var currentMode: TrackingMode = TrackingMode.INITIALIZING_FIX
     private var currentConfig: TrackingConfig = TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
-    private var maxAcceptedSampleAgeNanos: Long =
+    private var watchdogThresholdNanos: Long =
         TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
             .watchdogThresholdMs * 1_000_000L
+    private var maxAcceptedSampleAgeNanos: Long =
+        computeMaxAcceptedSampleAgeNanos(
+            watchdogThresholdNanos = watchdogThresholdNanos,
+            maxDelayMs = currentConfig.maxDelayMs,
+        )
     private var lastElapsedRealtimeNanos: Long? = null
     private var pendingBackgroundPermissionResult: MethodChannel.Result? = null
+    private var isForegroundServiceRunning: Boolean = false
+    private var activeRequestId: Long = 0L
+    private var activeRequestStartedRealtimeNanos: Long? = null
+    private var didLogFirstFixForActiveRequest: Boolean = false
 
     init {
         EventChannel(messenger, EVENT_CHANNEL_NAME).setStreamHandler(this)
@@ -55,7 +65,7 @@ class AndroidFusedLocationBridge(
     }
 
     override fun onCancel(arguments: Any?) {
-        stopLocationUpdates()
+        stopLocationUpdates(reason = "stream_cancel")
         eventSink = null
     }
 
@@ -73,9 +83,17 @@ class AndroidFusedLocationBridge(
                     call = call,
                     fallback = TrackingConfig.defaultsFor(parsedMode),
                 )
-                maxAcceptedSampleAgeNanos = readStaleSampleNanos(call, currentConfig)
+                watchdogThresholdNanos = readWatchdogThresholdNanos(call, currentConfig)
+                maxAcceptedSampleAgeNanos = computeMaxAcceptedSampleAgeNanos(
+                    watchdogThresholdNanos = watchdogThresholdNanos,
+                    maxDelayMs = currentConfig.maxDelayMs,
+                )
+                Log.d(
+                    TAG,
+                    "setTrackingMode mode=${currentMode.name} active=${eventSink != null} watchdogMs=${watchdogThresholdNanos / 1_000_000L} acceptedAgeMs=${maxAcceptedSampleAgeNanos / 1_000_000L}",
+                )
                 if (eventSink != null) {
-                    restartLocationUpdates()
+                    reconfigureLocationUpdates(reason = "mode_change")
                 }
                 result.success(null)
             }
@@ -238,11 +256,6 @@ class AndroidFusedLocationBridge(
         return true
     }
 
-    private fun restartLocationUpdates() {
-        stopLocationUpdates()
-        startLocationUpdates()
-    }
-
     private fun startLocationUpdates() {
         if (!hasFineLocationPermission()) {
             eventSink?.error(
@@ -260,34 +273,86 @@ class AndroidFusedLocationBridge(
             )
             return
         }
-        TrackingForegroundService.start(context)
-
         val locationRequest = currentConfig.toLocationRequest()
-        if (callback == null) {
-            callback = object : LocationCallback() {
+        val currentCallback =
+            if (callback == null) {
+                object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
                     pushLocations(locationResult)
                 }
             }
-        }
+            } else {
+                callback!!
+            }
+        callback = currentCallback
 
+        ensureForegroundServiceRunning(reason = "stream_start")
+        beginLocationRequest(
+            locationRequest = locationRequest,
+            callback = currentCallback,
+            reason = "stream_start",
+        )
+    }
+
+    private fun reconfigureLocationUpdates(reason: String) {
+        val currentCallback = callback ?: return
+        Log.d(
+            TAG,
+            "reconfigureLocationUpdates reason=$reason mode=${currentMode.name} requestId=$activeRequestId",
+        )
         try {
-            fusedLocationClient.requestLocationUpdates(
-                locationRequest,
-                callback!!,
-                Looper.getMainLooper(),
+            fusedLocationClient.removeLocationUpdates(currentCallback)
+            beginLocationRequest(
+                locationRequest = currentConfig.toLocationRequest(),
+                callback = currentCallback,
+                reason = reason,
             )
         } catch (securityException: SecurityException) {
             eventSink?.error("security_exception", securityException.message, null)
         }
     }
 
-    private fun stopLocationUpdates() {
+    private fun beginLocationRequest(
+        locationRequest: LocationRequest,
+        callback: LocationCallback,
+        reason: String,
+    ) {
+        activeRequestId += 1
+        activeRequestStartedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+        didLogFirstFixForActiveRequest = false
+        Log.d(
+            TAG,
+            "requestLocationUpdates id=$activeRequestId reason=$reason mode=${currentMode.name} priority=${currentConfig.priority} intervalMs=${currentConfig.intervalMs} minIntervalMs=${currentConfig.minIntervalMs} maxDelayMs=${currentConfig.maxDelayMs} minDistanceM=${currentConfig.minDistanceM}",
+        )
+
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            callback,
+            Looper.getMainLooper(),
+        )
+    }
+
+    private fun stopLocationUpdates(reason: String) {
         val currentCallback = callback
         if (currentCallback != null) {
             fusedLocationClient.removeLocationUpdates(currentCallback)
         }
-        TrackingForegroundService.stop(context)
+        if (isForegroundServiceRunning) {
+            Log.d(TAG, "stopLocationUpdates reason=$reason")
+            TrackingForegroundService.stop(context)
+            isForegroundServiceRunning = false
+        }
+        activeRequestStartedRealtimeNanos = null
+        didLogFirstFixForActiveRequest = false
+    }
+
+    private fun ensureForegroundServiceRunning(reason: String) {
+        if (isForegroundServiceRunning) {
+            return
+        }
+        TrackingForegroundService.start(context)
+        isForegroundServiceRunning = true
+        Log.d(TAG, "foregroundServiceStart reason=$reason")
     }
 
     private fun pushLocations(locationResult: LocationResult) {
@@ -301,25 +366,58 @@ class AndroidFusedLocationBridge(
         }
 
         val samples = mutableListOf<Map<String, Any?>>()
+        var droppedOutOfOrder = 0
+        var droppedStale = 0
+        var firstDroppedStaleAgeMs: Long? = null
+        var firstDroppedProvider: String? = null
         for (location in sortedLocations) {
             val elapsedRealtimeNanos = readElapsedRealtimeNanos(location)
             if (elapsedRealtimeNanos != null) {
                 val previous = lastElapsedRealtimeNanos
                 if (previous != null && elapsedRealtimeNanos <= previous) {
+                    droppedOutOfOrder += 1
                     continue
                 }
-                if (nowRealtimeNanos - elapsedRealtimeNanos > maxAcceptedSampleAgeNanos) {
+                val ageNanos = nowRealtimeNanos - elapsedRealtimeNanos
+                if (ageNanos > maxAcceptedSampleAgeNanos) {
+                    droppedStale += 1
+                    if (firstDroppedStaleAgeMs == null) {
+                        firstDroppedStaleAgeMs = ageNanos / 1_000_000L
+                        firstDroppedProvider = location.provider
+                    }
                     continue
                 }
                 lastElapsedRealtimeNanos = elapsedRealtimeNanos
             }
 
             samples.add(location.toPayload())
+            maybeLogFirstFix(location)
+        }
+
+        if (droppedOutOfOrder > 0 || droppedStale > 0) {
+            Log.w(
+                TAG,
+                "pushLocations dropped=${droppedOutOfOrder + droppedStale}/${sortedLocations.size} stale=$droppedStale outOfOrder=$droppedOutOfOrder firstStaleAgeMs=${firstDroppedStaleAgeMs ?: -1L} acceptedAgeMs=${maxAcceptedSampleAgeNanos / 1_000_000L} mode=${currentMode.name} requestId=$activeRequestId provider=${firstDroppedProvider ?: "n/a"}",
+            )
         }
 
         if (samples.isNotEmpty()) {
             eventSink?.success(mapOf("samples" to samples))
         }
+    }
+
+    private fun maybeLogFirstFix(location: Location) {
+        if (didLogFirstFixForActiveRequest) {
+            return
+        }
+        val requestStarted = activeRequestStartedRealtimeNanos ?: return
+        val delayMs = ((SystemClock.elapsedRealtimeNanos() - requestStarted) / 1_000_000L)
+            .coerceAtLeast(0L)
+        Log.d(
+            TAG,
+            "firstFix id=$activeRequestId delayMs=$delayMs mode=${currentMode.name} provider=${location.provider ?: "unknown"}",
+        )
+        didLogFirstFixForActiveRequest = true
     }
 
     private fun readElapsedRealtimeNanos(location: Location): Long? {
@@ -347,7 +445,7 @@ class AndroidFusedLocationBridge(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun readStaleSampleNanos(call: MethodCall, fallback: TrackingConfig): Long {
+    private fun readWatchdogThresholdNanos(call: MethodCall, fallback: TrackingConfig): Long {
         val rawMs =
             call.argument<Map<String, Any?>>("config")
                 ?.get("watchdogThresholdMs")
@@ -358,6 +456,19 @@ class AndroidFusedLocationBridge(
             .coerceAtMost(120_000L)
 
         return safeMs * 1_000_000L
+    }
+
+    private fun computeMaxAcceptedSampleAgeNanos(
+        watchdogThresholdNanos: Long,
+        maxDelayMs: Long,
+    ): Long {
+        val watchdogMs = (watchdogThresholdNanos / 1_000_000L).coerceAtLeast(1_000L)
+        val batchGraceMs = maxDelayMs.coerceAtLeast(0L) * 3L
+        val toleratedMs = maxOf(
+            watchdogMs * 3L,
+            watchdogMs + batchGraceMs,
+        ).coerceAtMost(MAX_ACCEPTED_SAMPLE_AGE_MS)
+        return toleratedMs * 1_000_000L
     }
 
     private fun Location.toPayload(): Map<String, Any?> {
@@ -549,9 +660,11 @@ class AndroidFusedLocationBridge(
     }
 
     companion object {
+        private const val TAG = "AndroidFusedBridge"
         private const val EVENT_CHANNEL_NAME = "goofyrider/location_events"
         private const val CONTROL_CHANNEL_NAME = "goofyrider/location_control"
         private const val REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION = 2001
         private const val REQUEST_CODE_APP_SETTINGS = 2002
+        private const val MAX_ACCEPTED_SAMPLE_AGE_MS = 300_000L
     }
 }

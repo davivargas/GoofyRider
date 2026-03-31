@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -16,13 +17,20 @@ class TrackingForegroundService : Service() {
         super.onCreate()
         ensureChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        Log.d(TAG, "onCreate -> startForeground")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand flags=$flags startId=$startId")
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        Log.d(TAG, "onDestroy")
+        super.onDestroy()
+    }
 
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -49,16 +57,19 @@ class TrackingForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG = "TrackingFgService"
         private const val CHANNEL_ID = "goofyrider_tracking"
         private const val CHANNEL_NAME = "Tracking"
         private const val NOTIFICATION_ID = 1717
 
         fun start(context: Context) {
+            Log.d(TAG, "start()")
             val intent = Intent(context, TrackingForegroundService::class.java)
             ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
+            Log.d(TAG, "stop()")
             val intent = Intent(context, TrackingForegroundService::class.java)
             context.stopService(intent)
         }

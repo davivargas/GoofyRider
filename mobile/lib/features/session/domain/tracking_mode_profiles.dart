@@ -102,7 +102,7 @@ class TrackingModeProfile {
     required this.maxDelayMs,
     required this.minDistanceM,
     required this.waitForAccurate,
-    required this.watchdogThresholdMs
+    required this.watchdogThresholdMs,
   });
 
   final TrackingModePriority priority;
@@ -273,7 +273,7 @@ class TrackingModeProfile {
 /// and believable the final session track appears.
 class TrackingModeProfiles {
   TrackingModeProfiles._();
-  
+
   /// Profile used while acquiring the initial reliable position fix.
   ///
   /// At startup, the tracker benefits more from obtaining a trustworthy
@@ -328,9 +328,8 @@ class TrackingModeProfiles {
     maxDelayMs: 900,
     minDistanceM: 5,
     waitForAccurate: false,
-    watchdogThresholdMs: 4000,
+    watchdogThresholdMs: 9000,
   );
-
 
   /// Profile used during uphill lift travel.
   ///
@@ -362,7 +361,7 @@ class TrackingModeProfiles {
     maxDelayMs: 2500,
     minDistanceM: 10,
     waitForAccurate: false,
-    watchdogThresholdMs: 7000,
+    watchdogThresholdMs: 10000,
   );
 
   /// Profile used when the user is moving slowly on foot rather than riding.
@@ -462,7 +461,7 @@ class TrackingModeProfiles {
     maxDelayMs: 0,
     minDistanceM: 0,
     waitForAccurate: true,
-    watchdogThresholdMs: 5000,
+    watchdogThresholdMs: 11000,
   );
 
   static TrackingModeProfile forMode(TrackingMode mode) {
