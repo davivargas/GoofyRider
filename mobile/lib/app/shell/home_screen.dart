@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../router/route_paths.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/providers/distance_unit_preference_provider.dart';
+import '../../core/utils/date_time_formatting.dart';
 import '../../core/utils/distance_unit.dart';
 import '../../core/utils/duration_formatting.dart';
 import '../../features/auth/presentation/auth_providers.dart';
@@ -92,6 +93,56 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            const Text(
+              'Recent sessions',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            history.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (Object error, StackTrace _) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('Unable to load history: $error'),
+                ),
+              ),
+              data: (List<LocalRideSession> sessions) {
+                if (sessions.isEmpty) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('No sessions yet.'),
+                    ),
+                  );
+                }
+
+                final List<LocalRideSession> latest = sessions.take(3).toList();
+                return Column(
+                  children: latest.map((LocalRideSession session) {
+                    return Card(
+                      child: ListTile(
+                        title: Text(session.resortId ?? 'Unknown resort'),
+                        subtitle: Text(
+                          '${session.startedAt.toDayLabel()} at ${session.startedAt.toTimeLabel()} • ${distanceUnit.formatFromMeters(session.distanceM)} • ${formatSecondsAsDuration(session.activeDurationS)}',
+                        ),
+                        trailing: showDebugDiagnostics
+                            ? Text(session.state.wireValue)
+                            : null,
+                        onTap: session.localId > 0
+                            ? () => context.go(
+                                  RoutePaths.sessionDetail.replaceAll(
+                                    ':sessionId',
+                                    session.localId.toString(),
+                                  ),
+                                )
+                            : null,
+                      ),
+                    );
+                  }).toList(growable: false),
+                );
+              },
+            ),
             const SizedBox(height: 12),
             const Text(
               'Favorite resorts',
@@ -166,56 +217,6 @@ class HomeScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Recent sessions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            history.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (Object error, StackTrace _) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text('Unable to load history: $error'),
-                ),
-              ),
-              data: (List<LocalRideSession> sessions) {
-                if (sessions.isEmpty) {
-                  return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text('No sessions yet.'),
-                    ),
-                  );
-                }
-
-                final List<LocalRideSession> latest = sessions.take(3).toList();
-                return Column(
-                  children: latest.map((LocalRideSession session) {
-                    return Card(
-                      child: ListTile(
-                        title: Text(session.resortId ?? 'Unknown resort'),
-                        subtitle: Text(
-                          '${distanceUnit.formatFromMeters(session.distanceM)} • ${formatSecondsAsDuration(session.activeDurationS)}',
-                        ),
-                        trailing: showDebugDiagnostics
-                            ? Text(session.state.wireValue)
-                            : null,
-                        onTap: session.localId > 0
-                            ? () => context.go(
-                                  RoutePaths.sessionDetail.replaceAll(
-                                    ':sessionId',
-                                    session.localId.toString(),
-                                  ),
-                                )
-                            : null,
-                      ),
-                    );
-                  }).toList(growable: false),
                 );
               },
             ),
