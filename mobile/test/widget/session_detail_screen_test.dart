@@ -10,6 +10,7 @@ class FakeSessionRepository implements SessionRepository {
   FakeSessionRepository(this.detail);
 
   final SessionDetail detail;
+  final List<int> syncedSessionIds = <int>[];
 
   @override
   Future<void> appendLocationPoint(
@@ -74,7 +75,7 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<LocalRideSession> retryFailedSync(int localSessionId) async {
-    throw UnimplementedError();
+    return syncSession(localSessionId);
   }
 
   @override
@@ -84,7 +85,8 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
-    throw UnimplementedError();
+    syncedSessionIds.add(localSessionId);
+    return detail.session;
   }
 
   @override
@@ -273,6 +275,44 @@ SessionDetail _buildLegacyDetail() {
   );
 }
 
+SessionDetail _buildUnsyncedDetail() {
+  final LocalRideSession session = LocalRideSession(
+    localId: 1,
+    ownerUserId: 'user-1',
+    remoteId: null,
+    resortId: 'whistler',
+    startedAt: DateTime.utc(2026, 1, 1, 9, 0, 0),
+    endedAt: DateTime.utc(2026, 1, 1, 9, 10, 0),
+    activeDurationS: 600,
+    distanceM: 2000,
+    maxSpeedMps: 18,
+    avgSpeedMps: 11,
+    elevationGainM: 0,
+    elevationLossM: 0,
+    state: LocalSessionState.syncFailed,
+    pointCount: 6,
+    syncAttemptCount: 1,
+    lastSyncError: 'network error',
+    createdAt: DateTime.utc(2026, 1, 1, 9, 0, 0),
+    updatedAt: DateTime.utc(2026, 1, 1, 9, 10, 0),
+  );
+
+  return SessionDetail(
+    session: session,
+    points: const <LocalSessionPoint>[],
+    acceptedPoints: const <LocalSessionPoint>[],
+    trackingDiagnostics: const <TrackingDiagnosticEvent>[],
+    stats: SessionStats(
+      durationS: session.activeDurationS,
+      distanceM: session.distanceM,
+      maxSpeedMps: session.maxSpeedMps,
+      avgSpeedMps: session.avgSpeedMps,
+      elevationGainM: session.elevationGainM,
+      elevationLossM: session.elevationLossM,
+    ),
+  );
+}
+
 void main() {
   testWidgets('session detail screen renders segmented ride breakdown',
       (WidgetTester tester) async {
@@ -331,5 +371,37 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Ride time'), findsOneWidget);
+  });
+
+  testWidgets('session detail screen exposes sync action for unsynced sessions',
+      (WidgetTester tester) async {
+    final FakeSessionRepository repository =
+        FakeSessionRepository(_buildUnsyncedDetail());
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const MaterialApp(
+          home: SessionDetailScreen(localSessionId: 1),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Retry sync'),
+      300,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Retry sync'), findsOneWidget);
+    await tester.tap(find.text('Retry sync'));
+    await tester.pumpAndSettle();
+
+    expect(repository.syncedSessionIds, <int>[1]);
   });
 }

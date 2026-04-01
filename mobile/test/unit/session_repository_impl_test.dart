@@ -108,10 +108,11 @@ LocalRideSession _buildSession({
   required LocalSessionState state,
   String? remoteId,
   int activeDurationS = 120,
+  double distanceM = 1000,
   double maxSpeedMps = 10,
   double avgSpeedMps = 8,
-  int syncAttemptCount = 0,
-  String? lastSyncError,
+  int? elevationGainM = 10,
+  int? elevationLossM = 100,
   DateTime? startedAt,
   DateTime? endedAt,
 }) {
@@ -125,11 +126,11 @@ LocalRideSession _buildSession({
     startedAt: effectiveStartedAt,
     endedAt: effectiveEndedAt,
     activeDurationS: activeDurationS,
-    distanceM: 1000,
+    distanceM: distanceM,
     maxSpeedMps: maxSpeedMps,
     avgSpeedMps: avgSpeedMps,
-    elevationGainM: 10,
-    elevationLossM: 100,
+    elevationGainM: elevationGainM,
+    elevationLossM: elevationLossM,
     state: state,
     pointCount: 0,
     syncAttemptCount: syncAttemptCount,
@@ -142,8 +143,10 @@ LocalRideSession _buildSession({
 LocalSessionPoint _buildPoint({
   required int offsetMs,
   double speedMps = 7,
+  double? headingDeg = 90,
   String qualityClass = 'accept',
   bool acceptedForAnalytics = true,
+  double? speedAccuracyMps,
   double? fusedSpeedMps,
   double? derivedSpeedMps,
   double? distanceDeltaM,
@@ -162,14 +165,63 @@ LocalSessionPoint _buildPoint({
     accuracyM: 8,
     altitudeM: 500,
     speedMps: speedMps,
-    headingDeg: 90,
+    headingDeg: headingDeg,
     acceptedForAnalytics: acceptedForAnalytics,
+    speedAccuracyMps: speedAccuracyMps,
     qualityClass: qualityClass,
     fusedSpeedMps: fusedSpeedMps ?? speedMps,
     derivedSpeedMps: derivedSpeedMps,
     distanceDeltaM: distanceDeltaM,
     motionState: motionState,
   );
+}
+
+LocalRideSession _copySessionWithState(
+  LocalRideSession source, {
+  required LocalSessionState state,
+  String? lastSyncError,
+}) {
+  return LocalRideSession(
+    localId: source.localId,
+    ownerUserId: source.ownerUserId,
+    remoteId: source.remoteId,
+    resortId: source.resortId,
+    startedAt: source.startedAt,
+    endedAt: source.endedAt,
+    activeDurationS: source.activeDurationS,
+    distanceM: source.distanceM,
+    maxSpeedMps: source.maxSpeedMps,
+    avgSpeedMps: source.avgSpeedMps,
+    elevationGainM: source.elevationGainM,
+    elevationLossM: source.elevationLossM,
+    state: state,
+    pointCount: source.pointCount,
+    syncAttemptCount: source.syncAttemptCount,
+    lastSyncError: lastSyncError,
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+  );
+}
+
+Queue<LocalRideSession?> _buildSyncLifecycle(LocalRideSession seed) {
+  return Queue<LocalRideSession?>.from(
+    <LocalRideSession?>[
+      _copySessionWithState(seed, state: LocalSessionState.syncPending),
+      _copySessionWithState(seed, state: LocalSessionState.syncing),
+      _copySessionWithState(seed, state: LocalSessionState.syncing),
+      _copySessionWithState(seed, state: LocalSessionState.synced),
+    ],
+  );
+}
+
+T _popOrPeekLast<T>(Queue<T> queue) {
+  if (queue.isEmpty) {
+    throw StateError('Test queue exhausted.');
+  }
+  if (queue.length == 1) {
+    return queue.first;
+  }
+  return queue.removeFirst();
 }
 
 void main() {
@@ -192,6 +244,74 @@ void main() {
       currentUserIdGetter: () => _ownerUserId,
     );
   });
+
+  void stubSyncHappyPath({
+    required Queue<LocalRideSession?> sessions,
+    required List<LocalSessionPoint> points,
+    Future<void> Function(List<Map<String, dynamic>> batch)? onUploadBatch,
+  }) {
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
+    when(
+      () => localDatabase.updateSessionState(
+        any(),
+        any(),
+        remoteId: any(named: 'remoteId'),
+        lastSyncError: any(named: 'lastSyncError'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => localDatabase.incrementSyncAttempt(any(),
+        error: any(named: 'error'))).thenAnswer((_) async {});
+    when(() => localDatabase.listPoints(any(),
+            onlyAccepted: any(named: 'onlyAccepted')))
+        .thenAnswer((_) async => points);
+    when(
+      () => localDatabase.insertTrackingDiagnostic(
+        localSessionId: any(named: 'localSessionId'),
+        eventType: any(named: 'eventType'),
+        message: any(named: 'message'),
+        details: any(named: 'details'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => api.getRemoteSessionPoints(any()))
+        .thenAnswer((_) async => <Map<String, dynamic>>[]);
+    when(() => api.uploadPointBatch(
+          remoteSessionId: any(named: 'remoteSessionId'),
+          points: any(named: 'points'),
+        )).thenAnswer((Invocation invocation) async {
+      if (onUploadBatch == null) {
+        return;
+      }
+      final List<Map<String, dynamic>> batch =
+          (invocation.namedArguments[#points] as List<dynamic>)
+              .cast<Map<String, dynamic>>();
+      await onUploadBatch(batch);
+    });
+    when(() => api.completeRemoteSession(
+          remoteSessionId: any(named: 'remoteSessionId'),
+          endedAt: any(named: 'endedAt'),
+          durationS: any(named: 'durationS'),
+          distanceM: any(named: 'distanceM'),
+          maxSpeedMps: any(named: 'maxSpeedMps'),
+          avgSpeedMps: any(named: 'avgSpeedMps'),
+          elevationGainM: any(named: 'elevationGainM'),
+          elevationLossM: any(named: 'elevationLossM'),
+        )).thenAnswer((_) async => <String, dynamic>{'id': 'remote-1'});
+  }
+
+  List<Map<String, dynamic>> captureUploadedPoints() {
+    final List<dynamic> captured = verify(
+      () => api.uploadPointBatch(
+        remoteSessionId: any(named: 'remoteSessionId'),
+        points: captureAny(named: 'points'),
+      ),
+    ).captured;
+    final List<Map<String, dynamic>> uploaded = <Map<String, dynamic>>[];
+    for (final dynamic batch in captured) {
+      uploaded.addAll((batch as List<dynamic>).cast<Map<String, dynamic>>());
+    }
+    return uploaded;
+  }
 
   test('startLocalSession persists the authenticated owner id', () async {
     final LocalRideSession created = _buildSession(
@@ -326,7 +446,7 @@ void main() {
     );
 
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
-        .thenAnswer((_) async => sessions.removeFirst());
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
       () => localDatabase.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
@@ -382,6 +502,223 @@ void main() {
     );
   });
 
+  test('syncSession sanitizes negative heading_deg and still syncs', () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, headingDeg: -15),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+    final Object? heading = uploaded.single['heading_deg'];
+    expect(
+      heading == null || (heading is num && heading >= 0),
+      isTrue,
+    );
+  });
+
+  test('syncSession sanitizes negative speed_accuracy_mps and still syncs',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, speedAccuracyMps: -3),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+    final Object? speedAccuracy = uploaded.single['speed_accuracy_mps'];
+    expect(
+      speedAccuracy == null || (speedAccuracy is num && speedAccuracy >= 0),
+      isTrue,
+    );
+  });
+
+  test('syncSession sanitizes negative completion metrics before complete call',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+        activeDurationS: -120,
+        distanceM: -900,
+        maxSpeedMps: -12,
+        avgSpeedMps: -6,
+        elevationGainM: -15,
+        elevationLossM: -35,
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[_buildPoint(offsetMs: 0)],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<dynamic> captured = verify(
+      () => api.completeRemoteSession(
+        remoteSessionId: 'remote-1',
+        endedAt: any(named: 'endedAt'),
+        durationS: captureAny(named: 'durationS'),
+        distanceM: captureAny(named: 'distanceM'),
+        maxSpeedMps: captureAny(named: 'maxSpeedMps'),
+        avgSpeedMps: captureAny(named: 'avgSpeedMps'),
+        elevationGainM: captureAny(named: 'elevationGainM'),
+        elevationLossM: captureAny(named: 'elevationLossM'),
+      ),
+    ).captured;
+    final int durationS = captured[0] as int;
+    final double distanceM = (captured[1] as num).toDouble();
+    final double maxSpeedMps = (captured[2] as num).toDouble();
+    final double avgSpeedMps = (captured[3] as num).toDouble();
+    final int? elevationGainM = captured[4] as int?;
+    final int? elevationLossM = captured[5] as int?;
+
+    expect(durationS, greaterThanOrEqualTo(0));
+    expect(distanceM, greaterThanOrEqualTo(0));
+    expect(avgSpeedMps, greaterThanOrEqualTo(0));
+    expect(maxSpeedMps, greaterThanOrEqualTo(avgSpeedMps));
+    expect(elevationGainM == null || elevationGainM >= 0, isTrue);
+    expect(elevationLossM == null || elevationLossM >= 0, isTrue);
+  });
+
+  test(
+      'syncSession isolates malformed point batch so valid sibling still syncs',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, latitude: double.nan),
+        _buildPoint(offsetMs: 1000),
+      ],
+      onUploadBatch: (List<Map<String, dynamic>> batch) async {
+        final bool hasMalformedRequiredCoordinates =
+            batch.any((Map<String, dynamic> point) {
+          final Object? latitude = point['latitude'];
+          final Object? longitude = point['longitude'];
+          final bool invalidLatitude = latitude is! num ||
+              !latitude.toDouble().isFinite ||
+              latitude < -90 ||
+              latitude > 90;
+          final bool invalidLongitude = longitude is! num ||
+              !longitude.toDouble().isFinite ||
+              longitude < -180 ||
+              longitude > 180;
+          return invalidLatitude || invalidLongitude;
+        });
+        if (!hasMalformedRequiredCoordinates) {
+          return;
+        }
+        throw DioException(
+          requestOptions:
+              RequestOptions(path: '/sessions/remote-1/points:batch'),
+          type: DioExceptionType.badResponse,
+          message: 'Malformed point in batch payload',
+        );
+      },
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(
+      uploaded
+          .any((Map<String, dynamic> point) => point['t_offset_ms'] == 1000),
+      isTrue,
+    );
+  });
+
+  test('syncSession succeeds in degraded mode with invalid points dropped',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, latitude: double.nan),
+        _buildPoint(offsetMs: 500, latitude: 190),
+        _buildPoint(offsetMs: 1000),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+    expect(uploaded.single['t_offset_ms'], 1000);
+  });
+
+  test('syncSession keeps saved state synced after partial point salvage',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, latitude: double.nan),
+        _buildPoint(offsetMs: 1000),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    expect(result.lastSyncError, isNull);
+    verifyNever(
+      () => localDatabase.updateSessionState(
+        1,
+        LocalSessionState.syncFailed,
+        lastSyncError: any(named: 'lastSyncError'),
+      ),
+    );
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+  });
+
   test('syncSession marks session as syncFailed when upload fails', () async {
     final DioException syncFailure = DioException(
       requestOptions: RequestOptions(path: '/sessions/remote-1/points:batch'),
@@ -411,7 +748,7 @@ void main() {
     );
 
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
-        .thenAnswer((_) async => sessions.removeFirst());
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
       () => localDatabase.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
@@ -567,12 +904,17 @@ void main() {
       type: DioExceptionType.badResponse,
     );
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
-        .thenAnswer((_) async => scopedSessions.removeFirst());
-    when(() => localDatabase.beginSyncAttempt(any())).thenAnswer((_) async {});
-    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
-        .thenAnswer((_) async {
-      currentUserId = null;
-    });
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
+    when(
+      () => localDatabase.updateSessionState(
+        any(),
+        any(),
+        remoteId: any(named: 'remoteId'),
+        lastSyncError: any(named: 'lastSyncError'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => localDatabase.incrementSyncAttempt(any(),
+        error: any(named: 'error'))).thenAnswer((_) async {});
     when(() => localDatabase.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
@@ -822,7 +1164,7 @@ void main() {
     );
 
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
-        .thenAnswer((_) async => sessions.removeFirst());
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
       () => localDatabase.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
@@ -1106,7 +1448,7 @@ void main() {
     );
 
     when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
-        .thenAnswer((_) async => sessions.removeFirst());
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(() => localDatabase.listPoints(1)).thenAnswer(
       (_) async => pointSnapshots.removeFirst(),
     );

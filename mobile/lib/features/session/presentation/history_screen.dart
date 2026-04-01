@@ -20,6 +20,12 @@ import 'session_providers.dart';
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
 
+  Future<void> _runSyncPass(WidgetRef ref) async {
+    await ref.read(recordingControllerProvider.notifier).retryPendingSyncs();
+    ref.invalidate(historyProvider);
+    ref.invalidate(unsyncedSessionCountProvider);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<LocalRideSession>> history =
@@ -28,9 +34,26 @@ class HistoryScreen extends ConsumerWidget {
     final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final bool showDebugDiagnostics =
         kDebugMode && AppConstants.isDebugDiagnostics;
+    final AsyncValue<int> unsyncedCount = ref.watch(unsyncedSessionCountProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(
+        title: const Text('History'),
+        actions: <Widget>[
+          unsyncedCount.maybeWhen(
+            data: (int count) => count > 0
+                ? IconButton(
+                    tooltip: 'Sync unsynced sessions',
+                    onPressed: () async {
+                      await _runSyncPass(ref);
+                    },
+                    icon: const Icon(Icons.sync),
+                  )
+                : const SizedBox.shrink(),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       body: history.when(
         loading: () => const AppLoadingView(label: 'Loading sessions...'),
         error: (Object error, StackTrace _) => AppErrorView(
@@ -47,10 +70,7 @@ class HistoryScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
-              await ref
-                  .read(recordingControllerProvider.notifier)
-                  .retryPendingSyncs();
-              ref.invalidate(historyProvider);
+              await _runSyncPass(ref);
             },
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -78,9 +98,10 @@ class HistoryScreen extends ConsumerWidget {
                       'Duration ${formatSecondsAsDuration(session.activeDurationS)} | Distance ${distanceUnit.formatFromMeters(session.distanceM)}\n'
                       'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
                     ),
-                    trailing: showDebugDiagnostics
-                        ? _SyncBadge(state: session.state)
-                        : null,
+                    trailing: _HistorySyncActions(
+                      session: session,
+                      showDebugDiagnostics: showDebugDiagnostics,
+                    ),
                   ),
                 );
               },
@@ -88,6 +109,42 @@ class HistoryScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _HistorySyncActions extends ConsumerWidget {
+  const _HistorySyncActions({
+    required this.session,
+    required this.showDebugDiagnostics,
+  });
+
+  final LocalRideSession session;
+  final bool showDebugDiagnostics;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool canSync = session.localId > 0 && session.isUnsynced && !session.isInProgress;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (showDebugDiagnostics || canSync) ...<Widget>[
+          _SyncBadge(state: session.state),
+          const SizedBox(width: 8),
+        ],
+        if (canSync)
+          IconButton(
+            tooltip: 'Sync now',
+            onPressed: () async {
+              await ref.read(sessionRepositoryProvider).syncSession(session.localId);
+              ref.invalidate(historyProvider);
+              ref.invalidate(unsyncedSessionCountProvider);
+              ref.invalidate(sessionDetailProvider(session.localId));
+            },
+            icon: const Icon(Icons.sync),
+          ),
+      ],
     );
   }
 }

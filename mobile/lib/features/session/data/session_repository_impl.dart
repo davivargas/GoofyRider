@@ -127,93 +127,18 @@ class SessionRepositoryImpl implements SessionRepository {
     LocalRideSession? syncingSnapshot;
 
     try {
-      // Claim the sync attempt up front so a failure anywhere in the remote
-      // lifecycle still leaves the local session in a consistent retry state.
-      await _localDatabase.beginSyncAttempt(localSessionId);
+      await _prepareSyncAttempt(localSessionId);
 
       final LocalRideSession syncing = await _requireSession(localSessionId);
-      syncingSnapshot = syncing;
-
-      String? remoteId = syncing.remoteId;
-      if (remoteId == null || remoteId.isEmpty) {
-        final Map<String, dynamic> draft = await _api.createRemoteDraft(
-          resortId: syncing.resortId,
-          startedAt: syncing.startedAt,
-        );
-        remoteId = draft['id'] as String;
-        await _localDatabase.updateSessionState(
-          localSessionId,
-          LocalSessionState.syncing,
-          remoteId: remoteId,
-        );
-      }
-
-      final List<LocalSessionPoint> acceptedPoints =
-          await _localDatabase.listPoints(
-        localSessionId,
-        onlyAccepted: true,
-      );
-
-      final Set<int> existingOffsets =
-          await _fetchExistingRemoteOffsets(remoteId);
-      final List<LocalSessionPoint> uploadable = acceptedPoints
-          .where((LocalSessionPoint point) =>
-              !existingOffsets.contains(point.tOffsetMs))
-          .toList(growable: false);
-      final List<LocalSessionPoint> dedupedUploadable =
-          _dedupeByOffset(uploadable);
-
-      for (int index = 0;
-          index < dedupedUploadable.length;
-          index += SessionConstants.uploadBatchSize) {
-        final int end = min(
-            index + SessionConstants.uploadBatchSize, dedupedUploadable.length);
-        final List<LocalSessionPoint> batch =
-            dedupedUploadable.sublist(index, end);
-
-        await _api.uploadPointBatch(
-          remoteSessionId: remoteId,
-          points: batch
-              .map(
-                (LocalSessionPoint point) => <String, dynamic>{
-                  't_offset_ms': point.tOffsetMs,
-                  'latitude': point.latitude,
-                  'longitude': point.longitude,
-                  'accuracy_m': point.accuracyM,
-                  'elapsed_realtime_ns': point.elapsedRealtimeNs,
-                  'altitude_m': point.altitudeM,
-                  'vertical_accuracy_m': point.verticalAccuracyM,
-                  'speed_mps': point.speedMps,
-                  'speed_accuracy_mps': point.speedAccuracyMps,
-                  'heading_deg': point.headingDeg,
-                  'bearing_accuracy_deg': point.bearingAccuracyDeg,
-                  'provider': point.provider,
-                  'is_mocked': point.isMocked,
-                  'quality_class': point.qualityClass,
-                  'quality_score': point.qualityScore,
-                  'quality_reason': point.qualityReason,
-                  'filtered_latitude': point.filteredLatitude,
-                  'filtered_longitude': point.filteredLongitude,
-                  'filtered_altitude_m': point.filteredAltitudeM,
-                  'fused_speed_mps': point.fusedSpeedMps,
-                  'derived_speed_mps': point.derivedSpeedMps,
-                  'distance_delta_m': point.distanceDeltaM,
-                  'motion_state': point.motionState,
-                },
-              )
-              .toList(growable: false),
-        );
-      }
-
-      await _api.completeRemoteSession(
+      final String remoteId =
+          await _ensureRemoteSessionId(localSessionId, syncing);
+      await _syncPointsForSession(
+        localSessionId: localSessionId,
         remoteSessionId: remoteId,
-        endedAt: syncing.endedAt ?? DateTime.now().toUtc(),
-        durationS: syncing.activeDurationS,
-        distanceM: syncing.distanceM,
-        maxSpeedMps: _sanitizeMaxSpeedForRemote(syncing),
-        avgSpeedMps: _sanitizeAvgSpeedForRemote(syncing),
-        elevationGainM: syncing.elevationGainM,
-        elevationLossM: syncing.elevationLossM,
+      );
+      await _completeSessionSync(
+        localSessionId: localSessionId,
+        remoteSessionId: remoteId,
       );
 
       await _localDatabase.updateSessionState(
@@ -416,6 +341,634 @@ class SessionRepositoryImpl implements SessionRepository {
       return Future<int>.value(0);
     }
     return _localDatabase.unsyncedCount(ownerUserId: ownerUserId);
+  }
+
+  Future<void> _prepareSyncAttempt(int localSessionId) async {
+    await _localDatabase.updateSessionState(
+      localSessionId,
+      LocalSessionState.syncing,
+      lastSyncError: null,
+    );
+    await _localDatabase.incrementSyncAttempt(localSessionId);
+  }
+
+  Future<String> _ensureRemoteSessionId(
+    int localSessionId,
+    LocalRideSession session,
+  ) async {
+    String? remoteId = session.remoteId;
+    if (remoteId != null && remoteId.isNotEmpty) {
+      return remoteId;
+    }
+
+    final Map<String, dynamic> draft = await _api.createRemoteDraft(
+      resortId: session.resortId,
+      startedAt: session.startedAt,
+    );
+    remoteId = draft['id'] as String;
+    await _localDatabase.updateSessionState(
+      localSessionId,
+      LocalSessionState.syncing,
+      remoteId: remoteId,
+    );
+    return remoteId;
+  }
+
+  Future<void> _syncPointsForSession({
+    required int localSessionId,
+    required String remoteSessionId,
+  }) async {
+    final List<LocalSessionPoint> acceptedPoints =
+        await _localDatabase.listPoints(localSessionId, onlyAccepted: true);
+    final Set<int> existingOffsets =
+        await _fetchExistingRemoteOffsets(remoteSessionId);
+    final List<LocalSessionPoint> uploadable = acceptedPoints
+        .where((LocalSessionPoint point) =>
+            !existingOffsets.contains(point.tOffsetMs))
+        .toList(growable: false);
+    final List<LocalSessionPoint> dedupedUploadable = _dedupeByOffset(
+      uploadable,
+    );
+    final _PointSanitizationResult sanitizedResult = _sanitizePointsForSync(
+      dedupedUploadable,
+    );
+    await _recordPointSanitizationDiagnostics(
+      localSessionId: localSessionId,
+      result: sanitizedResult,
+    );
+
+    int isolationFallbackBatches = 0;
+    final List<_DroppedSyncPoint> droppedDuringIsolation =
+        <_DroppedSyncPoint>[];
+    for (int index = 0;
+        index < sanitizedResult.uploadablePoints.length;
+        index += SessionConstants.uploadBatchSize) {
+      final int end = min(
+        index + SessionConstants.uploadBatchSize,
+        sanitizedResult.uploadablePoints.length,
+      );
+      final List<_SanitizedSyncPoint> batch =
+          sanitizedResult.uploadablePoints.sublist(index, end);
+      final _PointUploadResult uploadResult =
+          await _uploadPointBatchWithFallback(
+        localSessionId: localSessionId,
+        remoteSessionId: remoteSessionId,
+        batch: batch,
+        batchIndex: (index ~/ SessionConstants.uploadBatchSize) + 1,
+      );
+      if (uploadResult.usedIsolationFallback) {
+        isolationFallbackBatches += 1;
+      }
+      droppedDuringIsolation.addAll(uploadResult.droppedPoints);
+    }
+
+    if (isolationFallbackBatches > 0 || droppedDuringIsolation.isNotEmpty) {
+      final Map<String, int> dropReasonCounts =
+          _collectDropReasonCounts(droppedDuringIsolation);
+      await _recordSyncDiagnosticBestEffort(
+        localSessionId,
+        eventType: 'sync_points_partial_drop',
+        message: 'Point batch isolation applied during sync upload.',
+        details: <String, dynamic>{
+          'isolation_batches': isolationFallbackBatches,
+          'dropped_points': droppedDuringIsolation.length,
+          'drop_reasons': dropReasonCounts,
+          'dropped_offsets_sample': droppedDuringIsolation
+              .take(5)
+              .map((_DroppedSyncPoint dropped) => dropped.point.tOffsetMs)
+              .toList(growable: false),
+        },
+      );
+    }
+  }
+
+  Future<_PointUploadResult> _uploadPointBatchWithFallback({
+    required int localSessionId,
+    required String remoteSessionId,
+    required List<_SanitizedSyncPoint> batch,
+    required int batchIndex,
+  }) async {
+    if (batch.isEmpty) {
+      return const _PointUploadResult(
+        usedIsolationFallback: false,
+        droppedPoints: <_DroppedSyncPoint>[],
+      );
+    }
+
+    try {
+      await _uploadSanitizedPoints(
+        remoteSessionId: remoteSessionId,
+        points: batch,
+      );
+      return const _PointUploadResult(
+        usedIsolationFallback: false,
+        droppedPoints: <_DroppedSyncPoint>[],
+      );
+    } on DioException catch (exception) {
+      if (!_isLikelyValidationFailure(exception)) {
+        rethrow;
+      }
+      await _recordSyncDiagnosticBestEffort(
+        localSessionId,
+        eventType: 'sync_points_batch_isolation_retry',
+        message: 'Validation-style error detected while uploading batch.',
+        details: <String, dynamic>{
+          'batch_index': batchIndex,
+          'batch_size': batch.length,
+          'error': mapDioException(exception).message,
+        },
+      );
+
+      final _PointUploadResult isolationResult = await _uploadBatchByIsolation(
+        remoteSessionId: remoteSessionId,
+        points: batch,
+      );
+      return _PointUploadResult(
+        usedIsolationFallback: true,
+        droppedPoints: isolationResult.droppedPoints,
+      );
+    }
+  }
+
+  Future<void> _uploadSanitizedPoints({
+    required String remoteSessionId,
+    required List<_SanitizedSyncPoint> points,
+  }) {
+    return _api.uploadPointBatch(
+      remoteSessionId: remoteSessionId,
+      points: points
+          .map((_SanitizedSyncPoint point) => point.payload)
+          .toList(growable: false),
+    );
+  }
+
+  Future<_PointUploadResult> _uploadBatchByIsolation({
+    required String remoteSessionId,
+    required List<_SanitizedSyncPoint> points,
+  }) async {
+    if (points.isEmpty) {
+      return const _PointUploadResult(
+        usedIsolationFallback: true,
+        droppedPoints: <_DroppedSyncPoint>[],
+      );
+    }
+
+    try {
+      await _uploadSanitizedPoints(
+        remoteSessionId: remoteSessionId,
+        points: points,
+      );
+      return const _PointUploadResult(
+        usedIsolationFallback: true,
+        droppedPoints: <_DroppedSyncPoint>[],
+      );
+    } on DioException catch (exception) {
+      if (!_isLikelyValidationFailure(exception)) {
+        rethrow;
+      }
+
+      if (points.length == 1) {
+        return _PointUploadResult(
+          usedIsolationFallback: true,
+          droppedPoints: <_DroppedSyncPoint>[
+            _DroppedSyncPoint(
+              point: points.first.original,
+              reason: 'remote_validation_rejected_point',
+            ),
+          ],
+        );
+      }
+
+      final int midpoint = points.length ~/ 2;
+      final _PointUploadResult left = await _uploadBatchByIsolation(
+        remoteSessionId: remoteSessionId,
+        points: points.sublist(0, midpoint),
+      );
+      final _PointUploadResult right = await _uploadBatchByIsolation(
+        remoteSessionId: remoteSessionId,
+        points: points.sublist(midpoint),
+      );
+      return _PointUploadResult(
+        usedIsolationFallback: true,
+        droppedPoints: <_DroppedSyncPoint>[
+          ...left.droppedPoints,
+          ...right.droppedPoints,
+        ],
+      );
+    }
+  }
+
+  _PointSanitizationResult _sanitizePointsForSync(
+    List<LocalSessionPoint> points,
+  ) {
+    final List<_SanitizedSyncPoint> uploadable = <_SanitizedSyncPoint>[];
+    final List<_DroppedSyncPoint> droppedPoints = <_DroppedSyncPoint>[];
+    final Map<String, int> sanitizedFieldCounts = <String, int>{};
+    int sanitizedPointCount = 0;
+
+    for (final LocalSessionPoint point in points) {
+      final _SinglePointSanitizationResult pointResult =
+          _sanitizeSinglePointForSync(point);
+      if (pointResult.dropped != null) {
+        droppedPoints.add(pointResult.dropped!);
+        continue;
+      }
+      final _SanitizedSyncPoint sanitized = pointResult.sanitized!;
+      uploadable.add(sanitized);
+
+      if (sanitized.sanitizedFields.isEmpty) {
+        continue;
+      }
+      sanitizedPointCount += 1;
+      for (final String field in sanitized.sanitizedFields) {
+        sanitizedFieldCounts[field] = (sanitizedFieldCounts[field] ?? 0) + 1;
+      }
+    }
+
+    return _PointSanitizationResult(
+      candidateCount: points.length,
+      uploadablePoints: uploadable,
+      droppedPoints: droppedPoints,
+      sanitizedPointCount: sanitizedPointCount,
+      sanitizedFieldCounts: sanitizedFieldCounts,
+    );
+  }
+
+  _SinglePointSanitizationResult _sanitizeSinglePointForSync(
+    LocalSessionPoint point,
+  ) {
+    if (!point.latitude.isFinite || !point.longitude.isFinite) {
+      return _SinglePointSanitizationResult.drop(
+        point,
+        reason: 'invalid_required_coordinates',
+      );
+    }
+    if (point.latitude < -90 || point.latitude > 90) {
+      return _SinglePointSanitizationResult.drop(
+        point,
+        reason: 'latitude_out_of_range',
+      );
+    }
+    if (point.longitude < -180 || point.longitude > 180) {
+      return _SinglePointSanitizationResult.drop(
+        point,
+        reason: 'longitude_out_of_range',
+      );
+    }
+
+    final List<String> sanitizedFields = <String>[];
+    final Map<String, dynamic> payload = <String, dynamic>{
+      't_offset_ms': _sanitizeNonNegativeIntForSync(
+        point.tOffsetMs,
+        fieldName: 't_offset_ms',
+        sanitizedFields: sanitizedFields,
+      ),
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+      'accuracy_m': _sanitizeNullableNonNegativeDoubleForSync(
+        point.accuracyM,
+        fieldName: 'accuracy_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      'elapsed_realtime_ns': _sanitizeNullableNonNegativeIntForSync(
+        point.elapsedRealtimeNs,
+        fieldName: 'elapsed_realtime_ns',
+        sanitizedFields: sanitizedFields,
+      ),
+      'altitude_m': _sanitizeNullableNonNegativeDoubleForSync(
+        point.altitudeM,
+        fieldName: 'altitude_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      'vertical_accuracy_m': _sanitizeNullableNonNegativeDoubleForSync(
+        point.verticalAccuracyM,
+        fieldName: 'vertical_accuracy_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      'speed_mps': _sanitizeNullableNonNegativeDoubleForSync(
+        point.speedMps,
+        fieldName: 'speed_mps',
+        sanitizedFields: sanitizedFields,
+      ),
+      'speed_accuracy_mps': _sanitizeNullableNonNegativeDoubleForSync(
+        point.speedAccuracyMps,
+        fieldName: 'speed_accuracy_mps',
+        sanitizedFields: sanitizedFields,
+      ),
+      'heading_deg': _normalizeHeadingForSync(
+        point.headingDeg,
+        fieldName: 'heading_deg',
+        sanitizedFields: sanitizedFields,
+      ),
+      'bearing_accuracy_deg': _sanitizeNullableNonNegativeDoubleForSync(
+        point.bearingAccuracyDeg,
+        fieldName: 'bearing_accuracy_deg',
+        sanitizedFields: sanitizedFields,
+      ),
+      'provider': point.provider,
+      'is_mocked': point.isMocked,
+      'quality_class': point.qualityClass,
+      'quality_score': _sanitizeNullableNonNegativeDoubleForSync(
+        point.qualityScore,
+        fieldName: 'quality_score',
+        sanitizedFields: sanitizedFields,
+      ),
+      'quality_reason': point.qualityReason,
+      'filtered_latitude': _sanitizeNullableFiniteDoubleForSync(
+        point.filteredLatitude,
+        fieldName: 'filtered_latitude',
+        sanitizedFields: sanitizedFields,
+      ),
+      'filtered_longitude': _sanitizeNullableFiniteDoubleForSync(
+        point.filteredLongitude,
+        fieldName: 'filtered_longitude',
+        sanitizedFields: sanitizedFields,
+      ),
+      'filtered_altitude_m': _sanitizeNullableNonNegativeDoubleForSync(
+        point.filteredAltitudeM,
+        fieldName: 'filtered_altitude_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      'fused_speed_mps': _sanitizeNullableNonNegativeDoubleForSync(
+        point.fusedSpeedMps,
+        fieldName: 'fused_speed_mps',
+        sanitizedFields: sanitizedFields,
+      ),
+      'derived_speed_mps': _sanitizeNullableNonNegativeDoubleForSync(
+        point.derivedSpeedMps,
+        fieldName: 'derived_speed_mps',
+        sanitizedFields: sanitizedFields,
+      ),
+      'distance_delta_m': _sanitizeNullableNonNegativeDoubleForSync(
+        point.distanceDeltaM,
+        fieldName: 'distance_delta_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      'motion_state': point.motionState,
+    };
+
+    return _SinglePointSanitizationResult.keep(
+      _SanitizedSyncPoint(
+        original: point,
+        payload: payload,
+        sanitizedFields: _dedupeSanitizedFields(sanitizedFields),
+      ),
+    );
+  }
+
+  Future<void> _recordPointSanitizationDiagnostics({
+    required int localSessionId,
+    required _PointSanitizationResult result,
+  }) async {
+    if (result.sanitizedPointCount == 0 && result.droppedPoints.isEmpty) {
+      return;
+    }
+    await _recordSyncDiagnosticBestEffort(
+      localSessionId,
+      eventType: 'sync_points_sanitized',
+      message: 'Sanitized sync-only point payload before upload.',
+      details: <String, dynamic>{
+        'candidate_points': result.candidateCount,
+        'uploadable_points': result.uploadablePoints.length,
+        'sanitized_points': result.sanitizedPointCount,
+        'sanitized_fields': result.sanitizedFieldCounts,
+        'dropped_points': result.droppedPoints.length,
+        'drop_reasons': _collectDropReasonCounts(result.droppedPoints),
+        'dropped_offsets_sample': result.droppedPoints
+            .take(5)
+            .map((_DroppedSyncPoint dropped) => dropped.point.tOffsetMs)
+            .toList(growable: false),
+      },
+    );
+  }
+
+  Map<String, int> _collectDropReasonCounts(List<_DroppedSyncPoint> dropped) {
+    final Map<String, int> reasonCounts = <String, int>{};
+    for (final _DroppedSyncPoint point in dropped) {
+      reasonCounts[point.reason] = (reasonCounts[point.reason] ?? 0) + 1;
+    }
+    return reasonCounts;
+  }
+
+  Future<void> _completeSessionSync({
+    required int localSessionId,
+    required String remoteSessionId,
+  }) async {
+    final LocalRideSession syncing = await _requireSession(localSessionId);
+    final _SanitizedCompletionPayload payload =
+        _sanitizeCompletionPayloadForSync(syncing);
+    if (payload.sanitizedFields.isNotEmpty) {
+      await _recordSyncDiagnosticBestEffort(
+        localSessionId,
+        eventType: 'sync_completion_sanitized',
+        message: 'Sanitized completion payload before remote completion.',
+        details: <String, dynamic>{
+          'sanitized_fields': payload.sanitizedFields,
+        },
+      );
+    }
+
+    await _api.completeRemoteSession(
+      remoteSessionId: remoteSessionId,
+      endedAt: payload.endedAt,
+      durationS: payload.durationS,
+      distanceM: payload.distanceM,
+      maxSpeedMps: payload.maxSpeedMps,
+      avgSpeedMps: payload.avgSpeedMps,
+      elevationGainM: payload.elevationGainM,
+      elevationLossM: payload.elevationLossM,
+    );
+  }
+
+  _SanitizedCompletionPayload _sanitizeCompletionPayloadForSync(
+    LocalRideSession session,
+  ) {
+    final List<String> sanitizedFields = <String>[];
+    final int durationS = _sanitizeNonNegativeIntForSync(
+      session.activeDurationS,
+      fieldName: 'duration_s',
+      sanitizedFields: sanitizedFields,
+    );
+    final double distanceM = _sanitizeNonNegativeDoubleForSync(
+      session.distanceM,
+      fieldName: 'distance_m',
+      sanitizedFields: sanitizedFields,
+    );
+    final double avgSpeedMps = _sanitizeNonNegativeDoubleForSync(
+      session.avgSpeedMps,
+      fieldName: 'avg_speed_mps',
+      sanitizedFields: sanitizedFields,
+    );
+    final double rawMaxSpeedMps = _sanitizeNonNegativeDoubleForSync(
+      session.maxSpeedMps,
+      fieldName: 'max_speed_mps',
+      sanitizedFields: sanitizedFields,
+    );
+    final double maxSpeedMps = max(rawMaxSpeedMps, avgSpeedMps);
+    if (maxSpeedMps != rawMaxSpeedMps) {
+      sanitizedFields.add('max_speed_mps_adjusted_to_avg');
+    }
+
+    return _SanitizedCompletionPayload(
+      endedAt: session.endedAt ?? DateTime.now().toUtc(),
+      durationS: durationS,
+      distanceM: distanceM,
+      avgSpeedMps: avgSpeedMps,
+      maxSpeedMps: maxSpeedMps,
+      elevationGainM: _sanitizeNullableNonNegativeIntForSync(
+        session.elevationGainM,
+        fieldName: 'elevation_gain_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      elevationLossM: _sanitizeNullableNonNegativeIntForSync(
+        session.elevationLossM,
+        fieldName: 'elevation_loss_m',
+        sanitizedFields: sanitizedFields,
+      ),
+      sanitizedFields: _dedupeSanitizedFields(sanitizedFields),
+    );
+  }
+
+  int _sanitizeNonNegativeIntForSync(
+    int value, {
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    if (value >= 0) {
+      return value;
+    }
+    sanitizedFields.add(fieldName);
+    return 0;
+  }
+
+  int? _sanitizeNullableNonNegativeIntForSync(
+    int? value, {
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    if (value == null) {
+      return null;
+    }
+    if (value >= 0) {
+      return value;
+    }
+    sanitizedFields.add(fieldName);
+    return null;
+  }
+
+  double _sanitizeNonNegativeDoubleForSync(
+    double value, {
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    if (value.isFinite && value >= 0) {
+      return value;
+    }
+    sanitizedFields.add(fieldName);
+    return 0;
+  }
+
+  double? _sanitizeNullableFiniteDoubleForSync(
+    double? value, {
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    if (value == null) {
+      return null;
+    }
+    if (value.isFinite) {
+      return value;
+    }
+    sanitizedFields.add(fieldName);
+    return null;
+  }
+
+  double? _sanitizeNullableNonNegativeDoubleForSync(
+    double? value, {
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    final double? finiteValue = _sanitizeNullableFiniteDoubleForSync(
+      value,
+      fieldName: fieldName,
+      sanitizedFields: sanitizedFields,
+    );
+    if (finiteValue == null) {
+      return null;
+    }
+    if (finiteValue >= 0) {
+      return finiteValue;
+    }
+    sanitizedFields.add(fieldName);
+    return null;
+  }
+
+  double? _normalizeHeadingForSync(
+    double? headingDeg, {
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    final double? finiteHeading = _sanitizeNullableFiniteDoubleForSync(
+      headingDeg,
+      fieldName: fieldName,
+      sanitizedFields: sanitizedFields,
+    );
+    if (finiteHeading == null) {
+      return null;
+    }
+
+    double normalized = finiteHeading % 360;
+    if (normalized < 0) {
+      normalized += 360;
+    }
+    if ((normalized - finiteHeading).abs() > 1e-9) {
+      sanitizedFields.add(fieldName);
+    }
+    return normalized;
+  }
+
+  List<String> _dedupeSanitizedFields(List<String> fields) {
+    return fields.toSet().toList(growable: false);
+  }
+
+  bool _isLikelyValidationFailure(DioException exception) {
+    final int? statusCode = exception.response?.statusCode;
+    final String combined = <String>[
+      mapDioException(exception).message,
+      exception.response?.data?.toString() ?? '',
+    ].join(' ').toLowerCase();
+
+    if (statusCode == 422) {
+      return true;
+    }
+    if (statusCode == 400 &&
+        (combined.contains('validation') ||
+            combined.contains('input should') ||
+            combined.contains('greater than or equal to') ||
+            combined.contains('ge=0'))) {
+      return true;
+    }
+    return combined.contains('greater than or equal to') ||
+        combined.contains('input should') ||
+        combined.contains('ge=0');
+  }
+
+  Future<void> _recordSyncDiagnosticBestEffort(
+    int localSessionId, {
+    required String eventType,
+    required String message,
+    required Map<String, dynamic> details,
+  }) async {
+    try {
+      await _localDatabase.insertTrackingDiagnostic(
+        localSessionId: localSessionId,
+        eventType: eventType,
+        message: message,
+        details: details,
+      );
+    } catch (_) {
+      return;
+    }
   }
 
   Future<LocalRideSession> _requireSession(int localSessionId) async {
@@ -793,22 +1346,6 @@ class SessionRepositoryImpl implements SessionRepository {
     return maxSpeed;
   }
 
-  double _sanitizeAvgSpeedForRemote(LocalRideSession session) {
-    final double avg = session.avgSpeedMps;
-    if (!avg.isFinite || avg < 0) {
-      return 0;
-    }
-    return avg;
-  }
-
-  double _sanitizeMaxSpeedForRemote(LocalRideSession session) {
-    final double sanitizedAvg = _sanitizeAvgSpeedForRemote(session);
-    final double rawMax = session.maxSpeedMps;
-    final double sanitizedRawMax =
-        (!rawMax.isFinite || rawMax < 0) ? 0 : rawMax;
-    return max(sanitizedRawMax, sanitizedAvg);
-  }
-
   (int?, int?) _computeElevation(List<LocalSessionPoint> points) {
     double? previousAltitude;
     int gain = 0;
@@ -968,4 +1505,98 @@ class _TimedSpeed {
   final DateTime time;
   final double speed;
   final bool highConfidence;
+}
+
+class _SanitizedCompletionPayload {
+  const _SanitizedCompletionPayload({
+    required this.endedAt,
+    required this.durationS,
+    required this.distanceM,
+    required this.maxSpeedMps,
+    required this.avgSpeedMps,
+    required this.elevationGainM,
+    required this.elevationLossM,
+    required this.sanitizedFields,
+  });
+
+  final DateTime endedAt;
+  final int durationS;
+  final double distanceM;
+  final double maxSpeedMps;
+  final double avgSpeedMps;
+  final int? elevationGainM;
+  final int? elevationLossM;
+  final List<String> sanitizedFields;
+}
+
+class _PointSanitizationResult {
+  const _PointSanitizationResult({
+    required this.candidateCount,
+    required this.uploadablePoints,
+    required this.droppedPoints,
+    required this.sanitizedPointCount,
+    required this.sanitizedFieldCounts,
+  });
+
+  final int candidateCount;
+  final List<_SanitizedSyncPoint> uploadablePoints;
+  final List<_DroppedSyncPoint> droppedPoints;
+  final int sanitizedPointCount;
+  final Map<String, int> sanitizedFieldCounts;
+}
+
+class _SinglePointSanitizationResult {
+  const _SinglePointSanitizationResult._({
+    required this.sanitized,
+    required this.dropped,
+  });
+
+  factory _SinglePointSanitizationResult.keep(_SanitizedSyncPoint point) {
+    return _SinglePointSanitizationResult._(sanitized: point, dropped: null);
+  }
+
+  factory _SinglePointSanitizationResult.drop(
+    LocalSessionPoint point, {
+    required String reason,
+  }) {
+    return _SinglePointSanitizationResult._(
+      sanitized: null,
+      dropped: _DroppedSyncPoint(point: point, reason: reason),
+    );
+  }
+
+  final _SanitizedSyncPoint? sanitized;
+  final _DroppedSyncPoint? dropped;
+}
+
+class _SanitizedSyncPoint {
+  const _SanitizedSyncPoint({
+    required this.original,
+    required this.payload,
+    required this.sanitizedFields,
+  });
+
+  final LocalSessionPoint original;
+  final Map<String, dynamic> payload;
+  final List<String> sanitizedFields;
+}
+
+class _DroppedSyncPoint {
+  const _DroppedSyncPoint({
+    required this.point,
+    required this.reason,
+  });
+
+  final LocalSessionPoint point;
+  final String reason;
+}
+
+class _PointUploadResult {
+  const _PointUploadResult({
+    required this.usedIsolationFallback,
+    required this.droppedPoints,
+  });
+
+  final bool usedIsolationFallback;
+  final List<_DroppedSyncPoint> droppedPoints;
 }
