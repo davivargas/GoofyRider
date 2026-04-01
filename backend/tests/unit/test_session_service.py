@@ -170,6 +170,59 @@ def test_complete_session_sets_computed_duration_when_missing() -> None:
     assert completed.duration_s == 30
 
 
+def test_complete_session_allows_omitted_optional_metrics() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+    service = _build_service(ride_session_repository=ride_sessions)
+    ended_at = draft_session.started_at + timedelta(seconds=45)
+
+    completed = service.complete_session(
+        session_id=draft_session.id,
+        user_id=user_id,
+        completion=SessionCompletionInput(
+            ended_at=ended_at,
+            distance_m=None,
+            max_speed_mps=None,
+            avg_speed_mps=None,
+            elevation_gain_m=None,
+            elevation_loss_m=None,
+        ),
+    )
+
+    assert completed.status == RideSessionStatus.COMPLETED
+    assert completed.duration_s == 45
+    assert completed.distance_m is None
+    assert completed.max_speed_mps is None
+    assert completed.avg_speed_mps is None
+    assert completed.elevation_gain_m is None
+    assert completed.elevation_loss_m is None
+
+
+def test_complete_session_sanitizes_avg_speed_above_max() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+    service = _build_service(ride_session_repository=ride_sessions)
+    ended_at = draft_session.started_at + timedelta(seconds=60)
+
+    completed = service.complete_session(
+        session_id=draft_session.id,
+        user_id=user_id,
+        completion=SessionCompletionInput(
+            ended_at=ended_at,
+            max_speed_mps=10.0,
+            avg_speed_mps=12.0,
+        ),
+    )
+
+    assert completed.status == RideSessionStatus.COMPLETED
+    assert completed.max_speed_mps == 10.0
+    assert completed.avg_speed_mps is None
+
+
 def test_upload_points_batch_skips_existing_offsets() -> None:
     user_id = uuid4()
     ride_sessions = FakeRideSessionRepository()

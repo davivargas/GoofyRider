@@ -3,7 +3,6 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import model_validator
 
 from app.models.ride_session import RideSessionStatus
 from app.schemas.base import ORMBaseModel
@@ -51,22 +50,12 @@ class SessionPointsBatchResponse(BaseModel):
 
 class SessionCompleteRequest(BaseModel):
     ended_at: datetime | None = None
-    duration_s: int | None = Field(default=None, ge=0)
-    distance_m: float | None = Field(default=None, ge=0)
-    max_speed_mps: float | None = Field(default=None, ge=0)
-    avg_speed_mps: float | None = Field(default=None, ge=0)
-    elevation_gain_m: int | None = Field(default=None, ge=0)
-    elevation_loss_m: int | None = Field(default=None, ge=0)
-
-    @model_validator(mode="after")
-    def validate_avg_speed(self) -> "SessionCompleteRequest":
-        if (
-            self.avg_speed_mps is not None
-            and self.max_speed_mps is not None
-            and self.avg_speed_mps > self.max_speed_mps
-        ):
-            raise ValueError("Average speed cannot be greater than max speed.")
-        return self
+    duration_s: int | None = None
+    distance_m: float | None = None
+    max_speed_mps: float | None = None
+    avg_speed_mps: float | None = None
+    elevation_gain_m: int | None = None
+    elevation_loss_m: int | None = None
 
 
 class SessionResortSummary(ORMBaseModel):

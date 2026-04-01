@@ -104,16 +104,23 @@ class SessionDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              if (showDebugDiagnostics &&
-                  session.state == LocalSessionState.syncFailed)
+              if (session.localId > 0 &&
+                  session.isUnsynced &&
+                  !session.isInProgress)
                 FilledButton(
                   onPressed: () async {
                     await ref
                         .read(sessionRepositoryProvider)
-                        .retryFailedSync(localSessionId);
+                        .syncSession(localSessionId);
                     ref.invalidate(sessionDetailProvider(localSessionId));
+                    ref.invalidate(historyProvider);
+                    ref.invalidate(unsyncedSessionCountProvider);
                   },
-                  child: const Text('Retry sync'),
+                  child: Text(
+                    session.state == LocalSessionState.syncFailed
+                        ? 'Retry sync'
+                        : 'Sync now',
+                  ),
                 ),
             ],
           );

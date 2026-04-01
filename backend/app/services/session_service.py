@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
+from math import isfinite
 from typing import Protocol
 
 from sqlalchemy.exc import IntegrityError
@@ -168,7 +169,9 @@ class SessionService:
         if ended_at < ride_session.started_at:
             raise ValidationError("ended_at cannot be earlier than started_at.")
 
-        duration_s = completion.duration_s
+        sanitized_completion = self._sanitize_completion_metrics(completion)
+
+        duration_s = sanitized_completion.duration_s
         if duration_s is None:
             duration_s = int((ended_at - ride_session.started_at).total_seconds())
         if duration_s < 0:
@@ -176,16 +179,57 @@ class SessionService:
 
         ride_session.ended_at = ended_at
         ride_session.duration_s = duration_s
-        ride_session.distance_m = completion.distance_m
-        ride_session.max_speed_mps = completion.max_speed_mps
-        ride_session.avg_speed_mps = completion.avg_speed_mps
-        ride_session.elevation_gain_m = completion.elevation_gain_m
-        ride_session.elevation_loss_m = completion.elevation_loss_m
+        ride_session.distance_m = sanitized_completion.distance_m
+        ride_session.max_speed_mps = sanitized_completion.max_speed_mps
+        ride_session.avg_speed_mps = sanitized_completion.avg_speed_mps
+        ride_session.elevation_gain_m = sanitized_completion.elevation_gain_m
+        ride_session.elevation_loss_m = sanitized_completion.elevation_loss_m
         ride_session.status = RideSessionStatus.COMPLETED
 
         self._ride_session_repository.commit()
         self._ride_session_repository.refresh(ride_session)
         return ride_session
+
+    def _sanitize_completion_metrics(
+        self,
+        completion: SessionCompletionInput,
+    ) -> SessionCompletionInput:
+        distance_m = self._sanitize_optional_non_negative_float(completion.distance_m)
+        max_speed_mps = self._sanitize_optional_non_negative_float(completion.max_speed_mps)
+        avg_speed_mps = self._sanitize_optional_non_negative_float(completion.avg_speed_mps)
+        elevation_gain_m = self._sanitize_optional_non_negative_int(completion.elevation_gain_m)
+        elevation_loss_m = self._sanitize_optional_non_negative_int(completion.elevation_loss_m)
+
+        if (
+            avg_speed_mps is not None
+            and max_speed_mps is not None
+            and avg_speed_mps > max_speed_mps
+        ):
+            avg_speed_mps = None
+
+        return SessionCompletionInput(
+            ended_at=completion.ended_at,
+            duration_s=completion.duration_s,
+            distance_m=distance_m,
+            max_speed_mps=max_speed_mps,
+            avg_speed_mps=avg_speed_mps,
+            elevation_gain_m=elevation_gain_m,
+            elevation_loss_m=elevation_loss_m,
+        )
+
+    def _sanitize_optional_non_negative_float(self, value: float | None) -> float | None:
+        if value is None:
+            return None
+        if value < 0 or not isfinite(value):
+            return None
+        return value
+
+    def _sanitize_optional_non_negative_int(self, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 0:
+            return None
+        return value
 
     def get_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession:
         return self._get_owned_session(session_id=session_id, user_id=user_id)

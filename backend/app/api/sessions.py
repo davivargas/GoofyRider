@@ -1,10 +1,13 @@
-﻿import uuid
+import uuid
+from typing import Any
 
 from fastapi import APIRouter
+from fastapi import Body
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import status
+from pydantic import ValidationError as PydanticValidationError
 
 from app.core.dependencies import get_current_user
 from app.core.dependencies import get_session_service
@@ -26,6 +29,34 @@ from app.services.session_service import SessionPointInputData
 from app.services.session_service import SessionService
 
 router = APIRouter(tags=["sessions"])
+
+
+def _validate_complete_payload(payload: dict[str, Any]) -> SessionCompleteRequest:
+    try:
+        return SessionCompleteRequest.model_validate(payload)
+    except PydanticValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "Invalid session completion payload.",
+                "errors": _format_complete_payload_validation_errors(exc),
+            },
+        ) from exc
+
+
+def _format_complete_payload_validation_errors(
+    exc: PydanticValidationError,
+) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"] if part != "body") or "payload"
+        errors.append(
+            {
+                "field": location,
+                "message": f"{location}: {error['msg']}",
+            }
+        )
+    return errors
 
 
 @router.post("/sessions", response_model=RideSessionPublic, status_code=status.HTTP_201_CREATED)
@@ -77,11 +108,12 @@ def upload_session_points_batch(
 @router.post("/sessions/{session_id}/complete", response_model=RideSessionPublic)
 def complete_session(
     session_id: uuid.UUID,
-    payload: SessionCompleteRequest,
+    payload: dict[str, Any] = Body(...),
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
-    completion = SessionCompletionInput(**payload.model_dump())
+    validated_payload = _validate_complete_payload(payload)
+    completion = SessionCompletionInput(**validated_payload.model_dump())
     try:
         ride_session = session_service.complete_session(
             session_id=session_id,
