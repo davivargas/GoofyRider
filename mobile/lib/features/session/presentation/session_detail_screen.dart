@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../app/router/route_paths.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/errors/failures.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
@@ -39,7 +42,79 @@ class SessionDetailScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text(appBarTitle)),
+      appBar: AppBar(
+        title: Text(appBarTitle),
+        actions: <Widget>[
+          detail.maybeWhen(
+            data: (SessionDetail data) => PopupMenuButton<_SessionDetailAction>(
+              tooltip: 'Session actions',
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<_SessionDetailAction>>[
+                const PopupMenuItem<_SessionDetailAction>(
+                  value: _SessionDetailAction.delete,
+                  child: Text(
+                    'Delete session',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+              onSelected: (_SessionDetailAction action) async {
+                if (action != _SessionDetailAction.delete) {
+                  return;
+                }
+
+                final bool confirmed = await _confirmDelete(context);
+                if (!confirmed) {
+                  return;
+                }
+
+                try {
+                  final DeleteSessionResult result = await ref
+                      .read(sessionRepositoryProvider)
+                      .deleteSession(data.session);
+
+                  ref.invalidate(historyProvider);
+                  ref.invalidate(historySectionsProvider);
+                  ref.invalidate(unsyncedSessionCountProvider);
+                  ref.invalidate(sessionDetailProvider(localSessionId));
+
+                  if (context.mounted) {
+                    if (result.queuedRemoteDelete) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Session removed locally. Server deletion will retry when the backend is reachable.',
+                          ),
+                        ),
+                      );
+                    }
+                    final GoRouter? router = GoRouter.maybeOf(context);
+                    if (router != null) {
+                      router.go(RoutePaths.history);
+                    } else {
+                      Navigator.of(context).pop();
+                    }
+                  }
+                } catch (error) {
+                  final String message = switch (error) {
+                    AppFailure failure => failure.message,
+                    _ => error.toString(),
+                  };
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to delete session: $message'),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       body: detail.when(
         loading: () => const AppLoadingView(label: 'Loading details...'),
         error: (Object error, StackTrace _) => AppErrorView(
@@ -353,4 +428,34 @@ class SessionDetailScreen extends ConsumerWidget {
     final String message = event.message == null ? '' : ' (${event.message})';
     return '[$stamp] ${event.eventType}$message$details';
   }
+
+  Future<bool> _confirmDelete(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete session?'),
+          content: const Text(
+            'This removes the session from your history.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed ?? false;
+  }
 }
+
+enum _SessionDetailAction { delete }

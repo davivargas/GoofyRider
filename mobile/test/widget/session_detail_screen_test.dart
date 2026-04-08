@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/errors/failures.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_detail_screen.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
 
 class FakeSessionRepository implements SessionRepository {
-  FakeSessionRepository(this.detail);
+  FakeSessionRepository(
+    this.detail, {
+    this.deleteError,
+    this.deleteResult = const DeleteSessionResult(
+      disposition: DeleteSessionDisposition.deletedRemotely,
+    ),
+  });
 
   final SessionDetail detail;
+  final AppFailure? deleteError;
+  final DeleteSessionResult deleteResult;
   final List<int> syncedSessionIds = <int>[];
+  final List<LocalRideSession> deletedSessions = <LocalRideSession>[];
 
   @override
   Future<void> appendLocationPoint(
@@ -51,6 +61,20 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<void> refreshRemoteSessionHistoryCache() async {}
+
+  @override
+  Future<DeleteSessionResult> deleteSession(LocalRideSession session) async {
+    if (deleteError != null) {
+      throw deleteError!;
+    }
+    deletedSessions.add(session);
+    return deleteResult;
+  }
+
+  @override
+  Future<String> resolveSessionResortLabel(LocalRideSession session) async {
+    return session.resortId ?? 'Unknown resort';
+  }
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
@@ -403,5 +427,120 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.syncedSessionIds, <int>[1]);
+  });
+
+  testWidgets(
+      'session detail delete action confirms, deletes, and pops back to history',
+      (WidgetTester tester) async {
+    final FakeSessionRepository repository =
+        FakeSessionRepository(_buildSegmentedDetail());
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          initialRoute: '/detail',
+          routes: <String, WidgetBuilder>{
+            '/': (_) =>
+                const Scaffold(body: Center(child: Text('History placeholder'))),
+            '/detail': (_) => const SessionDetailScreen(localSessionId: 1),
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Session actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete session'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete session?'), findsOneWidget);
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(repository.deletedSessions.map((LocalRideSession s) => s.localId),
+        contains(1));
+    expect(find.text('History placeholder'), findsOneWidget);
+  });
+
+  testWidgets(
+      'session detail delete shows queued reconciliation message when remote delete is deferred',
+      (WidgetTester tester) async {
+    final FakeSessionRepository repository = FakeSessionRepository(
+      _buildSegmentedDetail(),
+      deleteResult: const DeleteSessionResult(
+        disposition: DeleteSessionDisposition.queuedRemoteDelete,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          initialRoute: '/detail',
+          routes: <String, WidgetBuilder>{
+            '/': (_) =>
+                const Scaffold(body: Center(child: Text('History placeholder'))),
+            '/detail': (_) => const SessionDetailScreen(localSessionId: 1),
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Session actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Session removed locally. Server deletion will retry when the backend is reachable.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'session detail delete failure shows AppFailure message',
+      (WidgetTester tester) async {
+    final FakeSessionRepository repository = FakeSessionRepository(
+      _buildSegmentedDetail(),
+      deleteError: const NetworkFailure('Could not connect to backend.'),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const MaterialApp(
+          home: SessionDetailScreen(localSessionId: 1),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Session actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Failed to delete session: Could not connect to backend.'),
+      findsOneWidget,
+    );
   });
 }
