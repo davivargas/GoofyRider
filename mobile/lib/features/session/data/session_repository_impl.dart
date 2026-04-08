@@ -4,12 +4,14 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 
 import '../../../core/constants/session_constants.dart';
+import '../../../core/errors/failures.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/storage/drift_local_database.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import '../domain/session_segmentation.dart';
 import '../domain/session_state_machine.dart';
+import 'session_resort_attribution_service.dart';
 import 'session_api.dart';
 
 class SessionRepositoryImpl implements SessionRepository {
@@ -21,12 +23,17 @@ class SessionRepositoryImpl implements SessionRepository {
   })  : _localDatabase = localDatabase,
         _api = api,
         _currentUserIdGetter = currentUserIdGetter,
+        _resortAttributionService =
+            SessionResortAttributionService(localDatabase: localDatabase),
         _stateMachine = stateMachine;
 
   final DriftLocalDatabase _localDatabase;
   final SessionApi _api;
   final String? Function() _currentUserIdGetter;
+  final SessionResortAttributionService _resortAttributionService;
   final SessionStateMachine _stateMachine;
+  Future<void>? _pendingDeleteReconciliationLoop;
+  String? _queuedReconciliationOwnerUserId;
 
   @override
   Future<LocalRideSession> startLocalSession({String? resortId}) async {
@@ -89,6 +96,8 @@ class SessionRepositoryImpl implements SessionRepository {
       points: points,
       activeDurationS: effectiveDurationS,
     );
+    final String? resolvedResortId = session.resortId ??
+        await _resortAttributionService.inferResortIdFromPoints(points);
 
     final DateTime endedAt = DateTime.now().toUtc();
 
@@ -96,6 +105,7 @@ class SessionRepositoryImpl implements SessionRepository {
       localId: localSessionId,
       endedAt: endedAt,
       stats: stats,
+      resortId: resolvedResortId,
     );
 
     return _requireSession(localSessionId);
@@ -171,11 +181,17 @@ class SessionRepositoryImpl implements SessionRepository {
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return const <LocalRideSession>[];
     }
+    unawaited(_ensurePendingDeleteReconciliation(ownerUserId));
+    final Set<String> pendingRemoteDeleteIds =
+        await _pendingRemoteDeleteIds(ownerUserId);
 
     List<LocalRideSession> local =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> cachedRemote =
-        await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
+    final List<Map<String, dynamic>> cachedRemote = (await _localDatabase
+            .readCachedRemoteSessions(ownerUserId: ownerUserId))
+        .where((Map<String, dynamic> raw) =>
+            _isVisibleRemoteSessionSummary(raw, pendingRemoteDeleteIds))
+        .toList(growable: false);
 
     if (cachedRemote.isNotEmpty &&
         _hasUnhydratedRemoteSessions(local: local, remote: cachedRemote)) {
@@ -196,10 +212,17 @@ class SessionRepositoryImpl implements SessionRepository {
     }
 
     await refreshRemoteSessionHistoryCache();
+    final Set<String> refreshedPendingRemoteDeleteIds =
+        await _pendingRemoteDeleteIds(ownerUserId);
     final List<LocalRideSession> refreshedLocal =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> refreshedRemote =
-        await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
+    final List<Map<String, dynamic>> refreshedRemote = (await _localDatabase
+            .readCachedRemoteSessions(ownerUserId: ownerUserId))
+        .where((Map<String, dynamic> raw) => _isVisibleRemoteSessionSummary(
+              raw,
+              refreshedPendingRemoteDeleteIds,
+            ))
+        .toList(growable: false);
     return _mergeHistory(
       local: refreshedLocal,
       remote: refreshedRemote,
@@ -213,16 +236,26 @@ class SessionRepositoryImpl implements SessionRepository {
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return;
     }
+    await _ensurePendingDeleteReconciliation(ownerUserId);
+    final Set<String> pendingRemoteDeleteIds =
+        await _pendingRemoteDeleteIds(ownerUserId);
 
     try {
       final List<Map<String, dynamic>> remote = await _api.listRemoteSessions();
       await _localDatabase.replaceCachedRemoteSessions(
         ownerUserId: ownerUserId,
-        sessions: remote,
+        sessions: remote
+            .where((Map<String, dynamic> raw) =>
+                _isVisibleRemoteSessionSummary(raw, pendingRemoteDeleteIds))
+            .toList(growable: false),
       );
       await _hydrateRemoteSessionSummaries(
         ownerUserId: ownerUserId,
-        remote: remote,
+        remote: remote.where((Map<String, dynamic> raw) {
+          return _isVisibleRemoteSessionSummary(raw, pendingRemoteDeleteIds);
+        }).toList(
+          growable: false,
+        ),
       );
     } on DioException {
       return;
@@ -332,6 +365,92 @@ class SessionRepositoryImpl implements SessionRepository {
       localSessionId,
       limit: limit,
     );
+  }
+
+  @override
+  Future<String> resolveSessionResortLabel(LocalRideSession session) async {
+    final ResolvedSessionResort resolved =
+        await _resortAttributionService.resolve(session);
+    return resolved.label;
+  }
+
+  @override
+  Future<DeleteSessionResult> deleteSession(LocalRideSession session) async {
+    final String ownerUserId = _requireCurrentUserId();
+    final String? remoteId = session.remoteId;
+    final bool hasRemoteId = remoteId != null && remoteId.isNotEmpty;
+    DeleteSessionDisposition disposition = DeleteSessionDisposition.localOnly;
+
+    if (hasRemoteId) {
+      await _localDatabase.enqueuePendingRemoteSessionDelete(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
+
+      try {
+        await _api.deleteRemoteSession(remoteId);
+        await _localDatabase.clearPendingRemoteSessionDelete(
+          ownerUserId: ownerUserId,
+          remoteId: remoteId,
+        );
+        disposition = DeleteSessionDisposition.deletedRemotely;
+      } on DioException catch (exception) {
+        if (_isNotFound(exception)) {
+          await _localDatabase.clearPendingRemoteSessionDelete(
+            ownerUserId: ownerUserId,
+            remoteId: remoteId,
+          );
+          disposition = DeleteSessionDisposition.deletedRemotely;
+        } else {
+          final AppFailure failure = mapDioException(exception);
+          if (failure is NetworkFailure) {
+            await _localDatabase.recordPendingRemoteSessionDeleteAttempt(
+              ownerUserId: ownerUserId,
+              remoteId: remoteId,
+              lastError: failure.message,
+            );
+            disposition = DeleteSessionDisposition.queuedRemoteDelete;
+          } else {
+            await _localDatabase.clearPendingRemoteSessionDelete(
+              ownerUserId: ownerUserId,
+              remoteId: remoteId,
+            );
+            throw failure;
+          }
+        }
+      }
+    }
+
+    final bool shouldDeleteLocally = !hasRemoteId ||
+        disposition == DeleteSessionDisposition.deletedRemotely ||
+        disposition == DeleteSessionDisposition.queuedRemoteDelete;
+
+    if (!shouldDeleteLocally) {
+      return DeleteSessionResult(disposition: disposition);
+    }
+
+    if (session.localId > 0) {
+      await _localDatabase.deleteSessionCascade(
+        localSessionId: session.localId,
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        clearPendingRemoteSessionDelete:
+            disposition != DeleteSessionDisposition.queuedRemoteDelete,
+      );
+    } else if (hasRemoteId) {
+      await _localDatabase.deleteCachedRemoteSessionSummary(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
+      if (disposition != DeleteSessionDisposition.queuedRemoteDelete) {
+        await _localDatabase.clearPendingRemoteSessionDelete(
+          ownerUserId: ownerUserId,
+          remoteId: remoteId,
+        );
+      }
+    }
+
+    return DeleteSessionResult(disposition: disposition);
   }
 
   @override
@@ -1068,6 +1187,7 @@ class SessionRepositoryImpl implements SessionRepository {
       if (remoteId == null || remoteId.isEmpty) {
         continue;
       }
+      await _cacheEmbeddedResortSummary(raw['resort'] as Map<String, dynamic>?);
 
       await _localDatabase.upsertRemoteSessionSummary(
         ownerUserId: ownerUserId,
@@ -1115,6 +1235,121 @@ class SessionRepositoryImpl implements SessionRepository {
     return status == 'COMPLETED' ||
         status == 'SYNCED' ||
         raw['ended_at'] != null;
+  }
+
+  Future<Set<String>> _pendingRemoteDeleteIds(String ownerUserId) {
+    return _localDatabase.listPendingRemoteSessionDeleteIds(
+      ownerUserId: ownerUserId,
+    );
+  }
+
+  Future<void> _ensurePendingDeleteReconciliation(String ownerUserId) {
+    _queuedReconciliationOwnerUserId = ownerUserId;
+    _pendingDeleteReconciliationLoop ??= _runPendingDeleteReconciliationLoop();
+    return _pendingDeleteReconciliationLoop!;
+  }
+
+  Future<void> _runPendingDeleteReconciliationLoop() async {
+    try {
+      while (true) {
+        final String? ownerUserId = _queuedReconciliationOwnerUserId;
+        _queuedReconciliationOwnerUserId = null;
+        if (ownerUserId == null || ownerUserId.isEmpty) {
+          return;
+        }
+        await _reconcilePendingRemoteDeletes(ownerUserId);
+        if (_queuedReconciliationOwnerUserId == null) {
+          return;
+        }
+      }
+    } finally {
+      _pendingDeleteReconciliationLoop = null;
+    }
+  }
+
+  Future<void> _reconcilePendingRemoteDeletes(String ownerUserId) async {
+    // We intentionally do not throttle retries yet; serialized reconciliation
+    // prevents overlapping attempts in a single repository instance.
+    final List<String> pendingRemoteIds =
+        await _localDatabase.listPendingRemoteDeleteIds(
+      ownerUserId: ownerUserId,
+    );
+
+    for (final String remoteId in pendingRemoteIds) {
+      try {
+        await _api.deleteRemoteSession(remoteId);
+        await _localDatabase.clearPendingRemoteSessionDelete(
+          ownerUserId: ownerUserId,
+          remoteId: remoteId,
+        );
+      } on DioException catch (exception) {
+        if (_isNotFound(exception)) {
+          await _localDatabase.clearPendingRemoteSessionDelete(
+            ownerUserId: ownerUserId,
+            remoteId: remoteId,
+          );
+          continue;
+        }
+
+        final AppFailure failure = mapDioException(exception);
+        if (failure is NetworkFailure) {
+          await _localDatabase.recordPendingRemoteSessionDeleteAttempt(
+            ownerUserId: ownerUserId,
+            remoteId: remoteId,
+            lastError: failure.message,
+          );
+          continue;
+        }
+
+        // Hard failures should not keep a pending local hide forever.
+        await _localDatabase.clearPendingRemoteSessionDelete(
+          ownerUserId: ownerUserId,
+          remoteId: remoteId,
+        );
+      }
+    }
+  }
+
+  bool _isVisibleRemoteSessionSummary(
+    Map<String, dynamic> raw,
+    Set<String> pendingRemoteDeleteIds,
+  ) {
+    final String? remoteId = raw['id'] as String?;
+    if (remoteId != null &&
+        remoteId.isNotEmpty &&
+        pendingRemoteDeleteIds.contains(remoteId)) {
+      return false;
+    }
+    return _isHistoryVisibleRemoteSession(raw);
+  }
+
+  Future<void> _cacheEmbeddedResortSummary(
+    Map<String, dynamic>? resortSummary,
+  ) async {
+    if (resortSummary == null) {
+      return;
+    }
+    final String? resortId = resortSummary['id'] as String?;
+    final String? name = resortSummary['name'] as String?;
+    if (resortId == null || resortId.isEmpty || name == null || name.isEmpty) {
+      return;
+    }
+
+    await _localDatabase.upsertCachedResort(
+      resortId,
+      <String, dynamic>{
+        'id': resortId,
+        'name': name,
+        'country': resortSummary['country'] as String? ?? '',
+        'region': resortSummary['region'] as String? ?? '',
+        'city': resortSummary['city'],
+        'latitude': resortSummary['latitude'],
+        'longitude': resortSummary['longitude'],
+        'elevation_base_m': resortSummary['elevation_base_m'],
+        'elevation_top_m': resortSummary['elevation_top_m'],
+        'is_favorite': false,
+      },
+    );
   }
 
   bool _canRestoreRemotePoints(LocalRideSession session) {
@@ -1492,6 +1727,10 @@ class SessionRepositoryImpl implements SessionRepository {
       return false;
     }
     return null;
+  }
+
+  bool _isNotFound(DioException exception) {
+    return exception.response?.statusCode == 404;
   }
 }
 
