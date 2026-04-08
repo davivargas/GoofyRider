@@ -898,7 +898,7 @@ void main() {
 
   test('syncSession returns explicit failed snapshot when auth context drops',
       () async {
-    String? currentUserId = _ownerUserId;
+    final String currentUserId = _ownerUserId;
     final SessionRepositoryImpl authDroppingRepository = SessionRepositoryImpl(
       localDatabase: localDatabase,
       api: api,

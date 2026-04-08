@@ -195,13 +195,10 @@ class _FakeDistanceUnitPreferenceController
 
 class _FakeRecordingController extends RecordingController {
   _FakeRecordingController({
-    required SessionRepository sessionRepository,
-    required LocationTrackingRepository locationTrackingRepository,
+    required super.sessionRepository,
+    required super.locationTrackingRepository,
     required RecordingViewState initialState,
-  }) : super(
-          sessionRepository: sessionRepository,
-          locationTrackingRepository: locationTrackingRepository,
-        ) {
+  }) {
     state = initialState;
   }
 

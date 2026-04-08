@@ -1485,7 +1485,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
     if (restartCoolingDown) {
       final int cooldownRemainingSeconds =
           _sampleWatchdogRestartCooldown.inSeconds -
-              now.difference(lastRestart!).inSeconds;
+              now.difference(lastRestart).inSeconds;
       await _recordTrackingDiagnostic(
         eventType: 'sample_watchdog_restart_cooldown',
         details: <String, dynamic>{

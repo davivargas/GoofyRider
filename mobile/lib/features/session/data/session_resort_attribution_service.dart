@@ -150,12 +150,9 @@ class SessionResortAttributionService {
   LocalSessionPoint? _latestResolvablePoint(List<LocalSessionPoint> points) {
     for (int index = points.length - 1; index >= 0; index -= 1) {
       final LocalSessionPoint point = points[index];
-      final double? latitude = point.filteredLatitude ?? point.latitude;
-      final double? longitude = point.filteredLongitude ?? point.longitude;
-      if (latitude != null &&
-          longitude != null &&
-          latitude.isFinite &&
-          longitude.isFinite) {
+      final double latitude = point.filteredLatitude ?? point.latitude;
+      final double longitude = point.filteredLongitude ?? point.longitude;
+      if (latitude.isFinite && longitude.isFinite) {
         return point;
       }
     }

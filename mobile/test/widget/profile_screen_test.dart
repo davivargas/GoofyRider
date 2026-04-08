@@ -10,6 +10,8 @@ import 'package:goofyrider_mobile/features/auth/presentation/auth_providers.dart
 import 'package:goofyrider_mobile/features/profile/presentation/profile_screen.dart';
 
 class _FakeAuthRepository implements AuthRepository {
+  const _FakeAuthRepository();
+
   @override
   Future<String?> currentAccessToken() async => 'access';
 
@@ -45,7 +47,7 @@ class _FakeAuthRepository implements AuthRepository {
 
 class _FakeAuthController extends AuthController {
   _FakeAuthController({required AuthState initialState})
-      : super(_FakeAuthRepository()) {
+      : super(const _FakeAuthRepository()) {
     state = initialState;
   }
 }
@@ -53,12 +55,12 @@ class _FakeAuthController extends AuthController {
 void main() {
   testWidgets('export debug info shows success snackbar when export completes',
       (WidgetTester tester) async {
-    final AuthState authState = AuthState(
+    const AuthState authState = AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',
         refreshToken: 'refresh',
-        user: const UserProfile(
+        user: UserProfile(
           id: 'user-1',
           email: 'rider@example.com',
           displayName: 'Rider',
@@ -130,12 +132,12 @@ void main() {
 
   testWidgets('export debug info shows failure snackbar on export error',
       (WidgetTester tester) async {
-    final AuthState authState = AuthState(
+    const AuthState authState = AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',
         refreshToken: 'refresh',
-        user: const UserProfile(
+        user: UserProfile(
           id: 'user-1',
           email: 'rider@example.com',
           displayName: 'Rider',

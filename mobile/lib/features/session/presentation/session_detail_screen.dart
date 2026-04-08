@@ -97,7 +97,7 @@ class SessionDetailScreen extends ConsumerWidget {
                   }
                 } catch (error) {
                   final String message = switch (error) {
-                    AppFailure failure => failure.message,
+                    final AppFailure failure => failure.message,
                     _ => error.toString(),
                   };
 

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/app/shell/home_screen.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/utils/date_time_formatting.dart';
-import 'package:goofyrider_mobile/core/utils/distance_unit.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
 import 'package:goofyrider_mobile/features/auth/presentation/auth_controller.dart';
@@ -15,6 +14,8 @@ import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
 
 class _FakeAuthRepository implements AuthRepository {
+  const _FakeAuthRepository();
+
   @override
   Future<String?> currentAccessToken() async => 'access';
 
@@ -50,13 +51,13 @@ class _FakeAuthRepository implements AuthRepository {
 
 class _FakeAuthController extends AuthController {
   _FakeAuthController()
-      : super(_FakeAuthRepository()) {
-    state = AuthState(
+      : super(const _FakeAuthRepository()) {
+    state = const AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',
         refreshToken: 'refresh',
-        user: const UserProfile(
+        user: UserProfile(
           id: 'user-1',
           email: 'rider@example.com',
           displayName: 'Rider',
