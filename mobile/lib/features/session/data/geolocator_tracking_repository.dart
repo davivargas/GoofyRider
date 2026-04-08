@@ -207,7 +207,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
       foregroundNotificationConfig: const ForegroundNotificationConfig(
         notificationTitle: 'GoofyRider is recording your session',
         notificationText: 'Tracking route in the background',
-        enableWakeLock: false,
+        enableWakeLock: true,
       ),
     );
   }
