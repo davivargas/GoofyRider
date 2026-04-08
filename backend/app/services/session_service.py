@@ -71,6 +71,9 @@ class RideSessionRepositoryProtocol(Protocol):
     def add(self, ride_session: RideSession) -> None:
         ...
 
+    def delete(self, ride_session: RideSession) -> None:
+        ...
+
     def get_owned_by_user(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession | None:
         ...
 
@@ -247,6 +250,11 @@ class SessionService:
         total = self._ride_session_repository.count_by_user(user_id)
         sessions = self._ride_session_repository.list_by_user(user_id, page, page_size)
         return sessions, total
+
+    def delete_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
+        self._ride_session_repository.delete(ride_session)
+        self._ride_session_repository.commit()
 
     def _get_owned_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession:
         ride_session = self._ride_session_repository.get_owned_by_user(session_id, user_id)

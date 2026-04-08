@@ -30,6 +30,7 @@ class FakeRideSessionRepository:
     def __init__(self) -> None:
         self.sessions: dict[object, RideSession] = {}
         self.did_commit = False
+        self.deleted_session_ids: list[object] = []
 
     def add(self, ride_session: RideSession) -> None:
         if ride_session.id is None:
@@ -41,6 +42,10 @@ class FakeRideSessionRepository:
         if session is None or session.user_id != user_id:
             return None
         return session
+
+    def delete(self, ride_session: RideSession) -> None:
+        self.deleted_session_ids.append(ride_session.id)
+        self.sessions.pop(ride_session.id, None)
 
     def count_by_user(self, user_id):
         return sum(1 for session in self.sessions.values() if session.user_id == user_id)
@@ -402,3 +407,32 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
     assert saved_point.derived_speed_mps == 7.3
     assert saved_point.distance_delta_m == 1.2
     assert saved_point.motion_state == "moving"
+
+
+def test_delete_session_removes_owned_session() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    session = _build_session(user_id=user_id, status=RideSessionStatus.COMPLETED)
+    ride_sessions.sessions[session.id] = session
+    service = _build_service(ride_session_repository=ride_sessions)
+
+    service.delete_session(session_id=session.id, user_id=user_id)
+
+    assert ride_sessions.did_commit is True
+    assert ride_sessions.deleted_session_ids == [session.id]
+    assert session.id not in ride_sessions.sessions
+
+
+def test_delete_session_rejects_unknown_or_unowned_session() -> None:
+    owner_id = uuid4()
+    attacker_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    session = _build_session(user_id=owner_id, status=RideSessionStatus.DRAFT)
+    ride_sessions.sessions[session.id] = session
+    service = _build_service(ride_session_repository=ride_sessions)
+
+    with pytest.raises(NotFoundError, match="Session not found."):
+        service.delete_session(session_id=session.id, user_id=attacker_id)
+
+    with pytest.raises(NotFoundError, match="Session not found."):
+        service.delete_session(session_id=uuid4(), user_id=owner_id)

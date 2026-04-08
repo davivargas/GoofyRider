@@ -12,6 +12,9 @@ class RideSessionRepository(SqlAlchemyRepository):
     def add(self, ride_session: RideSession) -> None:
         self._db.add(ride_session)
 
+    def delete(self, ride_session: RideSession) -> None:
+        self._db.delete(ride_session)
+
     def get_owned_by_user(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession | None:
         stmt = (
             select(RideSession)

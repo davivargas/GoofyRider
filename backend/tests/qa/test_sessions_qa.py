@@ -283,6 +283,28 @@ def test_sessions_cross_user_access_is_blocked(
     assert attacker_complete.status_code == 404
     assert attacker_complete.json()["detail"] == "Session not found."
 
+    attacker_delete = client.delete(
+        f"/v1/sessions/{session_id}",
+        headers=attacker_headers,
+    )
+    assert attacker_delete.status_code == 404
+    assert attacker_delete.json()["detail"] == "Session not found."
+
+
+def test_sessions_delete_missing_session_returns_404(
+    client: TestClient,
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+
+    delete_response = client.delete(
+        f"/v1/sessions/{uuid4()}",
+        headers=headers,
+    )
+    assert delete_response.status_code == 404
+    assert delete_response.json()["detail"] == "Session not found."
+
 
 def test_sessions_complete_rejects_already_completed(
     client: TestClient,
@@ -540,3 +562,96 @@ def test_sessions_points_batch_dedupes_offsets_within_single_payload(
     assert len(items) == 2
     offsets = {item["t_offset_ms"] for item in items}
     assert offsets == {0, 1000}
+
+
+def test_sessions_delete_removes_owned_session_from_history(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Delete Test Resort")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    completed = client.post(
+        f"/v1/sessions/{session_id}/complete",
+        json={"duration_s": 120, "distance_m": 500.0},
+        headers=headers,
+    )
+    assert completed.status_code == 200
+
+    deleted = client.delete(f"/v1/sessions/{session_id}", headers=headers)
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+
+    detail = client.get(f"/v1/sessions/{session_id}", headers=headers)
+    assert detail.status_code == 404
+
+    history = client.get("/v1/users/me/sessions", headers=headers)
+    assert history.status_code == 200
+    assert history.json()["items"] == []
+
+
+def test_sessions_delete_removes_owned_session_with_uploaded_points(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Delete With Points Resort")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    upload = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={
+            "points": [
+                {
+                    "t_offset_ms": 0,
+                    "latitude": 50.95,
+                    "longitude": -118.16,
+                },
+                {
+                    "t_offset_ms": 1000,
+                    "latitude": 50.951,
+                    "longitude": -118.161,
+                },
+            ]
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    assert upload.json()["inserted_count"] == 2
+
+    completed = client.post(
+        f"/v1/sessions/{session_id}/complete",
+        json={"duration_s": 120, "distance_m": 500.0},
+        headers=headers,
+    )
+    assert completed.status_code == 200
+
+    deleted = client.delete(f"/v1/sessions/{session_id}", headers=headers)
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+
+    detail = client.get(f"/v1/sessions/{session_id}", headers=headers)
+    assert detail.status_code == 404
+
+    history = client.get("/v1/users/me/sessions", headers=headers)
+    assert history.status_code == 200
+    assert history.json()["items"] == []
