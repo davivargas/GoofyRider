@@ -13,6 +13,7 @@ class SessionApi {
       <String, dynamic>{
     AuthTokenInterceptor.preserveAuthOnFailureExtraKey: true,
   };
+
   /// Session mutations opt into the preserved-auth retry path so a single
   /// token refresh can replay the original write before surfacing failure.
   static const Map<String, dynamic> _retryPreservedAuthOnFailureExtra =
@@ -113,6 +114,13 @@ class SessionApi {
       options: Options(extra: _preserveAuthOnFailureExtra),
     );
     return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> deleteRemoteSession(String sessionId) async {
+    await _dio.delete<dynamic>(
+      '/sessions/$sessionId',
+      options: Options(extra: _retryPreservedAuthOnFailureExtra),
+    );
   }
 
   Future<List<Map<String, dynamic>>> getRemoteSessionPoints(

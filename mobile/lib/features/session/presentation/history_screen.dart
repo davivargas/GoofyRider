@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
@@ -15,6 +13,7 @@ import '../../../core/widgets/app_empty_view.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
 import '../domain/session_models.dart';
+import 'history_view_models.dart';
 import 'session_providers.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -23,18 +22,18 @@ class HistoryScreen extends ConsumerWidget {
   Future<void> _runSyncPass(WidgetRef ref) async {
     await ref.read(recordingControllerProvider.notifier).retryPendingSyncs();
     ref.invalidate(historyProvider);
+    ref.invalidate(historySectionsProvider);
     ref.invalidate(unsyncedSessionCountProvider);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<LocalRideSession>> history =
-        ref.watch(historyProvider);
+    final AsyncValue<List<SessionHistorySeasonSection>> history =
+        ref.watch(historySectionsProvider);
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
     final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final bool showDebugDiagnostics =
-        kDebugMode && AppConstants.isDebugDiagnostics;
-    final AsyncValue<int> unsyncedCount = ref.watch(unsyncedSessionCountProvider);
+    final AsyncValue<int> unsyncedCount =
+        ref.watch(unsyncedSessionCountProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -58,10 +57,18 @@ class HistoryScreen extends ConsumerWidget {
         loading: () => const AppLoadingView(label: 'Loading sessions...'),
         error: (Object error, StackTrace _) => AppErrorView(
           message: error.toString(),
-          onRetry: () => ref.invalidate(historyProvider),
+          onRetry: () {
+            ref.invalidate(historyProvider);
+            ref.invalidate(historySectionsProvider);
+          },
         ),
-        data: (List<LocalRideSession> sessions) {
-          if (sessions.isEmpty) {
+        data: (List<SessionHistorySeasonSection> sections) {
+          final int totalSessions = sections.fold<int>(
+            0,
+            (int count, SessionHistorySeasonSection section) =>
+                count + section.items.length,
+          );
+          if (totalSessions == 0) {
             return const AppEmptyView(
               title: 'No sessions yet',
               subtitle: 'Record your first run to start your logbook.',
@@ -72,39 +79,33 @@ class HistoryScreen extends ConsumerWidget {
             onRefresh: () async {
               await _runSyncPass(ref);
             },
-            child: ListView.builder(
+            child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(12),
-              itemCount: sessions.length,
-              itemBuilder: (BuildContext context, int index) {
-                final LocalRideSession session = sessions[index];
-                return Card(
-                  child: ListTile(
-                    onTap: session.localId > 0
-                        ? () => context.go(
-                              RoutePaths.sessionDetail.replaceAll(
-                                ':sessionId',
-                                session.localId.toString(),
-                              ),
-                            )
-                        : null,
-                    leading: _SessionDateBox(date: session.startedAt),
-                    title: Text(
-                      session.resortId ?? 'Unknown resort',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'Duration ${formatSecondsAsDuration(session.activeDurationS)} | Distance ${distanceUnit.formatFromMeters(session.distanceM)}\n'
-                      'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
-                    ),
-                    trailing: _HistorySyncActions(
-                      session: session,
-                      showDebugDiagnostics: showDebugDiagnostics,
-                    ),
-                  ),
-                );
-              },
+              children: sections
+                  .expand(
+                    (SessionHistorySeasonSection section) => <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, bottom: 8),
+                        child: Text(
+                          section.label,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      ...section.items.map(
+                        (SessionHistoryEntryViewModel item) =>
+                            _HistorySessionCard(
+                          item: item,
+                          speedUnit: speedUnit,
+                          distanceUnit: distanceUnit,
+                        ),
+                      ),
+                    ],
+                  )
+                  .toList(growable: false),
             ),
           );
         },
@@ -113,38 +114,108 @@ class HistoryScreen extends ConsumerWidget {
   }
 }
 
-class _HistorySyncActions extends ConsumerWidget {
-  const _HistorySyncActions({
-    required this.session,
-    required this.showDebugDiagnostics,
+class _HistorySessionCard extends ConsumerWidget {
+  const _HistorySessionCard({
+    required this.item,
+    required this.speedUnit,
+    required this.distanceUnit,
   });
 
-  final LocalRideSession session;
-  final bool showDebugDiagnostics;
+  final SessionHistoryEntryViewModel item;
+  final SpeedUnit speedUnit;
+  final DistanceUnit distanceUnit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bool canSync = session.localId > 0 && session.isUnsynced && !session.isInProgress;
+    final LocalRideSession session = item.session;
+    final bool canSync =
+        session.localId > 0 && session.isUnsynced && !session.isInProgress;
+    final String syncLabel = switch (session.state) {
+      LocalSessionState.synced => 'Synced',
+      LocalSessionState.syncPending => 'Pending',
+      LocalSessionState.syncFailed => 'Failed',
+      LocalSessionState.syncing => 'Syncing',
+      _ => 'Pending',
+    };
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        if (showDebugDiagnostics || canSync) ...<Widget>[
-          _SyncBadge(state: session.state),
-          const SizedBox(width: 8),
-        ],
-        if (canSync)
-          IconButton(
-            tooltip: 'Sync now',
-            onPressed: () async {
-              await ref.read(sessionRepositoryProvider).syncSession(session.localId);
-              ref.invalidate(historyProvider);
-              ref.invalidate(unsyncedSessionCountProvider);
-              ref.invalidate(sessionDetailProvider(session.localId));
-            },
-            icon: const Icon(Icons.sync),
-          ),
-      ],
+    return Card(
+      child: ListTile(
+        onTap: session.localId > 0
+            ? () => context.go(
+                  RoutePaths.sessionDetail.replaceAll(
+                    ':sessionId',
+                    session.localId.toString(),
+                  ),
+                )
+            : null,
+        leading: _SessionDateBox(date: session.startedAt),
+        title: Text(
+          item.resortLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          'Duration ${formatSecondsAsDuration(session.activeDurationS)} | Distance ${distanceUnit.formatFromMeters(session.distanceM)}\n'
+          'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _SyncBadge(label: syncLabel, state: session.state),
+            if (canSync) ...<Widget>[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Sync now',
+                onPressed: () => _syncNow(ref, session),
+                icon: const Icon(Icons.sync),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncNow(WidgetRef ref, LocalRideSession session) async {
+    await ref.read(sessionRepositoryProvider).syncSession(session.localId);
+    ref.invalidate(historyProvider);
+    ref.invalidate(historySectionsProvider);
+    ref.invalidate(unsyncedSessionCountProvider);
+    ref.invalidate(sessionDetailProvider(session.localId));
+  }
+}
+
+class _SyncBadge extends StatelessWidget {
+  const _SyncBadge({
+    required this.label,
+    required this.state,
+  });
+
+  final String label;
+  final LocalSessionState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = switch (state) {
+      LocalSessionState.synced => Colors.green,
+      LocalSessionState.syncing => Colors.lightBlue,
+      LocalSessionState.syncFailed => Colors.redAccent,
+      _ => Colors.orange,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -170,35 +241,6 @@ class _SessionDateBox extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
-      ),
-    );
-  }
-}
-
-class _SyncBadge extends StatelessWidget {
-  const _SyncBadge({required this.state});
-
-  final LocalSessionState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final (Color color, String text) = switch (state) {
-      LocalSessionState.synced => (Colors.green, 'Synced'),
-      LocalSessionState.syncPending => (Colors.orange, 'Pending'),
-      LocalSessionState.syncFailed => (Colors.redAccent, 'Failed'),
-      LocalSessionState.syncing => (Colors.lightBlue, 'Syncing'),
-      _ => (Colors.orange, 'Pending'),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -3,10 +3,25 @@ import 'package:flutter/foundation.dart';
 class AppConstants {
   AppConstants._();
 
-  static const String apiBaseUrl = String.fromEnvironment(
+  static const String androidEmulatorApiBaseUrl = 'http://10.0.2.2:8000/v1';
+
+  static const String _configuredApiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/v1',
+    defaultValue: '',
   );
+
+  static String get apiBaseUrl {
+    final String configuredApiBaseUrl = _configuredApiBaseUrl.trim();
+    if (configuredApiBaseUrl.isNotEmpty) {
+      return configuredApiBaseUrl;
+    }
+    throw StateError(
+      'Missing API_BASE_URL. Pass --dart-define=API_BASE_URL=<url>. '
+      'Android emulator example: --dart-define=API_BASE_URL=$androidEmulatorApiBaseUrl',
+    );
+  }
+
+  static bool get isUsingImplicitEmulatorApiBaseUrl => false;
 
   static const Duration httpTimeout = Duration(seconds: 20);
   static const Duration weatherCacheTtl = Duration(minutes: 60);

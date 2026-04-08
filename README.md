@@ -140,11 +140,23 @@ uvicorn app.main:app --reload
 ```bash
 cd mobile
 flutter pub get
-flutter run
 ```
 
-If running Android emulator against local backend, default base URL is configured for emulator loopback:
-- `http://10.0.2.2:8000/v1`
+`API_BASE_URL` is required. Choose one workflow:
+
+- Android emulator:
+  - `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1`
+- Physical Android device on the same LAN:
+  - `flutter run --dart-define=API_BASE_URL=http://<your-lan-ip>:8000/v1`
+- Physical Android device via public tunnel:
+  - `flutter run -d <device-id> --dart-define=API_BASE_URL=https://<your-tunnel-host>/v1`
+- Local development with a custom backend URL:
+  - `flutter run --dart-define=API_BASE_URL=http://<host-or-ip>:<port>/v1`
+
+Notes:
+
+- `10.0.2.2` is Android-emulator loopback only.
+- If you run on a physical device and use `10.0.2.2`, requests will fail with network errors.
 
 ## Testing
 

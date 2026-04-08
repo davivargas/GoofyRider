@@ -3,13 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:goofyrider_mobile/core/utils/distance_unit.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
 import 'package:goofyrider_mobile/features/session/presentation/record_screen.dart';
+import 'package:goofyrider_mobile/features/session/presentation/recording_controller.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
 
 class FakeLocationRepository implements LocationTrackingRepository {
+  final StreamController<LocationSample> _positionController =
+      StreamController<LocationSample>.broadcast();
+
   @override
   Future<LocationPermissionState> checkPermissions() async {
     return LocationPermissionState.granted;
@@ -46,8 +52,7 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<String?> checkRecordingReadiness() async => null;
 
   @override
-  Stream<LocationSample> watchPosition() =>
-      const Stream<LocationSample>.empty();
+  Stream<LocationSample> watchPosition() => _positionController.stream;
 
   @override
   Future<void> setTrackingMode(TrackingMode mode) async {}
@@ -98,6 +103,18 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<void> refreshRemoteSessionHistoryCache() async {}
+
+  @override
+  Future<DeleteSessionResult> deleteSession(LocalRideSession session) async {
+    return const DeleteSessionResult(
+      disposition: DeleteSessionDisposition.localOnly,
+    );
+  }
+
+  @override
+  Future<String> resolveSessionResortLabel(LocalRideSession session) async {
+    return session.resortId ?? 'Unknown resort';
+  }
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
@@ -168,6 +185,27 @@ class FakeSessionRepository implements SessionRepository {
   }
 }
 
+class _FakeDistanceUnitPreferenceController
+    extends DistanceUnitPreferenceController {
+  _FakeDistanceUnitPreferenceController(DistanceUnit unit)
+      : super() {
+    state = unit;
+  }
+}
+
+class _FakeRecordingController extends RecordingController {
+  _FakeRecordingController({
+    required super.sessionRepository,
+    required super.locationTrackingRepository,
+    required RecordingViewState initialState,
+  }) {
+    state = initialState;
+  }
+
+  @override
+  Future<void> bootstrap({String? preselectedResortId}) async {}
+}
+
 void main() {
   testWidgets('record screen shows gps badge and resets after finish',
       (WidgetTester tester) async {
@@ -195,5 +233,101 @@ void main() {
     await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
     expect(find.text('Start Recording'), findsOneWidget);
+  });
+
+  testWidgets('record screen renders vertical and altitude cards in meters',
+      (WidgetTester tester) async {
+    final FakeSessionRepository fakeRepository = FakeSessionRepository();
+    final FakeLocationRepository fakeLocationRepository =
+        FakeLocationRepository();
+    final _FakeRecordingController fakeController = _FakeRecordingController(
+      sessionRepository: fakeRepository,
+      locationTrackingRepository: fakeLocationRepository,
+      initialState: RecordingViewState.initial().copyWith(
+        phase: RecordScreenPhase.recording,
+        permissionState: LocationPermissionState.granted,
+        liveStats: const SessionStats(
+          durationS: 180,
+          distanceM: 1200,
+          maxSpeedMps: 15,
+          avgSpeedMps: 8,
+          elevationGainM: 40,
+          elevationLossM: 320,
+        ),
+        currentAltitudeM: 1550,
+        currentSpeedMps: 10,
+        elapsed: const Duration(minutes: 3),
+        gpsSignal: const GpsSignalState(bars: 4, description: 'Excellent'),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(fakeRepository),
+          locationTrackingRepositoryProvider
+              .overrideWithValue(fakeLocationRepository),
+          recordingControllerProvider.overrideWith((_) => fakeController),
+          distanceUnitPreferenceProvider.overrideWith(
+            (_) => _FakeDistanceUnitPreferenceController(DistanceUnit.meters),
+          ),
+        ],
+        child: const MaterialApp(home: RecordScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vertical'), findsOneWidget);
+    expect(find.text('320 m'), findsOneWidget);
+    expect(find.text('Altitude'), findsOneWidget);
+    expect(find.text('1550 m'), findsOneWidget);
+  });
+
+  testWidgets('record screen renders vertical and altitude cards in feet',
+      (WidgetTester tester) async {
+    final FakeSessionRepository fakeRepository = FakeSessionRepository();
+    final FakeLocationRepository fakeLocationRepository =
+        FakeLocationRepository();
+    final _FakeRecordingController fakeController = _FakeRecordingController(
+      sessionRepository: fakeRepository,
+      locationTrackingRepository: fakeLocationRepository,
+      initialState: RecordingViewState.initial().copyWith(
+        phase: RecordScreenPhase.recording,
+        permissionState: LocationPermissionState.granted,
+        liveStats: const SessionStats(
+          durationS: 180,
+          distanceM: 1200,
+          maxSpeedMps: 15,
+          avgSpeedMps: 8,
+          elevationGainM: 40,
+          elevationLossM: 320,
+        ),
+        currentAltitudeM: 1550,
+        currentSpeedMps: 10,
+        elapsed: const Duration(minutes: 3),
+        gpsSignal: const GpsSignalState(bars: 4, description: 'Excellent'),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(fakeRepository),
+          locationTrackingRepositoryProvider
+              .overrideWithValue(fakeLocationRepository),
+          recordingControllerProvider.overrideWith((_) => fakeController),
+          distanceUnitPreferenceProvider.overrideWith(
+            (_) => _FakeDistanceUnitPreferenceController(DistanceUnit.feet),
+          ),
+        ],
+        child: const MaterialApp(home: RecordScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('1050 ft'), findsOneWidget);
+    expect(find.text('5085 ft'), findsOneWidget);
   });
 }

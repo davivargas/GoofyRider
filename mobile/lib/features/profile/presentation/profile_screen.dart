@@ -9,6 +9,34 @@ import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../auth/presentation/auth_providers.dart';
+import 'debug_export_service.dart';
+
+typedef DebugExportAction = Future<String> Function({
+  required String ownerUserId,
+  required String? userEmail,
+  required SpeedUnit speedUnit,
+  required DistanceUnit distanceUnit,
+});
+
+final debugExportActionProvider = Provider<DebugExportAction>((ref) {
+  final DebugExportService service = DebugExportService(
+    localDatabase: ref.watch(driftLocalDatabaseProvider),
+  );
+  return ({
+    required String ownerUserId,
+    required String? userEmail,
+    required SpeedUnit speedUnit,
+    required DistanceUnit distanceUnit,
+  }) async {
+    final file = await service.export(
+      ownerUserId: ownerUserId,
+      userEmail: userEmail,
+      speedUnit: speedUnit,
+      distanceUnit: distanceUnit,
+    );
+    return file.path;
+  };
+});
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -110,10 +138,50 @@ class ProfileScreen extends ConsumerWidget {
               },
             ),
           ),
-          const Card(
+          Card(
             child: ListTile(
-              title: Text('Export debug info'),
-              subtitle: Text('Dev-only placeholder'),
+              title: const Text('Export debug info'),
+              subtitle: const Text(
+                'Writes a JSON troubleshooting snapshot to the app documents folder.',
+              ),
+              trailing: const Icon(Icons.download_outlined),
+              onTap: () async {
+                final String? ownerUserId = authState.session?.user.id;
+                if (ownerUserId == null || ownerUserId.isEmpty) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Sign in to export debug info.'),
+                      ),
+                    );
+                  }
+                  return;
+                }
+
+                try {
+                  final DebugExportAction exportAction =
+                      ref.read(debugExportActionProvider);
+                  final String filePath = await exportAction(
+                    ownerUserId: ownerUserId,
+                    userEmail: authState.session?.user.email,
+                    speedUnit: speedUnit,
+                    distanceUnit: distanceUnit,
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Debug info exported to $filePath'),
+                      ),
+                    );
+                  }
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Debug export failed: $error')),
+                    );
+                  }
+                }
+              },
             ),
           ),
           const SizedBox(height: 20),

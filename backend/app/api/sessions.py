@@ -182,6 +182,24 @@ def list_session_points(
     )
 
 
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session_service: SessionService = Depends(get_session_service),
+) -> None:
+    try:
+        session_service.delete_session(
+            session_id=session_id,
+            user_id=current_user.id,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
 @router.get("/users/me/sessions", response_model=SessionListResponse)
 def list_user_sessions(
     page: int = Query(default=1, ge=1),

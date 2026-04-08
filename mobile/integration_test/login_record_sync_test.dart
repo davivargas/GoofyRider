@@ -157,6 +157,18 @@ class FakeSessionRepository implements SessionRepository {
   Future<void> refreshRemoteSessionHistoryCache() async {}
 
   @override
+  Future<DeleteSessionResult> deleteSession(LocalRideSession session) async {
+    return const DeleteSessionResult(
+      disposition: DeleteSessionDisposition.localOnly,
+    );
+  }
+
+  @override
+  Future<String> resolveSessionResortLabel(LocalRideSession session) async {
+    return session.resortId ?? 'Unknown resort';
+  }
+
+  @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async =>
       _session(LocalSessionState.paused);
 

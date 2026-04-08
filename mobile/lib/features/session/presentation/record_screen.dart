@@ -293,6 +293,12 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     DistanceUnit distanceUnit,
   ) {
     final SessionStats stats = state.liveStats;
+    final String verticalLabel = stats.elevationLossM == null
+        ? '--'
+        : distanceUnit.formatFromMeters(stats.elevationLossM!.toDouble());
+    final String altitudeLabel = state.currentAltitudeM == null
+        ? '--'
+        : distanceUnit.formatFromMeters(state.currentAltitudeM!);
 
     return SizedBox(
       width: double.infinity,
@@ -308,6 +314,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                 'Max', speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps)),
             _statCard(
                 'Distance', distanceUnit.formatFromMeters(stats.distanceM)),
+            _statCard('Vertical', verticalLabel),
+            _statCard('Altitude', altitudeLabel),
             _statCard('Ride avg',
                 speedUnit.formatFromMetersPerSecond(stats.rideAvgSpeedMps)),
             _statCard('Duration', state.elapsed.toHoursMinutesSeconds()),

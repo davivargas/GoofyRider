@@ -38,7 +38,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     positionController.add(_positionAt(
       streamStartUtc.subtract(
-        Duration(seconds: SessionConstants.staleSampleThresholdSeconds),
+        const Duration(seconds: SessionConstants.staleSampleThresholdSeconds),
       ),
       latitude: 49.0,
       longitude: -123.0,
@@ -111,13 +111,11 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform
     with MockPlatformInterfaceMixin {
   _FakeGeolocatorPlatform({
     required this.positionStream,
-    this.permission = LocationPermission.always,
-    this.serviceEnabled = true,
   });
 
   final Stream<Position> positionStream;
-  LocationPermission permission;
-  bool serviceEnabled;
+  LocationPermission permission = LocationPermission.always;
+  bool serviceEnabled = true;
   int requestPermissionCalls = 0;
   final List<LocationPermission> nextRequestPermissions = <LocationPermission>[];
 

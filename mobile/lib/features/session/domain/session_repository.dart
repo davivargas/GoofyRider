@@ -27,7 +27,26 @@ abstract class SessionRepository {
     int localSessionId, {
     int limit,
   });
+  Future<DeleteSessionResult> deleteSession(LocalRideSession session);
+  Future<String> resolveSessionResortLabel(LocalRideSession session);
   Future<int> unsyncedCount();
+}
+
+enum DeleteSessionDisposition {
+  deletedRemotely,
+  queuedRemoteDelete,
+  localOnly,
+}
+
+class DeleteSessionResult {
+  const DeleteSessionResult({
+    required this.disposition,
+  });
+
+  final DeleteSessionDisposition disposition;
+
+  bool get queuedRemoteDelete =>
+      disposition == DeleteSessionDisposition.queuedRemoteDelete;
 }
 
 class SessionDetail {

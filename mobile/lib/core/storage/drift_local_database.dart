@@ -193,6 +193,25 @@ class DriftLocalDatabase extends GeneratedDatabase {
       CREATE INDEX IF NOT EXISTS ix_cached_remote_session_summaries_owner_fetched
       ON cached_remote_session_summaries(owner_user_id, fetched_at DESC)
     ''');
+
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS pending_remote_session_deletes (
+        owner_user_id TEXT NOT NULL,
+        remote_id TEXT NOT NULL,
+        requested_at TEXT NOT NULL,
+        last_attempt_at TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        PRIMARY KEY(owner_user_id, remote_id)
+      )
+    ''');
+
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS ix_pending_remote_session_deletes_owner_requested
+      ON pending_remote_session_deletes(owner_user_id, requested_at ASC)
+    ''');
+
+    await _migrateLegacyDeletedRemoteSessionTombstones();
   }
 
   Future<int> insertLocalSession({
@@ -320,6 +339,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
     required int localId,
     required DateTime endedAt,
     required SessionStats stats,
+    String? resortId,
   }) async {
     final DateTime now = DateTime.now().toUtc();
     await customUpdate(
@@ -332,6 +352,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
           avg_speed_mps = ?,
           elevation_gain_m = ?,
           elevation_loss_m = ?,
+          resort_id = COALESCE(?, resort_id),
           state = ?,
           updated_at = ?
       WHERE local_id = ?
@@ -344,9 +365,33 @@ class DriftLocalDatabase extends GeneratedDatabase {
         Variable<double>(stats.avgSpeedMps),
         Variable<int>(stats.elevationGainM),
         Variable<int>(stats.elevationLossM),
+        Variable<String>(resortId),
         Variable<String>(LocalSessionState.syncPending.wireValue),
         Variable<String>(now.toIso8601String()),
         Variable<int>(localId),
+      ],
+    );
+  }
+
+  Future<void> updateSessionResortId({
+    required int localId,
+    required String ownerUserId,
+    required String resortId,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    await customUpdate(
+      '''
+      UPDATE local_ride_sessions
+      SET resort_id = ?,
+          updated_at = ?
+      WHERE local_id = ?
+      AND owner_user_id = ?
+      ''',
+      variables: <Variable>[
+        Variable<String>(resortId),
+        Variable<String>(now.toIso8601String()),
+        Variable<int>(localId),
+        Variable<String>(ownerUserId),
       ],
     );
   }
@@ -856,6 +901,60 @@ class DriftLocalDatabase extends GeneratedDatabase {
     await _addColumnIfMissing('local_session_points', 'motion_state TEXT');
   }
 
+  Future<void> _migrateLegacyDeletedRemoteSessionTombstones() async {
+    final List<QueryRow> tableRows = await customSelect(
+      '''
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+      AND name = 'deleted_remote_sessions'
+      ''',
+    ).get();
+    if (tableRows.isEmpty) {
+      return;
+    }
+
+    final List<QueryRow> legacyColumns =
+        await customSelect('PRAGMA table_info(deleted_remote_sessions)').get();
+    final Set<String> legacyColumnNames = legacyColumns
+        .map((QueryRow row) => row.data['name']?.toString() ?? '')
+        .where((String name) => name.isNotEmpty)
+        .toSet();
+    final bool hasDeletedAt = legacyColumnNames.contains('deleted_at');
+    final bool hasLastError = legacyColumnNames.contains('last_error');
+    final String requestedAtExpr =
+        hasDeletedAt ? 'deleted_at' : "'1970-01-01T00:00:00.000Z'";
+    final String lastAttemptAtExpr = hasDeletedAt ? 'deleted_at' : 'NULL';
+    final String attemptCountExpr = hasDeletedAt ? '1' : '0';
+    final String lastErrorExpr = hasLastError
+        ? 'COALESCE(last_error, \'Migrated legacy pending delete record.\')'
+        : '\'Migrated legacy pending delete record.\'';
+
+    await customStatement(
+      '''
+      INSERT INTO pending_remote_session_deletes (
+        owner_user_id,
+        remote_id,
+        requested_at,
+        last_attempt_at,
+        attempt_count,
+        last_error
+      )
+      SELECT
+        owner_user_id,
+        remote_id,
+        $requestedAtExpr,
+        $lastAttemptAtExpr,
+        $attemptCountExpr,
+        $lastErrorExpr
+      FROM deleted_remote_sessions
+      ON CONFLICT(owner_user_id, remote_id) DO NOTHING
+      ''',
+    );
+
+    await customStatement('DROP TABLE IF EXISTS deleted_remote_sessions');
+  }
+
   Future<void> _addColumnIfMissing(String table, String columnDef) async {
     final String columnName = columnDef.split(' ').first;
     final List<QueryRow> rows =
@@ -1052,6 +1151,28 @@ class DriftLocalDatabase extends GeneratedDatabase {
     return payload;
   }
 
+  Future<List<Map<String, dynamic>>> readCachedWeatherMetadata() async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT resort_id, payload_json, fetched_at
+      FROM cached_weather
+      ORDER BY fetched_at DESC
+      ''',
+    ).get();
+
+    return rows.map((QueryRow row) {
+      final String payloadJson = row.data['payload_json'] as String;
+      final Map<String, dynamic> payload =
+          jsonDecode(payloadJson) as Map<String, dynamic>;
+      return <String, dynamic>{
+        'resort_id': row.data['resort_id'],
+        'cached_fetched_at': row.data['fetched_at'],
+        'payload_size_bytes': payloadJson.length,
+        'payload_keys': payload.keys.toList(growable: false),
+      };
+    }).toList(growable: false);
+  }
+
   Future<void> replaceCachedRemoteSessions({
     required String ownerUserId,
     required List<Map<String, dynamic>> sessions,
@@ -1110,6 +1231,269 @@ class DriftLocalDatabase extends GeneratedDatabase {
               as Map<String, dynamic>,
         )
         .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>?> readCachedRemoteSessionSummary({
+    required String ownerUserId,
+    required String remoteId,
+  }) async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT payload_json
+      FROM cached_remote_session_summaries
+      WHERE owner_user_id = ?
+      AND remote_id = ?
+      LIMIT 1
+      ''',
+      variables: <Variable>[
+        Variable<String>(ownerUserId),
+        Variable<String>(remoteId),
+      ],
+    ).get();
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    return jsonDecode(rows.first.data['payload_json'] as String)
+        as Map<String, dynamic>;
+  }
+
+  Future<void> deleteCachedRemoteSessionSummary({
+    required String ownerUserId,
+    required String remoteId,
+  }) async {
+    await customStatement(
+      '''
+      DELETE FROM cached_remote_session_summaries
+      WHERE owner_user_id = ?
+      AND remote_id = ?
+      ''',
+      <Object?>[
+        ownerUserId,
+        remoteId,
+      ],
+    );
+  }
+
+  Future<void> enqueuePendingRemoteSessionDelete({
+    required String ownerUserId,
+    required String remoteId,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    await customStatement(
+      '''
+      INSERT INTO pending_remote_session_deletes (
+        owner_user_id,
+        remote_id,
+        requested_at,
+        last_attempt_at,
+        attempt_count,
+        last_error
+      )
+      VALUES (?, ?, ?, NULL, 0, NULL)
+      ON CONFLICT(owner_user_id, remote_id) DO NOTHING
+      ''',
+      <Object?>[
+        ownerUserId,
+        remoteId,
+        now.toIso8601String(),
+      ],
+    );
+  }
+
+  Future<void> recordPendingRemoteSessionDeleteAttempt({
+    required String ownerUserId,
+    required String remoteId,
+    required String lastError,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    await customStatement(
+      '''
+      INSERT INTO pending_remote_session_deletes (
+        owner_user_id,
+        remote_id,
+        requested_at,
+        last_attempt_at,
+        attempt_count,
+        last_error
+      )
+      VALUES (?, ?, ?, ?, 1, ?)
+      ON CONFLICT(owner_user_id, remote_id)
+      DO UPDATE SET
+        last_attempt_at = excluded.last_attempt_at,
+        attempt_count = pending_remote_session_deletes.attempt_count + 1,
+        last_error = excluded.last_error
+      ''',
+      <Object?>[
+        ownerUserId,
+        remoteId,
+        now.toIso8601String(),
+        now.toIso8601String(),
+        lastError,
+      ],
+    );
+  }
+
+  Future<void> clearPendingRemoteSessionDelete({
+    required String ownerUserId,
+    required String remoteId,
+  }) async {
+    await customStatement(
+      '''
+      DELETE FROM pending_remote_session_deletes
+      WHERE owner_user_id = ?
+      AND remote_id = ?
+      ''',
+      <Object?>[
+        ownerUserId,
+        remoteId,
+      ],
+    );
+  }
+
+  Future<Set<String>> listPendingRemoteSessionDeleteIds({
+    required String ownerUserId,
+  }) async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT remote_id
+      FROM pending_remote_session_deletes
+      WHERE owner_user_id = ?
+      ''',
+      variables: <Variable>[
+        Variable<String>(ownerUserId),
+      ],
+    ).get();
+
+    return rows.map((QueryRow row) => row.data['remote_id'] as String).toSet();
+  }
+
+  Future<List<String>> listPendingRemoteDeleteIds({
+    required String ownerUserId,
+  }) async {
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT remote_id
+      FROM pending_remote_session_deletes
+      WHERE owner_user_id = ?
+      ORDER BY requested_at ASC
+      ''',
+      variables: <Variable>[
+        Variable<String>(ownerUserId),
+      ],
+    ).get();
+
+    return rows
+        .map((QueryRow row) => row.data['remote_id'] as String)
+        .toList(growable: false);
+  }
+
+  // Compatibility wrappers kept so existing call sites/tests can migrate
+  // incrementally from legacy tombstone naming.
+  Future<void> upsertDeletedRemoteSession({
+    required String ownerUserId,
+    required String remoteId,
+    String? lastError,
+  }) async {
+    await enqueuePendingRemoteSessionDelete(
+      ownerUserId: ownerUserId,
+      remoteId: remoteId,
+    );
+    if (lastError != null && lastError.isNotEmpty) {
+      await recordPendingRemoteSessionDeleteAttempt(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        lastError: lastError,
+      );
+    }
+  }
+
+  Future<void> deleteDeletedRemoteSessionTombstone({
+    required String ownerUserId,
+    required String remoteId,
+  }) {
+    return clearPendingRemoteSessionDelete(
+      ownerUserId: ownerUserId,
+      remoteId: remoteId,
+    );
+  }
+
+  Future<Set<String>> listDeletedRemoteSessionIds({
+    required String ownerUserId,
+  }) {
+    return listPendingRemoteSessionDeleteIds(ownerUserId: ownerUserId);
+  }
+
+  Future<bool> deleteSessionCascade({
+    required int localSessionId,
+    required String ownerUserId,
+    String? remoteId,
+    bool clearDeletedRemoteSessionTombstone = true,
+    bool? clearPendingRemoteSessionDelete,
+  }) async {
+    final bool shouldClearPendingRemoteDelete =
+        clearPendingRemoteSessionDelete ?? clearDeletedRemoteSessionTombstone;
+    int deletedSessions = 0;
+    await transaction(() async {
+      await customStatement(
+        '''
+        DELETE FROM local_session_tracking_diagnostics
+        WHERE local_session_id = ?
+        ''',
+        <Object?>[localSessionId],
+      );
+
+      await customStatement(
+        '''
+        DELETE FROM local_session_points
+        WHERE local_session_id = ?
+        ''',
+        <Object?>[localSessionId],
+      );
+
+      deletedSessions = await customUpdate(
+        '''
+        DELETE FROM local_ride_sessions
+        WHERE local_id = ?
+        AND owner_user_id = ?
+        ''',
+        variables: <Variable>[
+          Variable<int>(localSessionId),
+          Variable<String>(ownerUserId),
+        ],
+      );
+
+      final String? trimmedRemoteId = remoteId?.trim();
+      if (trimmedRemoteId != null && trimmedRemoteId.isNotEmpty) {
+        await customStatement(
+          '''
+          DELETE FROM cached_remote_session_summaries
+          WHERE owner_user_id = ?
+          AND remote_id = ?
+          ''',
+          <Object?>[
+            ownerUserId,
+            trimmedRemoteId,
+          ],
+        );
+        if (shouldClearPendingRemoteDelete) {
+          await customStatement(
+            '''
+            DELETE FROM pending_remote_session_deletes
+            WHERE owner_user_id = ?
+            AND remote_id = ?
+            ''',
+            <Object?>[
+              ownerUserId,
+              trimmedRemoteId,
+            ],
+          );
+        }
+      }
+    });
+
+    return deletedSessions > 0;
   }
 
   Future<void> clearCaches() async {
