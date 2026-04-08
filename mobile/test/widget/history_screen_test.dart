@@ -6,6 +6,7 @@ import 'package:goofyrider_mobile/features/session/domain/location_tracking_repo
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
 import 'package:goofyrider_mobile/features/session/presentation/history_screen.dart';
+import 'package:goofyrider_mobile/features/session/presentation/history_view_models.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
 
 class FakeLocationRepository implements LocationTrackingRepository {
@@ -43,7 +44,6 @@ class FakeSessionRepository implements SessionRepository {
   FakeSessionRepository(this.sessions);
 
   final List<LocalRideSession> sessions;
-  final List<int> syncedSessionIds = <int>[];
 
   @override
   Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point) async {}
@@ -51,6 +51,13 @@ class FakeSessionRepository implements SessionRepository {
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async =>
       SessionStats.zero;
+
+  @override
+  Future<DeleteSessionResult> deleteSession(LocalRideSession session) async {
+    return const DeleteSessionResult(
+      disposition: DeleteSessionDisposition.localOnly,
+    );
+  }
 
   @override
   Future<LocalRideSession> finishLocalSession(
@@ -77,9 +84,7 @@ class FakeSessionRepository implements SessionRepository {
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async => sessions;
 
   @override
-  Future<List<LocalRideSession>> listPendingSyncSessions() async => sessions
-      .where((LocalRideSession session) => session.isUnsynced)
-      .toList(growable: false);
+  Future<List<LocalRideSession>> listPendingSyncSessions() async => sessions;
 
   @override
   Future<void> recordTrackingDiagnostic(
@@ -91,6 +96,11 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<void> refreshRemoteSessionHistoryCache() async {}
+
+  @override
+  Future<String> resolveSessionResortLabel(LocalRideSession session) async {
+    return session.resortId ?? 'Unknown resort';
+  }
 
   @override
   Future<LocalRideSession?> recoverInProgressSession() async => null;
@@ -106,8 +116,9 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<LocalRideSession> retryFailedSync(int localSessionId) async =>
-      syncSession(localSessionId);
+  Future<LocalRideSession> retryFailedSync(int localSessionId) async {
+    throw UnimplementedError();
+  }
 
   @override
   Future<LocalRideSession> startLocalSession({String? resortId}) async {
@@ -116,13 +127,11 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
-    syncedSessionIds.add(localSessionId);
-    return sessions.firstWhere((LocalRideSession session) => session.localId == localSessionId);
+    throw UnimplementedError();
   }
 
   @override
-  Future<int> unsyncedCount() async =>
-      sessions.where((LocalRideSession session) => session.isUnsynced).length;
+  Future<int> unsyncedCount() async => 0;
 }
 
 LocalRideSession buildSession() {
@@ -131,7 +140,7 @@ LocalRideSession buildSession() {
     localId: 1,
     ownerUserId: 'user-1',
     remoteId: null,
-    resortId: 'Whistler',
+    resortId: 'resort-1',
     startedAt: now,
     endedAt: now,
     activeDurationS: 360,
@@ -150,10 +159,11 @@ LocalRideSession buildSession() {
 }
 
 void main() {
-  testWidgets('history screen renders formatted session card',
+  testWidgets('history screen renders season header and resolved resort label',
       (WidgetTester tester) async {
+    final LocalRideSession session = buildSession();
     final FakeSessionRepository repository =
-        FakeSessionRepository(<LocalRideSession>[buildSession()]);
+        FakeSessionRepository(<LocalRideSession>[session]);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -161,6 +171,19 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repository),
           locationTrackingRepositoryProvider.overrideWithValue(
             FakeLocationRepository(),
+          ),
+          historySectionsProvider.overrideWith(
+            (_) async => <SessionHistorySeasonSection>[
+              SessionHistorySeasonSection(
+                label: '2025/2026',
+                items: <SessionHistoryEntryViewModel>[
+                  SessionHistoryEntryViewModel(
+                    session: session,
+                    resortLabel: 'Whistler Blackcomb',
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
         child: MaterialApp.router(
@@ -174,16 +197,18 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    expect(find.text('Whistler'), findsOneWidget);
+    expect(find.text('2025/2026'), findsOneWidget);
+    expect(find.text('Whistler Blackcomb'), findsOneWidget);
     expect(find.textContaining('00:06:00'), findsOneWidget);
-    expect(find.text('Pending'), findsOneWidget);
-    expect(find.byTooltip('Sync now'), findsOneWidget);
+    expect(find.textContaining('Pending'), findsOneWidget);
   });
 
-  testWidgets('history screen sync action retries an unsynced session',
+  testWidgets(
+      'history screen keeps sync state visible and no per-card overflow actions',
       (WidgetTester tester) async {
+    final LocalRideSession session = buildSession();
     final FakeSessionRepository repository =
-        FakeSessionRepository(<LocalRideSession>[buildSession()]);
+        FakeSessionRepository(<LocalRideSession>[session]);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -191,6 +216,19 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repository),
           locationTrackingRepositoryProvider.overrideWithValue(
             FakeLocationRepository(),
+          ),
+          historySectionsProvider.overrideWith(
+            (_) async => <SessionHistorySeasonSection>[
+              SessionHistorySeasonSection(
+                label: '2025/2026',
+                items: <SessionHistoryEntryViewModel>[
+                  SessionHistoryEntryViewModel(
+                    session: session,
+                    resortLabel: 'Whistler Blackcomb',
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
         child: MaterialApp.router(
@@ -204,9 +242,8 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Sync now').first);
-    await tester.pumpAndSettle();
-
-    expect(repository.syncedSessionIds, contains(1));
+    expect(find.textContaining('Pending'), findsOneWidget);
+    expect(find.byTooltip('Sync now'), findsOneWidget);
+    expect(find.byTooltip('Session actions'), findsNothing);
   });
 }
