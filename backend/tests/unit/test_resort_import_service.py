@@ -160,7 +160,14 @@ def test_import_resorts_with_mixed_sources_and_deactivate_missing_disabled_succe
     service = ResortImportService(
         resort_repository=repository,
         resort_source=FakeResortSource(
-            [_build_external_resort(), _build_external_resort(external_source="partner_feed")]
+            [
+                _build_external_resort(),
+                _build_external_resort(
+                    name="Blackcomb Glacier",
+                    external_source="partner_feed",
+                    external_id="blackcomb-glacier",
+                ),
+            ]
         ),
         deactivate_missing=False,
         clock=lambda: IMPORTED_AT,
@@ -206,13 +213,15 @@ def test_import_resorts_with_mixed_sources_and_deactivate_missing_enabled_raises
 
 
 def _build_external_resort(
+    name: str = "Whistler Blackcomb",
     city: str | None = "Whistler",
     external_source: str = "ski_api",
+    external_id: str = "whistler-blackcomb",
 ) -> ExternalResortRecord:
     return ExternalResortRecord(
         external_source=external_source,
-        external_id="whistler-blackcomb",
-        name="Whistler Blackcomb",
+        external_id=external_id,
+        name=name,
         country="Canada",
         region="British Columbia",
         city=city,
