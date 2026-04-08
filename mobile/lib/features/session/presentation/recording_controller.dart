@@ -63,6 +63,7 @@ class RecordingViewState {
     required this.liveStats,
     required this.route,
     required this.currentSpeedMps,
+    required this.currentAltitudeM,
     required this.maxSpeedMps,
     required this.elapsed,
     required this.lowAccuracy,
@@ -84,6 +85,7 @@ class RecordingViewState {
         liveStats: SessionStats.zero,
         route: <LatLng>[],
         currentSpeedMps: 0,
+        currentAltitudeM: null,
         maxSpeedMps: 0,
         elapsed: Duration.zero,
         lowAccuracy: false,
@@ -97,6 +99,7 @@ class RecordingViewState {
   final SessionStats liveStats;
   final List<LatLng> route;
   final double currentSpeedMps;
+  final double? currentAltitudeM;
   final double maxSpeedMps;
   final Duration elapsed;
   final bool lowAccuracy;
@@ -136,6 +139,8 @@ class RecordingViewState {
     SessionStats? liveStats,
     List<LatLng>? route,
     double? currentSpeedMps,
+    double? currentAltitudeM,
+    bool clearCurrentAltitudeM = false,
     double? maxSpeedMps,
     Duration? elapsed,
     bool? lowAccuracy,
@@ -162,6 +167,9 @@ class RecordingViewState {
       liveStats: liveStats ?? this.liveStats,
       route: route ?? this.route,
       currentSpeedMps: currentSpeedMps ?? this.currentSpeedMps,
+      currentAltitudeM: clearCurrentAltitudeM
+          ? null
+          : (currentAltitudeM ?? this.currentAltitudeM),
       maxSpeedMps: maxSpeedMps ?? this.maxSpeedMps,
       elapsed: elapsed ?? this.elapsed,
       lowAccuracy: lowAccuracy ?? this.lowAccuracy,
@@ -471,6 +479,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
             )
             .toList(growable: false),
         elapsed: _currentElapsedDuration(),
+        currentAltitudeM: _currentAltitudeFromPersistedPoints(detail.points),
         maxSpeedMps: stats.maxSpeedMps,
       );
 
@@ -582,6 +591,9 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         route: hasInProgressSession ? state.route : <LatLng>[],
         liveStats: hasInProgressSession ? state.liveStats : SessionStats.zero,
         currentSpeedMps: hasInProgressSession ? state.currentSpeedMps : 0,
+        currentAltitudeM:
+            hasInProgressSession ? state.currentAltitudeM : null,
+        clearCurrentAltitudeM: !hasInProgressSession,
         maxSpeedMps: hasInProgressSession ? state.maxSpeedMps : 0,
         elapsed: _currentElapsedDuration(),
         permissionState: permission,
@@ -746,6 +758,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         route: const <LatLng>[],
         liveStats: SessionStats.zero,
         currentSpeedMps: 0,
+        clearCurrentAltitudeM: true,
         maxSpeedMps: 0,
         elapsed: Duration.zero,
         lowAccuracy: false,
@@ -1147,6 +1160,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       // pinned to the last persisted snapshot until resync succeeds.
       state = state.copyWith(
         elapsed: _currentElapsedDuration(),
+        currentAltitudeM: _currentAltitudeFromTrackedPoint(result.point),
         lowAccuracy: result.lowAccuracy,
         gpsSignal: _gpsSignalFromSample(
           sample,
@@ -1199,6 +1213,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
       route: updatedRoute,
       liveStats: result.stats,
       currentSpeedMps: result.liveSpeedMps,
+      currentAltitudeM: _currentAltitudeFromTrackedPoint(result.point),
       maxSpeedMps: result.stats.maxSpeedMps,
       elapsed: _currentElapsedDuration(),
       lowAccuracy: result.lowAccuracy,
@@ -1571,6 +1586,7 @@ class RecordingController extends StateNotifier<RecordingViewState> {
         liveStats: stats,
         route: _buildPersistedRoute(detail.points),
         currentSpeedMps: _currentSpeedFromPersistedPoints(detail.points),
+        currentAltitudeM: _currentAltitudeFromPersistedPoints(detail.points),
         maxSpeedMps: stats.maxSpeedMps,
       );
       _needsPersistedProgressResync = false;
@@ -1618,6 +1634,21 @@ class RecordingController extends StateNotifier<RecordingViewState> {
           0;
     }
     return 0;
+  }
+
+  double? _currentAltitudeFromPersistedPoints(List<LocalSessionPoint> points) {
+    for (int index = points.length - 1; index >= 0; index -= 1) {
+      final LocalSessionPoint point = points[index];
+      final double? altitude = point.filteredAltitudeM ?? point.altitudeM;
+      if (altitude != null) {
+        return altitude;
+      }
+    }
+    return null;
+  }
+
+  double? _currentAltitudeFromTrackedPoint(NewSessionPoint point) {
+    return point.filteredAltitudeM ?? point.altitudeM;
   }
 
   List<LatLng> _buildUpdatedRouteFromResult({

@@ -88,6 +88,7 @@ class TrackingProcessResult {
     required this.point,
     required this.stats,
     required this.liveSpeedMps,
+    required this.currentAltitudeM,
     required this.lowAccuracy,
     required this.motionState,
     required this.trackingMode,
@@ -99,6 +100,7 @@ class TrackingProcessResult {
   final NewSessionPoint point;
   final SessionStats stats;
   final double liveSpeedMps;
+  final double? currentAltitudeM;
   final bool lowAccuracy;
   final MotionState motionState;
   final TrackingMode trackingMode;
@@ -368,6 +370,7 @@ class TrackingPipelineEngine {
       point: point,
       stats: stats,
       liveSpeedMps: liveSpeed,
+      currentAltitudeM: vertical.filteredAltitudeM ?? sample.altitudeM,
       lowAccuracy:
           quality.qualityClass == TrackingQualityClass.acceptLowConfidence,
       motionState: _motionState,
