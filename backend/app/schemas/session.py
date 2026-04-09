@@ -3,9 +3,14 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
 
 from app.models.ride_session import RideSessionStatus
 from app.schemas.base import ORMBaseModel
+from app.schemas.session_vocabulary import normalize_motion_state
+from app.schemas.session_vocabulary import normalize_provider
+from app.schemas.session_vocabulary import normalize_quality_class
 
 
 class SessionCreateRequest(BaseModel):
@@ -19,6 +24,7 @@ class SessionPointInput(BaseModel):
     longitude: float = Field(ge=-180, le=180)
     accuracy_m: float | None = Field(default=None, ge=0)
     elapsed_realtime_ns: int | None = Field(default=None, ge=0)
+    recorded_at: datetime | None = None
     altitude_m: float | None = None
     vertical_accuracy_m: float | None = Field(default=None, ge=0)
     speed_mps: float | None = Field(default=None, ge=0)
@@ -37,6 +43,22 @@ class SessionPointInput(BaseModel):
     derived_speed_mps: float | None = Field(default=None, ge=0)
     distance_delta_m: float | None = Field(default=None, ge=0)
     motion_state: str | None = None
+    accepted_for_analytics: bool = True
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def normalize_provider_value(cls, value: str | None) -> str | None:
+        return normalize_provider(value)
+
+    @field_validator("quality_class", mode="before")
+    @classmethod
+    def normalize_quality_class_value(cls, value: str | None) -> str | None:
+        return normalize_quality_class(value)
+
+    @field_validator("motion_state", mode="before")
+    @classmethod
+    def normalize_motion_state_value(cls, value: str | None) -> str | None:
+        return normalize_motion_state(value)
 
 
 class SessionPointsBatchRequest(BaseModel):
@@ -50,12 +72,22 @@ class SessionPointsBatchResponse(BaseModel):
 
 class SessionCompleteRequest(BaseModel):
     ended_at: datetime | None = None
-    duration_s: int | None = None
-    distance_m: float | None = None
-    max_speed_mps: float | None = None
-    avg_speed_mps: float | None = None
-    elevation_gain_m: int | None = None
-    elevation_loss_m: int | None = None
+    duration_s: int | None = Field(default=None, ge=0)
+    distance_m: float | None = Field(default=None, ge=0)
+    max_speed_mps: float | None = Field(default=None, ge=0)
+    avg_speed_mps: float | None = Field(default=None, ge=0)
+    elevation_gain_m: int | None = Field(default=None, ge=0)
+    elevation_loss_m: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_speed_bounds(self) -> "SessionCompleteRequest":
+        if (
+            self.avg_speed_mps is not None
+            and self.max_speed_mps is not None
+            and self.avg_speed_mps > self.max_speed_mps
+        ):
+            raise ValueError("avg_speed_mps must be less than or equal to max_speed_mps")
+        return self
 
 
 class SessionResortSummary(ORMBaseModel):
@@ -85,6 +117,7 @@ class RideSessionPublic(ORMBaseModel):
 class SessionPointPublic(ORMBaseModel):
     id: int
     t_offset_ms: int
+    recorded_at: datetime
     latitude: float
     longitude: float
     accuracy_m: float | None
@@ -107,6 +140,7 @@ class SessionPointPublic(ORMBaseModel):
     derived_speed_mps: float | None
     distance_delta_m: float | None
     motion_state: str | None
+    accepted_for_analytics: bool
     created_at: datetime
 
 

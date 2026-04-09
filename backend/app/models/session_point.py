@@ -11,6 +11,7 @@ from sqlalchemy import Integer
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import Text
 from sqlalchemy import func
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -59,6 +60,10 @@ class SessionPoint(Base):
     elapsed_realtime_ns: Mapped[int | None] = mapped_column(
         BigInteger,
         nullable=True,
+    )
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
     )
     altitude_m: Mapped[float | None] = mapped_column(
         Float,
@@ -131,6 +136,12 @@ class SessionPoint(Base):
     motion_state: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+    accepted_for_analytics: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
