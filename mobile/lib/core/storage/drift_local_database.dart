@@ -8,11 +8,23 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../features/session/domain/session_models.dart';
 
+class PendingRemoteSessionDeleteEntry {
+  const PendingRemoteSessionDeleteEntry({
+    required this.ownerUserId,
+    required this.remoteId,
+    required this.attemptCount,
+  });
+
+  final String ownerUserId;
+  final String remoteId;
+  final int attemptCount;
+}
+
 class DriftLocalDatabase extends GeneratedDatabase {
   DriftLocalDatabase._(super.connection) : super.connect();
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -29,18 +41,26 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
   static Future<DriftLocalDatabase> open() async {
     final Directory directory = await getApplicationDocumentsDirectory();
-    final File file = File(path.join(directory.path, _dbFileName));
-    final DatabaseConnection connection =
-        DatabaseConnection(NativeDatabase(file));
+    return openAtPath(path.join(directory.path, _dbFileName));
+  }
 
-    final DriftLocalDatabase database = DriftLocalDatabase._(connection);
-    await database.initialize();
-    return database;
+  static Future<DriftLocalDatabase> openAtPath(String filePath) async {
+    final File file = File(filePath);
+    await file.parent.create(recursive: true);
+    return _openWithConnection(DatabaseConnection(NativeDatabase(file)));
   }
 
   static Future<DriftLocalDatabase> openInMemory() async {
-    final DatabaseConnection connection =
-        DatabaseConnection(NativeDatabase.memory());
+    return _openWithConnection(DatabaseConnection(NativeDatabase.memory()));
+  }
+
+  static DriftLocalDatabase connectForTesting(DatabaseConnection connection) {
+    return DriftLocalDatabase._(connection);
+  }
+
+  static Future<DriftLocalDatabase> _openWithConnection(
+    DatabaseConnection connection,
+  ) async {
     final DriftLocalDatabase database = DriftLocalDatabase._(connection);
     await database.initialize();
     return database;
@@ -89,21 +109,6 @@ class DriftLocalDatabase extends GeneratedDatabase {
     ''');
 
     await customStatement('''
-      CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_started
-      ON local_ride_sessions(owner_user_id, started_at DESC)
-    ''');
-
-    await customStatement('''
-      CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_state_updated
-      ON local_ride_sessions(owner_user_id, state, updated_at DESC)
-    ''');
-
-    await customStatement('''
-      CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_remote
-      ON local_ride_sessions(owner_user_id, remote_id)
-    ''');
-
-    await customStatement('''
       CREATE TABLE IF NOT EXISTS local_session_points (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         local_session_id INTEGER NOT NULL,
@@ -137,14 +142,19 @@ class DriftLocalDatabase extends GeneratedDatabase {
       )
     ''');
 
-    await customStatement('''
-      CREATE INDEX IF NOT EXISTS ix_local_session_points_session_offset
-      ON local_session_points(local_session_id, t_offset_ms)
-    ''');
-
     await _migrateToV2();
     await _migrateToV3();
     await _normalizeLegacySessionStates();
+
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_started
+      ON local_ride_sessions(owner_user_id, started_at DESC)
+    ''');
+
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_state_updated
+      ON local_ride_sessions(owner_user_id, state, updated_at DESC)
+    ''');
 
     await customStatement('''
       CREATE TABLE IF NOT EXISTS local_session_tracking_diagnostics (
@@ -202,16 +212,27 @@ class DriftLocalDatabase extends GeneratedDatabase {
         last_attempt_at TEXT,
         attempt_count INTEGER NOT NULL DEFAULT 0,
         last_error TEXT,
+        state TEXT NOT NULL DEFAULT 'pending',
+        next_attempt_at TEXT,
         PRIMARY KEY(owner_user_id, remote_id)
       )
     ''');
+
+    await _migratePendingRemoteDeleteSchema();
 
     await customStatement('''
       CREATE INDEX IF NOT EXISTS ix_pending_remote_session_deletes_owner_requested
       ON pending_remote_session_deletes(owner_user_id, requested_at ASC)
     ''');
 
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS ix_pending_remote_session_deletes_owner_state_next
+      ON pending_remote_session_deletes(owner_user_id, state, next_attempt_at ASC, requested_at ASC)
+    ''');
+
     await _migrateLegacyDeletedRemoteSessionTombstones();
+    await _enforceRemoteSessionIdentityUniqueness();
+    await _enforceLocalSessionPointUniqueness();
   }
 
   Future<int> insertLocalSession({
@@ -404,7 +425,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
     await transaction(() async {
       await customInsert(
         '''
-        INSERT INTO local_session_points (
+        INSERT OR IGNORE INTO local_session_points (
           local_session_id,
           recorded_at,
           t_offset_ms,
@@ -466,17 +487,9 @@ class DriftLocalDatabase extends GeneratedDatabase {
         ],
       );
 
-      await customUpdate(
-        '''
-        UPDATE local_ride_sessions
-        SET point_count = point_count + 1,
-            updated_at = ?
-        WHERE local_id = ?
-        ''',
-        variables: <Variable>[
-          Variable<String>(now.toIso8601String()),
-          Variable<int>(localSessionId),
-        ],
+      await _refreshSessionPointCount(
+        localSessionId: localSessionId,
+        updatedAt: now,
       );
     });
   }
@@ -563,50 +576,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
     DateTime? createdAt,
   }) async {
     final DateTime now = DateTime.now().toUtc();
-    final LocalRideSession? existing = await getSessionByRemoteId(
-      ownerUserId: ownerUserId,
-      remoteId: remoteId,
-    );
-
-    if (existing != null) {
-      await customUpdate(
-        '''
-        UPDATE local_ride_sessions
-        SET owner_user_id = ?,
-            resort_id = ?,
-            started_at = ?,
-            ended_at = ?,
-            active_duration_s = ?,
-            distance_m = ?,
-            max_speed_mps = ?,
-            avg_speed_mps = ?,
-            elevation_gain_m = ?,
-            elevation_loss_m = ?,
-            state = ?,
-            last_sync_error = NULL,
-            updated_at = ?
-        WHERE local_id = ?
-        ''',
-        variables: <Variable>[
-          Variable<String>(ownerUserId),
-          Variable<String>(resortId),
-          Variable<String>(startedAt.toUtc().toIso8601String()),
-          Variable<String>(endedAt?.toUtc().toIso8601String()),
-          Variable<int>(activeDurationS),
-          Variable<double>(distanceM),
-          Variable<double>(maxSpeedMps),
-          Variable<double>(avgSpeedMps),
-          Variable<int>(elevationGainM),
-          Variable<int>(elevationLossM),
-          Variable<String>(LocalSessionState.synced.wireValue),
-          Variable<String>(now.toIso8601String()),
-          Variable<int>(existing.localId),
-        ],
-      );
-      return existing.localId;
-    }
-
-    return customInsert(
+    await customStatement(
       '''
       INSERT INTO local_ride_sessions (
         owner_user_id,
@@ -627,27 +597,50 @@ class DriftLocalDatabase extends GeneratedDatabase {
         created_at,
         updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(owner_user_id, remote_id)
+      DO UPDATE SET
+        resort_id = excluded.resort_id,
+        started_at = excluded.started_at,
+        ended_at = excluded.ended_at,
+        active_duration_s = excluded.active_duration_s,
+        distance_m = excluded.distance_m,
+        max_speed_mps = excluded.max_speed_mps,
+        avg_speed_mps = excluded.avg_speed_mps,
+        elevation_gain_m = excluded.elevation_gain_m,
+        elevation_loss_m = excluded.elevation_loss_m,
+        state = excluded.state,
+        last_sync_error = NULL,
+        updated_at = excluded.updated_at
       ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-        Variable<String>(remoteId),
-        Variable<String>(resortId),
-        Variable<String>(startedAt.toUtc().toIso8601String()),
-        Variable<String>(endedAt?.toUtc().toIso8601String()),
-        Variable<int>(activeDurationS),
-        Variable<double>(distanceM),
-        Variable<double>(maxSpeedMps),
-        Variable<double>(avgSpeedMps),
-        Variable<int>(elevationGainM),
-        Variable<int>(elevationLossM),
-        Variable<String>(LocalSessionState.synced.wireValue),
-        const Variable<int>(0),
-        const Variable<int>(0),
-        const Variable<String>(null),
-        Variable<String>((createdAt ?? now).toUtc().toIso8601String()),
-        Variable<String>(now.toIso8601String()),
+      <Object?>[
+        ownerUserId,
+        remoteId,
+        resortId,
+        startedAt.toUtc().toIso8601String(),
+        endedAt?.toUtc().toIso8601String(),
+        activeDurationS,
+        distanceM,
+        maxSpeedMps,
+        avgSpeedMps,
+        elevationGainM,
+        elevationLossM,
+        LocalSessionState.synced.wireValue,
+        0,
+        0,
+        null,
+        (createdAt ?? now).toUtc().toIso8601String(),
+        now.toIso8601String(),
       ],
     );
+
+    final LocalRideSession? persisted = await getSessionByRemoteId(
+      ownerUserId: ownerUserId,
+      remoteId: remoteId,
+    );
+    if (persisted == null) {
+      throw StateError('Remote-backed session summary was not persisted.');
+    }
+    return persisted.localId;
   }
 
   Future<LocalRideSession?> getInProgressSession({
@@ -753,6 +746,146 @@ class DriftLocalDatabase extends GeneratedDatabase {
     );
   }
 
+  Future<void> _enforceRemoteSessionIdentityUniqueness() async {
+    await transaction(() async {
+      final List<QueryRow> duplicateKeys = await customSelect(
+        '''
+        SELECT owner_user_id, remote_id
+        FROM local_ride_sessions
+        WHERE owner_user_id IS NOT NULL
+        AND remote_id IS NOT NULL
+        GROUP BY owner_user_id, remote_id
+        HAVING COUNT(*) > 1
+        ''',
+      ).get();
+
+      for (final QueryRow key in duplicateKeys) {
+        final String ownerUserId = key.data['owner_user_id'] as String;
+        final String remoteId = key.data['remote_id'] as String;
+        final List<QueryRow> duplicates = await customSelect(
+          '''
+          SELECT local_id
+          FROM local_ride_sessions
+          WHERE owner_user_id = ?
+          AND remote_id = ?
+          ORDER BY point_count DESC, updated_at DESC, local_id DESC
+          ''',
+          variables: <Variable>[
+            Variable<String>(ownerUserId),
+            Variable<String>(remoteId),
+          ],
+        ).get();
+        if (duplicates.length < 2) {
+          continue;
+        }
+
+        final int keepLocalId = _asInt(duplicates.first.data['local_id']);
+        for (final QueryRow duplicate in duplicates.skip(1)) {
+          final int duplicateLocalId = _asInt(duplicate.data['local_id']);
+          await customStatement(
+            '''
+            UPDATE local_session_points
+            SET local_session_id = ?
+            WHERE local_session_id = ?
+            ''',
+            <Object?>[
+              keepLocalId,
+              duplicateLocalId,
+            ],
+          );
+          await customStatement(
+            '''
+            UPDATE local_session_tracking_diagnostics
+            SET local_session_id = ?
+            WHERE local_session_id = ?
+            ''',
+            <Object?>[
+              keepLocalId,
+              duplicateLocalId,
+            ],
+          );
+          await customStatement(
+            'DELETE FROM local_ride_sessions WHERE local_id = ?',
+            <Object?>[duplicateLocalId],
+          );
+        }
+      }
+
+      await _removeDuplicateSessionPoints();
+      await _refreshAllSessionPointCounts();
+    });
+
+    await customStatement(
+        'DROP INDEX IF EXISTS ix_local_ride_sessions_owner_remote');
+    await customStatement('''
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_local_ride_sessions_owner_remote
+      ON local_ride_sessions(owner_user_id, remote_id)
+    ''');
+  }
+
+  Future<void> _enforceLocalSessionPointUniqueness() async {
+    await transaction(() async {
+      await _removeDuplicateSessionPoints();
+      await _refreshAllSessionPointCounts();
+    });
+
+    await customStatement(
+        'DROP INDEX IF EXISTS ix_local_session_points_session_offset');
+    await customStatement('''
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_local_session_points_session_offset
+      ON local_session_points(local_session_id, t_offset_ms)
+    ''');
+  }
+
+  Future<void> _removeDuplicateSessionPoints() {
+    return customStatement(
+      '''
+      DELETE FROM local_session_points
+      WHERE id NOT IN (
+        SELECT MIN(id)
+        FROM local_session_points
+        GROUP BY local_session_id, t_offset_ms
+      )
+      ''',
+    );
+  }
+
+  Future<void> _refreshSessionPointCount({
+    required int localSessionId,
+    required DateTime updatedAt,
+  }) {
+    return customUpdate(
+      '''
+      UPDATE local_ride_sessions
+      SET point_count = (
+            SELECT COUNT(*)
+            FROM local_session_points
+            WHERE local_session_id = ?
+          ),
+          updated_at = ?
+      WHERE local_id = ?
+      ''',
+      variables: <Variable>[
+        Variable<int>(localSessionId),
+        Variable<String>(updatedAt.toIso8601String()),
+        Variable<int>(localSessionId),
+      ],
+    );
+  }
+
+  Future<void> _refreshAllSessionPointCounts() {
+    return customStatement(
+      '''
+      UPDATE local_ride_sessions
+      SET point_count = (
+        SELECT COUNT(*)
+        FROM local_session_points
+        WHERE local_session_id = local_ride_sessions.local_id
+      )
+      ''',
+    );
+  }
+
   LocalSessionState _canonicalPersistedState(LocalSessionState state) {
     if (state == LocalSessionState.locallyCompleted) {
       return LocalSessionState.syncPending;
@@ -796,7 +929,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       for (final NewSessionPoint point in points) {
         await customInsert(
           '''
-          INSERT INTO local_session_points (
+          INSERT OR IGNORE INTO local_session_points (
             local_session_id,
             recorded_at,
             t_offset_ms,
@@ -860,18 +993,9 @@ class DriftLocalDatabase extends GeneratedDatabase {
         );
       }
 
-      await customUpdate(
-        '''
-        UPDATE local_ride_sessions
-        SET point_count = ?,
-            updated_at = ?
-        WHERE local_id = ?
-        ''',
-        variables: <Variable>[
-          Variable<int>(points.length),
-          Variable<String>(now.toIso8601String()),
-          Variable<int>(localSessionId),
-        ],
+      await _refreshSessionPointCount(
+        localSessionId: localSessionId,
+        updatedAt: now,
       );
     });
   }
@@ -899,6 +1023,25 @@ class DriftLocalDatabase extends GeneratedDatabase {
     await _addColumnIfMissing('local_session_points', 'derived_speed_mps REAL');
     await _addColumnIfMissing('local_session_points', 'distance_delta_m REAL');
     await _addColumnIfMissing('local_session_points', 'motion_state TEXT');
+  }
+
+  Future<void> _migratePendingRemoteDeleteSchema() async {
+    await _addColumnIfMissing(
+      'pending_remote_session_deletes',
+      "state TEXT NOT NULL DEFAULT 'pending'",
+    );
+    await _addColumnIfMissing(
+      'pending_remote_session_deletes',
+      'next_attempt_at TEXT',
+    );
+    await customStatement(
+      '''
+      UPDATE pending_remote_session_deletes
+      SET state = 'pending'
+      WHERE state IS NULL
+      OR TRIM(state) = ''
+      ''',
+    );
   }
 
   Future<void> _migrateLegacyDeletedRemoteSessionTombstones() async {
@@ -932,7 +1075,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
     await customStatement(
       '''
-      INSERT INTO pending_remote_session_deletes (
+      INSERT OR IGNORE INTO pending_remote_session_deletes (
         owner_user_id,
         remote_id,
         requested_at,
@@ -948,7 +1091,6 @@ class DriftLocalDatabase extends GeneratedDatabase {
         $attemptCountExpr,
         $lastErrorExpr
       FROM deleted_remote_sessions
-      ON CONFLICT(owner_user_id, remote_id) DO NOTHING
       ''',
     );
 
@@ -1289,10 +1431,19 @@ class DriftLocalDatabase extends GeneratedDatabase {
         requested_at,
         last_attempt_at,
         attempt_count,
-        last_error
+        last_error,
+        state,
+        next_attempt_at
       )
-      VALUES (?, ?, ?, NULL, 0, NULL)
-      ON CONFLICT(owner_user_id, remote_id) DO NOTHING
+      VALUES (?, ?, ?, NULL, 0, NULL, 'pending', NULL)
+      ON CONFLICT(owner_user_id, remote_id)
+      DO UPDATE SET
+        requested_at = excluded.requested_at,
+        last_attempt_at = NULL,
+        attempt_count = 0,
+        last_error = NULL,
+        state = 'pending',
+        next_attempt_at = NULL
       ''',
       <Object?>[
         ownerUserId,
@@ -1306,6 +1457,46 @@ class DriftLocalDatabase extends GeneratedDatabase {
     required String ownerUserId,
     required String remoteId,
     required String lastError,
+    DateTime? nextAttemptAt,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    final DateTime effectiveNextAttemptAt = (nextAttemptAt ?? now).toUtc();
+    await customStatement(
+      '''
+      INSERT INTO pending_remote_session_deletes (
+        owner_user_id,
+        remote_id,
+        requested_at,
+        last_attempt_at,
+        attempt_count,
+        last_error,
+        state,
+        next_attempt_at
+      )
+      VALUES (?, ?, ?, ?, 1, ?, 'pending', ?)
+      ON CONFLICT(owner_user_id, remote_id)
+      DO UPDATE SET
+        last_attempt_at = excluded.last_attempt_at,
+        attempt_count = pending_remote_session_deletes.attempt_count + 1,
+        last_error = excluded.last_error,
+        state = 'pending',
+        next_attempt_at = excluded.next_attempt_at
+      ''',
+      <Object?>[
+        ownerUserId,
+        remoteId,
+        now.toIso8601String(),
+        now.toIso8601String(),
+        lastError,
+        effectiveNextAttemptAt.toIso8601String(),
+      ],
+    );
+  }
+
+  Future<void> markPendingRemoteSessionDeleteFailed({
+    required String ownerUserId,
+    required String remoteId,
+    required String lastError,
   }) async {
     final DateTime now = DateTime.now().toUtc();
     await customStatement(
@@ -1316,14 +1507,18 @@ class DriftLocalDatabase extends GeneratedDatabase {
         requested_at,
         last_attempt_at,
         attempt_count,
-        last_error
+        last_error,
+        state,
+        next_attempt_at
       )
-      VALUES (?, ?, ?, ?, 1, ?)
+      VALUES (?, ?, ?, ?, 1, ?, 'failed', NULL)
       ON CONFLICT(owner_user_id, remote_id)
       DO UPDATE SET
         last_attempt_at = excluded.last_attempt_at,
         attempt_count = pending_remote_session_deletes.attempt_count + 1,
-        last_error = excluded.last_error
+        last_error = excluded.last_error,
+        state = 'failed',
+        next_attempt_at = NULL
       ''',
       <Object?>[
         ownerUserId,
@@ -1360,6 +1555,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       SELECT remote_id
       FROM pending_remote_session_deletes
       WHERE owner_user_id = ?
+      AND state = 'pending'
       ''',
       variables: <Variable>[
         Variable<String>(ownerUserId),
@@ -1372,20 +1568,61 @@ class DriftLocalDatabase extends GeneratedDatabase {
   Future<List<String>> listPendingRemoteDeleteIds({
     required String ownerUserId,
   }) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
     final List<QueryRow> rows = await customSelect(
       '''
       SELECT remote_id
       FROM pending_remote_session_deletes
       WHERE owner_user_id = ?
+      AND state = 'pending'
+      AND (
+        next_attempt_at IS NULL
+        OR next_attempt_at <= ?
+      )
       ORDER BY requested_at ASC
       ''',
       variables: <Variable>[
         Variable<String>(ownerUserId),
+        Variable<String>(now),
       ],
     ).get();
 
     return rows
         .map((QueryRow row) => row.data['remote_id'] as String)
+        .toList(growable: false);
+  }
+
+  Future<List<PendingRemoteSessionDeleteEntry>>
+      listRetryablePendingRemoteDeletes({
+    required String ownerUserId,
+  }) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    final List<QueryRow> rows = await customSelect(
+      '''
+      SELECT owner_user_id, remote_id, attempt_count
+      FROM pending_remote_session_deletes
+      WHERE owner_user_id = ?
+      AND state = 'pending'
+      AND (
+        next_attempt_at IS NULL
+        OR next_attempt_at <= ?
+      )
+      ORDER BY requested_at ASC
+      ''',
+      variables: <Variable>[
+        Variable<String>(ownerUserId),
+        Variable<String>(now),
+      ],
+    ).get();
+
+    return rows
+        .map(
+          (QueryRow row) => PendingRemoteSessionDeleteEntry(
+            ownerUserId: row.data['owner_user_id'] as String,
+            remoteId: row.data['remote_id'] as String,
+            attemptCount: _asInt(row.data['attempt_count']),
+          ),
+        )
         .toList(growable: false);
   }
 
