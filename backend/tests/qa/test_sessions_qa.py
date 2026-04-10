@@ -102,6 +102,7 @@ def test_sessions_points_batch_accepts_and_returns_richer_fields(
                 "longitude": -119.885,
                 "accuracy_m": 3.0,
                 "elapsed_realtime_ns": 123456789,
+                "recorded_at": "2026-01-01T00:00:00Z",
                 "altitude_m": 1780.5,
                 "vertical_accuracy_m": 4.5,
                 "speed_mps": 8.4,
@@ -110,7 +111,7 @@ def test_sessions_points_batch_accepts_and_returns_richer_fields(
                 "bearing_accuracy_deg": 5.0,
                 "provider": "fused",
                 "is_mocked": False,
-                "quality_class": "good",
+                "quality_class": "accept",
                 "quality_score": 0.92,
                 "quality_reason": "high_confidence",
                 "filtered_latitude": 50.8781,
@@ -119,7 +120,8 @@ def test_sessions_points_batch_accepts_and_returns_richer_fields(
                 "fused_speed_mps": 8.2,
                 "derived_speed_mps": 8.1,
                 "distance_delta_m": 1.4,
-                "motion_state": "moving",
+                "motion_state": "active_descent",
+                "accepted_for_analytics": True,
             }
         ]
     }
@@ -136,12 +138,13 @@ def test_sessions_points_batch_accepts_and_returns_richer_fields(
     assert points.status_code == 200
     item = points.json()["items"][0]
     assert item["elapsed_realtime_ns"] == 123456789
+    assert item["recorded_at"] == "2026-01-01T00:00:00Z"
     assert item["vertical_accuracy_m"] == 4.5
     assert item["speed_accuracy_mps"] == 0.7
     assert item["bearing_accuracy_deg"] == 5.0
     assert item["provider"] == "fused"
     assert item["is_mocked"] is False
-    assert item["quality_class"] == "good"
+    assert item["quality_class"] == "accept"
     assert item["quality_score"] == 0.92
     assert item["quality_reason"] == "high_confidence"
     assert item["filtered_latitude"] == 50.8781
@@ -150,7 +153,86 @@ def test_sessions_points_batch_accepts_and_returns_richer_fields(
     assert item["fused_speed_mps"] == 8.2
     assert item["derived_speed_mps"] == 8.1
     assert item["distance_delta_m"] == 1.4
-    assert item["motion_state"] == "moving"
+    assert item["motion_state"] == "active_descent"
+    assert item["accepted_for_analytics"] is True
+
+
+def test_sessions_points_batch_legacy_payload_populates_canonical_values(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Legacy Payload Resort")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id), "started_at": "2026-01-01T00:00:00Z"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    upload = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={
+            "points": [
+                {
+                    "t_offset_ms": 1000,
+                    "latitude": 50.878,
+                    "longitude": -119.885,
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    assert upload.json()["inserted_count"] == 1
+
+    points = client.get(f"/v1/sessions/{session_id}/points", headers=headers)
+    assert points.status_code == 200
+    item = points.json()["items"][0]
+    assert item["recorded_at"] == "2026-01-01T00:00:01Z"
+    assert item["accepted_for_analytics"] is True
+
+
+def test_sessions_points_batch_rejects_non_canonical_quality_or_motion_state(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Vocabulary Guard Resort")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    upload = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={
+            "points": [
+                {
+                    "t_offset_ms": 0,
+                    "latitude": 50.878,
+                    "longitude": -119.885,
+                    "quality_class": "good",
+                    "motion_state": "moving",
+                }
+            ]
+        },
+        headers=headers,
+    )
+
+    assert upload.status_code == 422
+    error_fields = {error["loc"][-1] for error in upload.json()["detail"]}
+    assert error_fields == {"quality_class", "motion_state"}
 
 
 def test_sessions_upload_points_rejects_completed_session(
@@ -222,6 +304,40 @@ def test_sessions_complete_rejects_ended_before_started(
     )
     assert complete_response.status_code == 400
     assert complete_response.json()["detail"] == "ended_at cannot be earlier than started_at."
+
+
+def test_sessions_complete_rejects_invalid_metrics_at_api_boundary(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Boundary Validation Resort")
+
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id)},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    complete_response = client.post(
+        f"/v1/sessions/{session_id}/complete",
+        json={
+            "duration_s": -1,
+            "distance_m": -500.0,
+            "max_speed_mps": 10.0,
+            "avg_speed_mps": 12.0,
+        },
+        headers=headers,
+    )
+    assert complete_response.status_code == 422
+    payload = complete_response.json()["detail"]
+    assert payload["message"] == "Invalid session completion payload."
+    fields = {error["field"] for error in payload["errors"]}
+    assert fields == {"duration_s", "distance_m"}
 
 
 def test_sessions_create_with_missing_resort_returns_404(
@@ -411,6 +527,7 @@ def test_sessions_points_batch_preserves_enriched_fields(
         "longitude": -118.16,
         "accuracy_m": 3.2,
         "elapsed_realtime_ns": 123456789,
+        "recorded_at": "2026-01-01T00:00:05Z",
         "altitude_m": 1450.5,
         "vertical_accuracy_m": 4.1,
         "speed_mps": 6.4,
@@ -419,7 +536,7 @@ def test_sessions_points_batch_preserves_enriched_fields(
         "bearing_accuracy_deg": 7.5,
         "provider": "gps",
         "is_mocked": False,
-        "quality_class": "good",
+        "quality_class": "accept",
         "quality_score": 0.91,
         "quality_reason": "stable_fix",
         "filtered_latitude": 50.9501,
@@ -428,7 +545,8 @@ def test_sessions_points_batch_preserves_enriched_fields(
         "fused_speed_mps": 6.1,
         "derived_speed_mps": 6.2,
         "distance_delta_m": 4.7,
-        "motion_state": "moving",
+        "motion_state": "active_descent",
+        "accepted_for_analytics": False,
     }
 
     upload = client.post(
@@ -445,12 +563,13 @@ def test_sessions_points_batch_preserves_enriched_fields(
     assert len(items) == 1
     item = items[0]
     assert item["elapsed_realtime_ns"] == 123456789
+    assert item["recorded_at"] == "2026-01-01T00:00:05Z"
     assert item["vertical_accuracy_m"] == 4.1
     assert item["speed_accuracy_mps"] == 0.4
     assert item["bearing_accuracy_deg"] == 7.5
     assert item["provider"] == "gps"
     assert item["is_mocked"] is False
-    assert item["quality_class"] == "good"
+    assert item["quality_class"] == "accept"
     assert item["quality_score"] == 0.91
     assert item["quality_reason"] == "stable_fix"
     assert item["filtered_latitude"] == 50.9501
@@ -459,7 +578,8 @@ def test_sessions_points_batch_preserves_enriched_fields(
     assert item["fused_speed_mps"] == 6.1
     assert item["derived_speed_mps"] == 6.2
     assert item["distance_delta_m"] == 4.7
-    assert item["motion_state"] == "moving"
+    assert item["motion_state"] == "active_descent"
+    assert item["accepted_for_analytics"] is False
 
 
 def test_sessions_points_batch_is_idempotent_on_duplicate_offsets(

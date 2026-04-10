@@ -104,11 +104,13 @@ class _SessionSyncRetryBackendInterceptor extends Interceptor {
 class FakeNewSessionPoint extends Fake implements NewSessionPoint {}
 
 const String _ownerUserId = 'user-1';
+const String _uuidLikeRemoteSessionId = '2dc7f6ff-9ad0-4d87-b0f1-6545af670d87';
 
 LocalRideSession _buildSession({
   required int localId,
   required LocalSessionState state,
   String? remoteId,
+  String? resortId,
   int activeDurationS = 120,
   double distanceM = 1000,
   double maxSpeedMps = 10,
@@ -126,7 +128,7 @@ LocalRideSession _buildSession({
     localId: localId,
     ownerUserId: _ownerUserId,
     remoteId: remoteId,
-    resortId: null,
+    resortId: resortId,
     startedAt: effectiveStartedAt,
     endedAt: effectiveEndedAt,
     activeDurationS: activeDurationS,
@@ -157,6 +159,12 @@ LocalSessionPoint _buildPoint({
   String? motionState,
   double? latitude,
   double? longitude,
+  double? altitudeM = 500,
+  double? filteredAltitudeM,
+  double? filteredLatitude,
+  double? filteredLongitude,
+  double? qualityScore,
+  String? provider,
 }) {
   final DateTime now = DateTime.utc(2026, 1, 1);
   return LocalSessionPoint(
@@ -167,12 +175,17 @@ LocalSessionPoint _buildPoint({
     latitude: latitude ?? 49.0 + (offsetMs / 1000000),
     longitude: longitude ?? -123.0 - (offsetMs / 1000000),
     accuracyM: 8,
-    altitudeM: 500,
+    altitudeM: altitudeM,
     speedMps: speedMps,
     headingDeg: headingDeg,
     acceptedForAnalytics: acceptedForAnalytics,
     speedAccuracyMps: speedAccuracyMps,
+    provider: provider,
     qualityClass: qualityClass,
+    qualityScore: qualityScore,
+    filteredAltitudeM: filteredAltitudeM,
+    filteredLatitude: filteredLatitude,
+    filteredLongitude: filteredLongitude,
     fusedSpeedMps: fusedSpeedMps ?? speedMps,
     derivedSpeedMps: derivedSpeedMps,
     distanceDeltaM: distanceDeltaM,
@@ -243,8 +256,7 @@ void main() {
   setUp(() {
     localDatabase = MockDriftLocalDatabase();
     api = MockSessionApi();
-    when(() => localDatabase.beginSyncAttempt(any()))
-        .thenAnswer((_) async {});
+    when(() => localDatabase.beginSyncAttempt(any())).thenAnswer((_) async {});
     when(() => localDatabase.readCachedResorts())
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
@@ -258,6 +270,11 @@ void main() {
       ),
     ).thenAnswer((_) async => <String>[]);
     when(
+      () => localDatabase.listRetryablePendingRemoteDeletes(
+        ownerUserId: any(named: 'ownerUserId'),
+      ),
+    ).thenAnswer((_) async => const <PendingRemoteSessionDeleteEntry>[]);
+    when(
       () => localDatabase.enqueuePendingRemoteSessionDelete(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
@@ -265,6 +282,14 @@ void main() {
     ).thenAnswer((_) async {});
     when(
       () => localDatabase.recordPendingRemoteSessionDeleteAttempt(
+        ownerUserId: any(named: 'ownerUserId'),
+        remoteId: any(named: 'remoteId'),
+        lastError: any(named: 'lastError'),
+        nextAttemptAt: any(named: 'nextAttemptAt'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => localDatabase.markPendingRemoteSessionDeleteFailed(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
         lastError: any(named: 'lastError'),
@@ -277,8 +302,7 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(() => localDatabase.incrementSyncAttempt(any(),
-            error: any(named: 'error')))
-        .thenAnswer((_) async {});
+        error: any(named: 'error'))).thenAnswer((_) async {});
     when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
         .thenAnswer((_) async {});
     repository = SessionRepositoryImpl(
@@ -316,8 +340,6 @@ void main() {
         details: any(named: 'details'),
       ),
     ).thenAnswer((_) async {});
-    when(() => api.getRemoteSessionPoints(any()))
-        .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(() => api.uploadPointBatch(
           remoteSessionId: any(named: 'remoteSessionId'),
           points: any(named: 'points'),
@@ -486,8 +508,6 @@ void main() {
         _buildPoint(offsetMs: 1000),
       ],
     );
-    when(() => api.getRemoteSessionPoints(any()))
-        .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(() => api.uploadPointBatch(
           remoteSessionId: any(named: 'remoteSessionId'),
           points: any(named: 'points'),
@@ -520,6 +540,17 @@ void main() {
       uploaded.map((Map<String, dynamic> p) => p['t_offset_ms'] as int).toSet(),
       <int>{0, 1000},
     );
+    expect(
+      uploaded.every(
+          (Map<String, dynamic> point) => point['recorded_at'] is String),
+      isTrue,
+    );
+    expect(
+      uploaded.every((Map<String, dynamic> point) =>
+          point['accepted_for_analytics'] == true),
+      isTrue,
+    );
+    verifyNever(() => api.getRemoteSessionPoints(any()));
   });
 
   test('syncSession sanitizes negative heading_deg and still syncs', () async {
@@ -575,6 +606,190 @@ void main() {
       speedAccuracy == null || (speedAccuracy is num && speedAccuracy >= 0),
       isTrue,
     );
+  });
+
+  test('syncSession drops quality_score values outside backend range',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, qualityScore: 1.1),
+        _buildPoint(offsetMs: 1000, qualityScore: -0.1),
+        _buildPoint(offsetMs: 2000, qualityScore: 0.75),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(3));
+    expect(uploaded[0]['quality_score'], isNull);
+    expect(uploaded[1]['quality_score'], isNull);
+    expect(uploaded[2]['quality_score'], 0.75);
+  });
+
+  test('syncSession drops filtered coordinates outside backend ranges',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(
+          offsetMs: 0,
+          filteredLatitude: 91,
+          filteredLongitude: -181,
+        ),
+        _buildPoint(
+          offsetMs: 1000,
+          filteredLatitude: 49.0001,
+          filteredLongitude: -123.0001,
+        ),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(2));
+    expect(uploaded[0]['filtered_latitude'], isNull);
+    expect(uploaded[0]['filtered_longitude'], isNull);
+    expect(uploaded[1]['filtered_latitude'], 49.0001);
+    expect(uploaded[1]['filtered_longitude'], -123.0001);
+  });
+
+  test('syncSession preserves negative altitude fields allowed by backend',
+      () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(
+          offsetMs: 0,
+          altitudeM: -12.5,
+          filteredAltitudeM: -13.2,
+        ),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+    expect(uploaded.single['altitude_m'], -12.5);
+    expect(uploaded.single['filtered_altitude_m'], -13.2);
+  });
+
+  test('syncSession sends null resort_id when local resort id is not UUID-like',
+      () async {
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncPending,
+          remoteId: null,
+          resortId: 'resort-whistler',
+        ),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncing,
+          remoteId: null,
+          resortId: 'resort-whistler',
+        ),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.syncing,
+          remoteId: _uuidLikeRemoteSessionId,
+          resortId: 'resort-whistler',
+        ),
+        _buildSession(
+          localId: 1,
+          state: LocalSessionState.synced,
+          remoteId: _uuidLikeRemoteSessionId,
+          resortId: 'resort-whistler',
+        ),
+      ],
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[_buildPoint(offsetMs: 0)],
+    );
+    when(() => api.createRemoteDraft(
+          resortId: any(named: 'resortId'),
+          startedAt: any(named: 'startedAt'),
+        )).thenAnswer(
+      (_) async => <String, dynamic>{'id': _uuidLikeRemoteSessionId},
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    verify(
+      () => api.createRemoteDraft(
+        resortId: null,
+        startedAt: any(named: 'startedAt'),
+      ),
+    ).called(1);
+  });
+
+  test('syncSession canonicalizes vocabulary fields before upload', () async {
+    final Queue<LocalRideSession?> sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(
+          offsetMs: 0,
+          provider: 'FusedLocationProvider',
+          qualityClass: 'ACCEPT-LOW-CONFIDENCE',
+          motionState: 'ACTIVE DESCENT',
+        ),
+        _buildPoint(
+          offsetMs: 1000,
+          provider: 'satellite',
+          qualityClass: 'good',
+          motionState: 'moving',
+        ),
+      ],
+    );
+
+    final LocalRideSession result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final List<Map<String, dynamic>> uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(2));
+    expect(uploaded[0]['provider'], 'fused');
+    expect(uploaded[0]['quality_class'], 'accept_low_confidence');
+    expect(uploaded[0]['motion_state'], 'active_descent');
+    expect(uploaded[1]['provider'], 'unknown');
+    expect(uploaded[1]['quality_class'], isNull);
+    expect(uploaded[1]['motion_state'], isNull);
   });
 
   test('syncSession sanitizes negative completion metrics before complete call',
@@ -797,15 +1012,7 @@ void main() {
     expect(result.state, LocalSessionState.syncFailed);
     expect(result.syncAttemptCount, 1);
     expect(result.lastSyncError, expectedMessage);
-    verify(
-      () => localDatabase.updateSessionState(
-        1,
-        LocalSessionState.syncing,
-        remoteId: null,
-        lastSyncError: null,
-      ),
-    ).called(1);
-    verify(() => localDatabase.incrementSyncAttempt(1, error: null)).called(1);
+    verify(() => localDatabase.beginSyncAttempt(1)).called(1);
     verify(() => localDatabase.markSyncFailed(
           1,
           error: expectedMessage,
@@ -1542,6 +1749,122 @@ void main() {
     expect(restored[2].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 20));
   });
 
+  test(
+      'getSessionDetail prefers canonical acceptance and recorded_at fields when available',
+      () async {
+    final LocalRideSession hydrated = _buildSession(
+      localId: 1,
+      state: LocalSessionState.synced,
+      remoteId: 'remote-restore',
+      activeDurationS: 20,
+    );
+    final Queue<LocalRideSession?> sessions = Queue<LocalRideSession?>.from(
+      <LocalRideSession?>[
+        hydrated,
+        hydrated,
+      ],
+    );
+    final Queue<List<LocalSessionPoint>> pointSnapshots =
+        Queue<List<LocalSessionPoint>>.from(
+      <List<LocalSessionPoint>>[
+        const <LocalSessionPoint>[],
+        <LocalSessionPoint>[
+          _buildPoint(
+            offsetMs: 5000,
+            acceptedForAnalytics: false,
+            qualityClass: 'accept',
+            motionState: 'active_descent',
+            distanceDeltaM: 0,
+            latitude: 49.0,
+            longitude: -123.0,
+          ),
+          _buildPoint(
+            offsetMs: 10000,
+            acceptedForAnalytics: true,
+            qualityClass: 'accept',
+            motionState: 'active_descent',
+            distanceDeltaM: 30,
+            latitude: 49.0003,
+            longitude: -123.0002,
+          ),
+          _buildPoint(
+            offsetMs: 20000,
+            acceptedForAnalytics: false,
+            qualityClass: 'reject',
+            motionState: 'low_confidence_recovery',
+            distanceDeltaM: 0,
+            latitude: 49.0003,
+            longitude: -123.0002,
+          ),
+        ],
+      ],
+    );
+
+    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => _popOrPeekLast(sessions));
+    when(() => localDatabase.listPoints(1)).thenAnswer(
+      (_) async => pointSnapshots.removeFirst(),
+    );
+    when(
+      () => localDatabase.replaceSessionPoints(
+        localSessionId: any(named: 'localSessionId'),
+        points: any(named: 'points'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+        .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
+    when(() => api.getRemoteSessionPoints('remote-restore')).thenAnswer(
+      (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          't_offset_ms': 0,
+          'recorded_at': '2026-01-01T00:00:05Z',
+          'latitude': 49.0,
+          'longitude': -123.0,
+          'quality_class': 'accept',
+          'motion_state': 'active_descent',
+          'accepted_for_analytics': false,
+          'distance_delta_m': 0,
+        },
+        <String, dynamic>{
+          't_offset_ms': 10000,
+          'latitude': 49.0003,
+          'longitude': -123.0002,
+          'quality_class': 'accept',
+          'motion_state': 'active_descent',
+          'accepted_for_analytics': true,
+          'distance_delta_m': 30,
+        },
+        <String, dynamic>{
+          't_offset_ms': 20000,
+          'latitude': 49.0003,
+          'longitude': -123.0002,
+          'motion_state': 'low_confidence_recovery',
+          'distance_delta_m': 0,
+        },
+      ],
+    );
+
+    final SessionDetail detail = await repository.getSessionDetail(1);
+
+    expect(detail.points, hasLength(3));
+    expect(detail.acceptedPoints, hasLength(1));
+    final List<dynamic> captured = verify(
+      () => localDatabase.replaceSessionPoints(
+        localSessionId: 1,
+        points: captureAny(named: 'points'),
+      ),
+    ).captured;
+    final List<NewSessionPoint> restored =
+        captured.single as List<NewSessionPoint>;
+    expect(restored, hasLength(3));
+    expect(restored[0].acceptedForAnalytics, isFalse);
+    expect(restored[0].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 5));
+    expect(restored[1].acceptedForAnalytics, isTrue);
+    expect(restored[1].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 10));
+    expect(restored[2].acceptedForAnalytics, isFalse);
+    expect(restored[2].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 20));
+  });
+
   test('deleteSession removes a local-only session without remote API call',
       () async {
     final LocalRideSession session = _buildSession(
@@ -1633,7 +1956,8 @@ void main() {
       () async {
     when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
         .thenAnswer((_) async => const <LocalRideSession>[]);
-    when(() => localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
+    when(() =>
+            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
         .thenAnswer(
       (_) async => <Map<String, dynamic>>[
         <String, dynamic>{
@@ -1694,8 +2018,7 @@ void main() {
       error: const SocketException('No route to host'),
     );
 
-    when(() => api.deleteRemoteSession('remote-5'))
-        .thenThrow(connectionError);
+    when(() => api.deleteRemoteSession('remote-5')).thenThrow(connectionError);
     when(
       () => localDatabase.deleteSessionCascade(
         localSessionId: 5,
@@ -1721,6 +2044,7 @@ void main() {
         ownerUserId: _ownerUserId,
         remoteId: 'remote-5',
         lastError: any(named: 'lastError'),
+        nextAttemptAt: any(named: 'nextAttemptAt'),
       ),
     ).called(1);
     verify(
@@ -1740,7 +2064,7 @@ void main() {
   });
 
   test(
-      'deleteSession clears pending queue and throws for hard remote delete failures',
+      'deleteSession marks durable failed delete state and throws for hard remote delete failures',
       () async {
     final LocalRideSession session = _buildSession(
       localId: 6,
@@ -1773,11 +2097,18 @@ void main() {
     ).called(1);
     verify(() => api.deleteRemoteSession('remote-6')).called(1);
     verify(
+      () => localDatabase.markPendingRemoteSessionDeleteFailed(
+        ownerUserId: _ownerUserId,
+        remoteId: 'remote-6',
+        lastError: any(named: 'lastError'),
+      ),
+    ).called(1);
+    verifyNever(
       () => localDatabase.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-6',
       ),
-    ).called(1);
+    );
     verifyNever(
       () => localDatabase.deleteSessionCascade(
         localSessionId: 6,
@@ -1793,8 +2124,18 @@ void main() {
       'refreshRemoteSessionHistoryCache reconciles queued deletes and clears queue on success',
       () async {
     when(
-      () => localDatabase.listPendingRemoteDeleteIds(ownerUserId: _ownerUserId),
-    ).thenAnswer((_) async => <String>['remote-10']);
+      () => localDatabase.listRetryablePendingRemoteDeletes(
+        ownerUserId: _ownerUserId,
+      ),
+    ).thenAnswer(
+      (_) async => const <PendingRemoteSessionDeleteEntry>[
+        PendingRemoteSessionDeleteEntry(
+          ownerUserId: _ownerUserId,
+          remoteId: 'remote-10',
+          attemptCount: 0,
+        ),
+      ],
+    );
     when(() => api.deleteRemoteSession('remote-10')).thenAnswer((_) async {});
     when(
       () => localDatabase.listPendingRemoteSessionDeleteIds(
@@ -1824,8 +2165,18 @@ void main() {
       'refreshRemoteSessionHistoryCache clears queued delete when reconciliation returns 404',
       () async {
     when(
-      () => localDatabase.listPendingRemoteDeleteIds(ownerUserId: _ownerUserId),
-    ).thenAnswer((_) async => <String>['remote-11']);
+      () => localDatabase.listRetryablePendingRemoteDeletes(
+        ownerUserId: _ownerUserId,
+      ),
+    ).thenAnswer(
+      (_) async => const <PendingRemoteSessionDeleteEntry>[
+        PendingRemoteSessionDeleteEntry(
+          ownerUserId: _ownerUserId,
+          remoteId: 'remote-11',
+          attemptCount: 1,
+        ),
+      ],
+    );
     final RequestOptions requestOptions =
         RequestOptions(path: '/sessions/remote-11');
     final DioException notFound = DioException(
@@ -1862,7 +2213,65 @@ void main() {
   });
 
   test(
-      'resolveSessionResortLabel prefers explicit resort id mapped from cache',
+      'refreshRemoteSessionHistoryCache marks queued delete as failed on hard reconciliation error',
+      () async {
+    when(
+      () => localDatabase.listRetryablePendingRemoteDeletes(
+        ownerUserId: _ownerUserId,
+      ),
+    ).thenAnswer(
+      (_) async => const <PendingRemoteSessionDeleteEntry>[
+        PendingRemoteSessionDeleteEntry(
+          ownerUserId: _ownerUserId,
+          remoteId: 'remote-12',
+          attemptCount: 2,
+        ),
+      ],
+    );
+    final RequestOptions requestOptions =
+        RequestOptions(path: '/sessions/remote-12');
+    final DioException unauthorized = DioException(
+      requestOptions: requestOptions,
+      response: Response<dynamic>(
+        requestOptions: requestOptions,
+        statusCode: 401,
+        data: <String, dynamic>{'detail': 'Authentication required.'},
+      ),
+      type: DioExceptionType.badResponse,
+    );
+    when(() => api.deleteRemoteSession('remote-12')).thenThrow(unauthorized);
+    when(
+      () => localDatabase.listPendingRemoteSessionDeleteIds(
+        ownerUserId: _ownerUserId,
+      ),
+    ).thenAnswer((_) async => <String>{});
+    when(() => api.listRemoteSessions())
+        .thenAnswer((_) async => <Map<String, dynamic>>[]);
+    when(
+      () => localDatabase.replaceCachedRemoteSessions(
+        ownerUserId: _ownerUserId,
+        sessions: any(named: 'sessions'),
+      ),
+    ).thenAnswer((_) async {});
+
+    await repository.refreshRemoteSessionHistoryCache();
+
+    verify(
+      () => localDatabase.markPendingRemoteSessionDeleteFailed(
+        ownerUserId: _ownerUserId,
+        remoteId: 'remote-12',
+        lastError: any(named: 'lastError'),
+      ),
+    ).called(1);
+    verifyNever(
+      () => localDatabase.clearPendingRemoteSessionDelete(
+        ownerUserId: _ownerUserId,
+        remoteId: 'remote-12',
+      ),
+    );
+  });
+
+  test('resolveSessionResortLabel prefers explicit resort id mapped from cache',
       () async {
     final LocalRideSession session = _buildSession(
       localId: 12,

@@ -205,7 +205,7 @@ def test_complete_session_allows_omitted_optional_metrics() -> None:
     assert completed.elevation_loss_m is None
 
 
-def test_complete_session_sanitizes_avg_speed_above_max() -> None:
+def test_complete_session_rejects_avg_speed_above_max() -> None:
     user_id = uuid4()
     ride_sessions = FakeRideSessionRepository()
     draft_session = _build_session(user_id=user_id)
@@ -213,19 +213,19 @@ def test_complete_session_sanitizes_avg_speed_above_max() -> None:
     service = _build_service(ride_session_repository=ride_sessions)
     ended_at = draft_session.started_at + timedelta(seconds=60)
 
-    completed = service.complete_session(
-        session_id=draft_session.id,
-        user_id=user_id,
-        completion=SessionCompletionInput(
-            ended_at=ended_at,
-            max_speed_mps=10.0,
-            avg_speed_mps=12.0,
-        ),
-    )
-
-    assert completed.status == RideSessionStatus.COMPLETED
-    assert completed.max_speed_mps == 10.0
-    assert completed.avg_speed_mps is None
+    with pytest.raises(
+        ValidationError,
+        match="avg_speed_mps must be less than or equal to max_speed_mps.",
+    ):
+        service.complete_session(
+            session_id=draft_session.id,
+            user_id=user_id,
+            completion=SessionCompletionInput(
+                ended_at=ended_at,
+                max_speed_mps=10.0,
+                avg_speed_mps=12.0,
+            ),
+        )
 
 
 def test_upload_points_batch_skips_existing_offsets() -> None:
@@ -281,6 +281,37 @@ def test_upload_points_batch_dedupes_duplicate_offsets_in_single_request() -> No
     assert inserted_offsets == {0, 1000}
 
 
+def test_upload_points_batch_populates_legacy_defaults_when_fields_omitted() -> None:
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    point_repo = FakeSessionPointRepository()
+    draft_session = _build_session(user_id=user_id)
+    draft_session.started_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+    ride_sessions.sessions[draft_session.id] = draft_session
+
+    service = _build_service(
+        ride_session_repository=ride_sessions,
+        session_point_repository=point_repo,
+    )
+
+    inserted = service.upload_points_batch(
+        session_id=draft_session.id,
+        user_id=user_id,
+        points=[
+            SessionPointInputData(
+                t_offset_ms=1500,
+                latitude=50.95,
+                longitude=-118.16,
+            )
+        ],
+    )
+
+    assert inserted == 1
+    stored_point = point_repo.batches[0][0]
+    assert stored_point.recorded_at == datetime(2026, 1, 1, 0, 0, 1, 500000, tzinfo=UTC)
+    assert stored_point.accepted_for_analytics is True
+
+
 def test_upload_points_batch_preserves_enriched_point_fields() -> None:
     user_id = uuid4()
     ride_sessions = FakeRideSessionRepository()
@@ -303,15 +334,16 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
                 longitude=-118.16,
                 accuracy_m=3.2,
                 elapsed_realtime_ns=123456789,
+                recorded_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
                 altitude_m=1450.5,
                 vertical_accuracy_m=4.1,
                 speed_mps=6.4,
                 speed_accuracy_mps=0.4,
                 heading_deg=182.0,
                 bearing_accuracy_deg=7.5,
-                provider="gps",
+                provider=" GPS ",
                 is_mocked=False,
-                quality_class="good",
+                quality_class="ACCEPT",
                 quality_score=0.91,
                 quality_reason="stable_fix",
                 filtered_latitude=50.9501,
@@ -320,7 +352,8 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
                 fused_speed_mps=6.1,
                 derived_speed_mps=6.2,
                 distance_delta_m=4.7,
-                motion_state="moving",
+                motion_state="ACTIVE DESCENT",
+                accepted_for_analytics=True,
             )
         ],
     )
@@ -328,12 +361,13 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
     assert inserted == 1
     stored_point = point_repo.batches[0][0]
     assert stored_point.elapsed_realtime_ns == 123456789
+    assert stored_point.recorded_at == datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
     assert stored_point.vertical_accuracy_m == 4.1
     assert stored_point.speed_accuracy_mps == 0.4
     assert stored_point.bearing_accuracy_deg == 7.5
     assert stored_point.provider == "gps"
     assert stored_point.is_mocked is False
-    assert stored_point.quality_class == "good"
+    assert stored_point.quality_class == "accept"
     assert stored_point.quality_score == 0.91
     assert stored_point.quality_reason == "stable_fix"
     assert stored_point.filtered_latitude == 50.9501
@@ -342,7 +376,8 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
     assert stored_point.fused_speed_mps == 6.1
     assert stored_point.derived_speed_mps == 6.2
     assert stored_point.distance_delta_m == 4.7
-    assert stored_point.motion_state == "moving"
+    assert stored_point.motion_state == "active_descent"
+    assert stored_point.accepted_for_analytics is True
 
 
 def test_upload_points_batch_preserves_richer_point_fields() -> None:
@@ -367,15 +402,16 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
                 longitude=-122.0,
                 accuracy_m=3.2,
                 elapsed_realtime_ns=123456789,
+                recorded_at=datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC),
                 altitude_m=1500.0,
                 vertical_accuracy_m=4.4,
                 speed_mps=7.5,
                 speed_accuracy_mps=0.8,
                 heading_deg=42.0,
                 bearing_accuracy_deg=6.0,
-                provider="fused",
+                provider="FusedLocationProvider",
                 is_mocked=False,
-                quality_class="good",
+                quality_class="accept_low_confidence",
                 quality_score=0.9,
                 quality_reason="strong_fix",
                 filtered_latitude=50.0001,
@@ -384,7 +420,8 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
                 fused_speed_mps=7.4,
                 derived_speed_mps=7.3,
                 distance_delta_m=1.2,
-                motion_state="moving",
+                motion_state="Lift Uphill",
+                accepted_for_analytics=False,
             )
         ],
     )
@@ -392,12 +429,13 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
     assert inserted == 1
     saved_point = point_repo.batches[0][0]
     assert saved_point.elapsed_realtime_ns == 123456789
+    assert saved_point.recorded_at == datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC)
     assert saved_point.vertical_accuracy_m == 4.4
     assert saved_point.speed_accuracy_mps == 0.8
     assert saved_point.bearing_accuracy_deg == 6.0
     assert saved_point.provider == "fused"
     assert saved_point.is_mocked is False
-    assert saved_point.quality_class == "good"
+    assert saved_point.quality_class == "accept_low_confidence"
     assert saved_point.quality_score == 0.9
     assert saved_point.quality_reason == "strong_fix"
     assert saved_point.filtered_latitude == 50.0001
@@ -406,7 +444,8 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
     assert saved_point.fused_speed_mps == 7.4
     assert saved_point.derived_speed_mps == 7.3
     assert saved_point.distance_delta_m == 1.2
-    assert saved_point.motion_state == "moving"
+    assert saved_point.motion_state == "lift_uphill"
+    assert saved_point.accepted_for_analytics is False
 
 
 def test_delete_session_removes_owned_session() -> None:

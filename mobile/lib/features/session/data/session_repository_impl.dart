@@ -13,6 +13,7 @@ import '../domain/session_segmentation.dart';
 import '../domain/session_state_machine.dart';
 import 'session_resort_attribution_service.dart';
 import 'session_api.dart';
+import 'session_sync_vocabulary.dart';
 
 class SessionRepositoryImpl implements SessionRepository {
   SessionRepositoryImpl({
@@ -26,6 +27,17 @@ class SessionRepositoryImpl implements SessionRepository {
         _resortAttributionService =
             SessionResortAttributionService(localDatabase: localDatabase),
         _stateMachine = stateMachine;
+
+  static final RegExp _uuidLikeIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static const List<Duration> _remoteDeleteRetrySchedule = <Duration>[
+    Duration(minutes: 1),
+    Duration(minutes: 5),
+    Duration(minutes: 15),
+    Duration(hours: 1),
+    Duration(hours: 6),
+  ];
 
   final DriftLocalDatabase _localDatabase;
   final SessionApi _api;
@@ -408,12 +420,14 @@ class SessionRepositoryImpl implements SessionRepository {
               ownerUserId: ownerUserId,
               remoteId: remoteId,
               lastError: failure.message,
+              nextAttemptAt: _nextRemoteDeleteAttemptAt(failedAttemptCount: 1),
             );
             disposition = DeleteSessionDisposition.queuedRemoteDelete;
           } else {
-            await _localDatabase.clearPendingRemoteSessionDelete(
+            await _localDatabase.markPendingRemoteSessionDeleteFailed(
               ownerUserId: ownerUserId,
               remoteId: remoteId,
+              lastError: failure.message,
             );
             throw failure;
           }
@@ -463,12 +477,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<void> _prepareSyncAttempt(int localSessionId) async {
-    await _localDatabase.updateSessionState(
-      localSessionId,
-      LocalSessionState.syncing,
-      lastSyncError: null,
-    );
-    await _localDatabase.incrementSyncAttempt(localSessionId);
+    await _localDatabase.beginSyncAttempt(localSessionId);
   }
 
   Future<String> _ensureRemoteSessionId(
@@ -481,7 +490,7 @@ class SessionRepositoryImpl implements SessionRepository {
     }
 
     final Map<String, dynamic> draft = await _api.createRemoteDraft(
-      resortId: session.resortId,
+      resortId: _sanitizeNullableUuidLikeIdForSync(session.resortId),
       startedAt: session.startedAt,
     );
     remoteId = draft['id'] as String;
@@ -499,14 +508,8 @@ class SessionRepositoryImpl implements SessionRepository {
   }) async {
     final List<LocalSessionPoint> acceptedPoints =
         await _localDatabase.listPoints(localSessionId, onlyAccepted: true);
-    final Set<int> existingOffsets =
-        await _fetchExistingRemoteOffsets(remoteSessionId);
-    final List<LocalSessionPoint> uploadable = acceptedPoints
-        .where((LocalSessionPoint point) =>
-            !existingOffsets.contains(point.tOffsetMs))
-        .toList(growable: false);
     final List<LocalSessionPoint> dedupedUploadable = _dedupeByOffset(
-      uploadable,
+      acceptedPoints,
     );
     final _PointSanitizationResult sanitizedResult = _sanitizePointsForSync(
       dedupedUploadable,
@@ -742,6 +745,7 @@ class SessionRepositoryImpl implements SessionRepository {
         fieldName: 't_offset_ms',
         sanitizedFields: sanitizedFields,
       ),
+      'recorded_at': point.recordedAt.toUtc().toIso8601String(),
       'latitude': point.latitude,
       'longitude': point.longitude,
       'accuracy_m': _sanitizeNullableNonNegativeDoubleForSync(
@@ -754,7 +758,7 @@ class SessionRepositoryImpl implements SessionRepository {
         fieldName: 'elapsed_realtime_ns',
         sanitizedFields: sanitizedFields,
       ),
-      'altitude_m': _sanitizeNullableNonNegativeDoubleForSync(
+      'altitude_m': _sanitizeNullableFiniteDoubleForSync(
         point.altitudeM,
         fieldName: 'altitude_m',
         sanitizedFields: sanitizedFields,
@@ -784,26 +788,32 @@ class SessionRepositoryImpl implements SessionRepository {
         fieldName: 'bearing_accuracy_deg',
         sanitizedFields: sanitizedFields,
       ),
-      'provider': point.provider,
+      'provider': canonicalizeProviderForSync(point.provider),
       'is_mocked': point.isMocked,
-      'quality_class': point.qualityClass,
-      'quality_score': _sanitizeNullableNonNegativeDoubleForSync(
+      'quality_class': canonicalizeQualityClassForSync(point.qualityClass),
+      'quality_score': _sanitizeNullableRangedDoubleForSync(
         point.qualityScore,
+        minValue: 0,
+        maxValue: 1,
         fieldName: 'quality_score',
         sanitizedFields: sanitizedFields,
       ),
       'quality_reason': point.qualityReason,
-      'filtered_latitude': _sanitizeNullableFiniteDoubleForSync(
+      'filtered_latitude': _sanitizeNullableRangedDoubleForSync(
         point.filteredLatitude,
+        minValue: -90,
+        maxValue: 90,
         fieldName: 'filtered_latitude',
         sanitizedFields: sanitizedFields,
       ),
-      'filtered_longitude': _sanitizeNullableFiniteDoubleForSync(
+      'filtered_longitude': _sanitizeNullableRangedDoubleForSync(
         point.filteredLongitude,
+        minValue: -180,
+        maxValue: 180,
         fieldName: 'filtered_longitude',
         sanitizedFields: sanitizedFields,
       ),
-      'filtered_altitude_m': _sanitizeNullableNonNegativeDoubleForSync(
+      'filtered_altitude_m': _sanitizeNullableFiniteDoubleForSync(
         point.filteredAltitudeM,
         fieldName: 'filtered_altitude_m',
         sanitizedFields: sanitizedFields,
@@ -823,7 +833,8 @@ class SessionRepositoryImpl implements SessionRepository {
         fieldName: 'distance_delta_m',
         sanitizedFields: sanitizedFields,
       ),
-      'motion_state': point.motionState,
+      'motion_state': canonicalizeMotionStateForSync(point.motionState),
+      'accepted_for_analytics': point.acceptedForAnalytics,
     };
 
     return _SinglePointSanitizationResult.keep(
@@ -1019,6 +1030,42 @@ class SessionRepositoryImpl implements SessionRepository {
       return finiteValue;
     }
     sanitizedFields.add(fieldName);
+    return null;
+  }
+
+  double? _sanitizeNullableRangedDoubleForSync(
+    double? value, {
+    required double minValue,
+    required double maxValue,
+    required String fieldName,
+    required List<String> sanitizedFields,
+  }) {
+    final double? finiteValue = _sanitizeNullableFiniteDoubleForSync(
+      value,
+      fieldName: fieldName,
+      sanitizedFields: sanitizedFields,
+    );
+    if (finiteValue == null) {
+      return null;
+    }
+    if (finiteValue >= minValue && finiteValue <= maxValue) {
+      return finiteValue;
+    }
+    sanitizedFields.add(fieldName);
+    return null;
+  }
+
+  String? _sanitizeNullableUuidLikeIdForSync(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    if (_uuidLikeIdPattern.hasMatch(trimmed)) {
+      return trimmed;
+    }
     return null;
   }
 
@@ -1268,14 +1315,14 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<void> _reconcilePendingRemoteDeletes(String ownerUserId) async {
-    // We intentionally do not throttle retries yet; serialized reconciliation
-    // prevents overlapping attempts in a single repository instance.
-    final List<String> pendingRemoteIds =
-        await _localDatabase.listPendingRemoteDeleteIds(
+    final List<PendingRemoteSessionDeleteEntry> pendingRemoteDeletes =
+        await _localDatabase.listRetryablePendingRemoteDeletes(
       ownerUserId: ownerUserId,
     );
 
-    for (final String remoteId in pendingRemoteIds) {
+    for (final PendingRemoteSessionDeleteEntry pendingDelete
+        in pendingRemoteDeletes) {
+      final String remoteId = pendingDelete.remoteId;
       try {
         await _api.deleteRemoteSession(remoteId);
         await _localDatabase.clearPendingRemoteSessionDelete(
@@ -1297,17 +1344,30 @@ class SessionRepositoryImpl implements SessionRepository {
             ownerUserId: ownerUserId,
             remoteId: remoteId,
             lastError: failure.message,
+            nextAttemptAt: _nextRemoteDeleteAttemptAt(
+              failedAttemptCount: pendingDelete.attemptCount + 1,
+            ),
           );
           continue;
         }
 
-        // Hard failures should not keep a pending local hide forever.
-        await _localDatabase.clearPendingRemoteSessionDelete(
+        await _localDatabase.markPendingRemoteSessionDeleteFailed(
           ownerUserId: ownerUserId,
           remoteId: remoteId,
+          lastError: failure.message,
         );
       }
     }
+  }
+
+  DateTime _nextRemoteDeleteAttemptAt({
+    required int failedAttemptCount,
+  }) {
+    final int scheduleIndex = (failedAttemptCount - 1)
+        .clamp(0, _remoteDeleteRetrySchedule.length - 1);
+    return DateTime.now()
+        .toUtc()
+        .add(_remoteDeleteRetrySchedule[scheduleIndex]);
   }
 
   bool _isVisibleRemoteSessionSummary(
@@ -1391,11 +1451,16 @@ class SessionRepositoryImpl implements SessionRepository {
 
     return sorted.map((Map<String, dynamic> raw) {
       final int tOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
-      final String? qualityClass = raw['quality_class'] as String?;
-      final String? motionState = raw['motion_state'] as String?;
+      final DateTime recordedAt = _parseRemoteDateTime(raw['recorded_at']) ??
+          sessionStartedAt.toUtc().add(Duration(milliseconds: tOffsetMs));
+      final String? qualityClass =
+          canonicalizeQualityClassForSync(raw['quality_class'] as String?);
+      final String? motionState =
+          canonicalizeMotionStateForSync(raw['motion_state'] as String?);
+      final bool? acceptedForAnalytics =
+          _remoteNullableBool(raw['accepted_for_analytics']);
       return NewSessionPoint(
-        recordedAt:
-            sessionStartedAt.toUtc().add(Duration(milliseconds: tOffsetMs)),
+        recordedAt: recordedAt,
         tOffsetMs: tOffsetMs,
         latitude: _remoteDouble(raw['latitude']),
         longitude: _remoteDouble(raw['longitude']),
@@ -1404,6 +1469,7 @@ class SessionRepositoryImpl implements SessionRepository {
         speedMps: _remoteNullableDouble(raw['speed_mps']),
         headingDeg: _remoteNullableDouble(raw['heading_deg']),
         acceptedForAnalytics: _remotePointAcceptedForAnalytics(
+          acceptedForAnalytics: acceptedForAnalytics,
           qualityClass: qualityClass,
           motionState: motionState,
         ),
@@ -1411,7 +1477,7 @@ class SessionRepositoryImpl implements SessionRepository {
         verticalAccuracyM: _remoteNullableDouble(raw['vertical_accuracy_m']),
         speedAccuracyMps: _remoteNullableDouble(raw['speed_accuracy_mps']),
         bearingAccuracyDeg: _remoteNullableDouble(raw['bearing_accuracy_deg']),
-        provider: raw['provider'] as String?,
+        provider: canonicalizeProviderForSync(raw['provider'] as String?),
         isMocked: _remoteNullableBool(raw['is_mocked']),
         qualityClass: qualityClass,
         qualityScore: _remoteNullableDouble(raw['quality_score']),
@@ -1428,9 +1494,13 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   bool _remotePointAcceptedForAnalytics({
+    required bool? acceptedForAnalytics,
     required String? qualityClass,
     required String? motionState,
   }) {
+    if (acceptedForAnalytics != null) {
+      return acceptedForAnalytics;
+    }
     if (qualityClass != null && qualityClass.isNotEmpty) {
       return qualityClass != 'reject';
     }
@@ -1438,18 +1508,6 @@ class SessionRepositoryImpl implements SessionRepository {
       return false;
     }
     return true;
-  }
-
-  Future<Set<int>> _fetchExistingRemoteOffsets(String remoteId) async {
-    try {
-      final List<Map<String, dynamic>> remotePoints =
-          await _api.getRemoteSessionPoints(remoteId);
-      return remotePoints
-          .map((Map<String, dynamic> point) => point['t_offset_ms'] as int)
-          .toSet();
-    } on DioException {
-      return <int>{};
-    }
   }
 
   List<LocalSessionPoint> _dedupeByOffset(List<LocalSessionPoint> points) {

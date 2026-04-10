@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from math import isfinite
 from typing import Protocol
 
@@ -12,6 +13,9 @@ from app.models.resort import Resort
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.session_point import SessionPoint
+from app.schemas.session_vocabulary import normalize_motion_state
+from app.schemas.session_vocabulary import normalize_provider
+from app.schemas.session_vocabulary import normalize_quality_class
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
@@ -31,6 +35,7 @@ class SessionPointInputData:
     longitude: float
     accuracy_m: float | None = None
     elapsed_realtime_ns: int | None = None
+    recorded_at: datetime | None = None
     altitude_m: float | None = None
     vertical_accuracy_m: float | None = None
     speed_mps: float | None = None
@@ -49,6 +54,7 @@ class SessionPointInputData:
     derived_speed_mps: float | None = None
     distance_delta_m: float | None = None
     motion_state: str | None = None
+    accepted_for_analytics: bool = True
 
 
 @dataclass(frozen=True)
@@ -153,6 +159,7 @@ class SessionService:
         )
 
         return self._insert_new_points_with_idempotency(
+            ride_session=ride_session,
             session_id=ride_session.id,
             points=deduped_points,
             existing_offsets=existing_offsets,
@@ -208,7 +215,7 @@ class SessionService:
             and max_speed_mps is not None
             and avg_speed_mps > max_speed_mps
         ):
-            avg_speed_mps = None
+            raise ValidationError("avg_speed_mps must be less than or equal to max_speed_mps.")
 
         return SessionCompletionInput(
             ended_at=completion.ended_at,
@@ -277,11 +284,13 @@ class SessionService:
 
     def _insert_new_points_with_idempotency(
         self,
+        ride_session: RideSession,
         session_id: uuid.UUID,
         points: Sequence[SessionPointInputData],
         existing_offsets: set[int],
     ) -> int:
         models = self._build_models(
+            ride_session=ride_session,
             session_id=session_id,
             points=points,
             existing_offsets=existing_offsets,
@@ -301,6 +310,7 @@ class SessionService:
             offsets=[point.t_offset_ms for point in points],
         )
         retry_models = self._build_models(
+            ride_session=ride_session,
             session_id=session_id,
             points=points,
             existing_offsets=latest_existing_offsets,
@@ -320,6 +330,7 @@ class SessionService:
 
     def _build_models(
         self,
+        ride_session: RideSession,
         session_id: uuid.UUID,
         points: Sequence[SessionPointInputData],
         existing_offsets: set[int],
@@ -328,6 +339,8 @@ class SessionService:
             SessionPoint(
                 session_id=session_id,
                 t_offset_ms=point.t_offset_ms,
+                recorded_at=point.recorded_at
+                or ride_session.started_at + timedelta(milliseconds=point.t_offset_ms),
                 latitude=point.latitude,
                 longitude=point.longitude,
                 accuracy_m=point.accuracy_m,
@@ -338,9 +351,9 @@ class SessionService:
                 speed_accuracy_mps=point.speed_accuracy_mps,
                 heading_deg=point.heading_deg,
                 bearing_accuracy_deg=point.bearing_accuracy_deg,
-                provider=point.provider,
+                provider=normalize_provider(point.provider),
                 is_mocked=point.is_mocked,
-                quality_class=point.quality_class,
+                quality_class=normalize_quality_class(point.quality_class),
                 quality_score=point.quality_score,
                 quality_reason=point.quality_reason,
                 filtered_latitude=point.filtered_latitude,
@@ -349,7 +362,8 @@ class SessionService:
                 fused_speed_mps=point.fused_speed_mps,
                 derived_speed_mps=point.derived_speed_mps,
                 distance_delta_m=point.distance_delta_m,
-                motion_state=point.motion_state,
+                motion_state=normalize_motion_state(point.motion_state),
+                accepted_for_analytics=point.accepted_for_analytics,
             )
             for point in points
             if point.t_offset_ms not in existing_offsets
