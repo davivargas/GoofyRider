@@ -7,12 +7,12 @@ import pytest
 
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
+from app.schemas.session import SessionCompleteRequest
+from app.schemas.session import SessionCreateRequest
+from app.schemas.session import SessionPointInput
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
-from app.services.session_service import SessionCompletionInput
-from app.services.session_service import SessionCreateInput
-from app.services.session_service import SessionPointInputData
 from app.services.session_service import SessionService
 
 
@@ -76,8 +76,10 @@ class FakeSessionPointRepository:
             existing = self.offsets_by_session.setdefault(point.session_id, set())
             existing.add(point.t_offset_ms)
 
-    def existing_offsets(self, session_id, offsets):
-        return set(self.offsets_by_session.get(session_id, set())).intersection(set(offsets))
+    def existing_elapsed_offsets_ms(self, session_id, elapsed_offsets_ms):
+        return set(self.offsets_by_session.get(session_id, set())).intersection(
+            set(elapsed_offsets_ms)
+        )
 
     def list_by_session(self, _session_id):
         return []
@@ -117,10 +119,10 @@ def test_create_session_rejects_unknown_resort() -> None:
 
     with pytest.raises(NotFoundError, match="Resort not found."):
         service.create_session(
-            SessionCreateInput(
-                user_id=uuid4(),
+            user_id=uuid4(),
+            request=SessionCreateRequest(
                 resort_id=uuid4(),
-            )
+            ),
         )
 
 
@@ -136,7 +138,7 @@ def test_upload_points_batch_rejects_non_draft_session() -> None:
             session_id=completed_session.id,
             user_id=user_id,
             points=[
-                SessionPointInputData(t_offset_ms=0, latitude=50.0, longitude=-122.0),
+                SessionPointInput(t_offset_ms=0, latitude=50.0, longitude=-122.0),
             ],
         )
 
@@ -153,7 +155,7 @@ def test_complete_session_rejects_end_before_start() -> None:
         service.complete_session(
             session_id=draft_session.id,
             user_id=user_id,
-            completion=SessionCompletionInput(ended_at=ended_at),
+            completion=SessionCompleteRequest(ended_at=ended_at),
         )
 
 
@@ -168,7 +170,7 @@ def test_complete_session_sets_computed_duration_when_missing() -> None:
     completed = service.complete_session(
         session_id=draft_session.id,
         user_id=user_id,
-        completion=SessionCompletionInput(ended_at=ended_at),
+        completion=SessionCompleteRequest(ended_at=ended_at),
     )
 
     assert completed.status == RideSessionStatus.COMPLETED
@@ -186,7 +188,7 @@ def test_complete_session_allows_omitted_optional_metrics() -> None:
     completed = service.complete_session(
         session_id=draft_session.id,
         user_id=user_id,
-        completion=SessionCompletionInput(
+        completion=SessionCompleteRequest(
             ended_at=ended_at,
             distance_m=None,
             max_speed_mps=None,
@@ -205,7 +207,7 @@ def test_complete_session_allows_omitted_optional_metrics() -> None:
     assert completed.elevation_loss_m is None
 
 
-def test_complete_session_rejects_avg_speed_above_max() -> None:
+def test_complete_session_persists_valid_metrics() -> None:
     user_id = uuid4()
     ride_sessions = FakeRideSessionRepository()
     draft_session = _build_session(user_id=user_id)
@@ -213,19 +215,24 @@ def test_complete_session_rejects_avg_speed_above_max() -> None:
     service = _build_service(ride_session_repository=ride_sessions)
     ended_at = draft_session.started_at + timedelta(seconds=60)
 
-    with pytest.raises(
-        ValidationError,
-        match="avg_speed_mps must be less than or equal to max_speed_mps.",
-    ):
-        service.complete_session(
-            session_id=draft_session.id,
-            user_id=user_id,
-            completion=SessionCompletionInput(
-                ended_at=ended_at,
-                max_speed_mps=10.0,
-                avg_speed_mps=12.0,
-            ),
-        )
+    completed = service.complete_session(
+        session_id=draft_session.id,
+        user_id=user_id,
+        completion=SessionCompleteRequest(
+            ended_at=ended_at,
+            max_speed_mps=10.0,
+            avg_speed_mps=8.0,
+            distance_m=420.5,
+            elevation_gain_m=22,
+            elevation_loss_m=180,
+        ),
+    )
+
+    assert completed.max_speed_mps == 10.0
+    assert completed.avg_speed_mps == 8.0
+    assert completed.distance_m == 420.5
+    assert completed.elevation_gain_m == 22
+    assert completed.elevation_loss_m == 180
 
 
 def test_upload_points_batch_skips_existing_offsets() -> None:
@@ -245,8 +252,8 @@ def test_upload_points_batch_skips_existing_offsets() -> None:
         session_id=draft_session.id,
         user_id=user_id,
         points=[
-            SessionPointInputData(t_offset_ms=0, latitude=50.0, longitude=-122.0),
-            SessionPointInputData(t_offset_ms=1000, latitude=50.001, longitude=-122.001),
+            SessionPointInput(t_offset_ms=0, latitude=50.0, longitude=-122.0),
+            SessionPointInput(t_offset_ms=1000, latitude=50.001, longitude=-122.001),
         ],
     )
 
@@ -269,9 +276,9 @@ def test_upload_points_batch_dedupes_duplicate_offsets_in_single_request() -> No
         session_id=draft_session.id,
         user_id=user_id,
         points=[
-            SessionPointInputData(t_offset_ms=0, latitude=50.0, longitude=-122.0),
-            SessionPointInputData(t_offset_ms=0, latitude=50.1, longitude=-122.1),
-            SessionPointInputData(t_offset_ms=1000, latitude=50.001, longitude=-122.001),
+            SessionPointInput(t_offset_ms=0, latitude=50.0, longitude=-122.0),
+            SessionPointInput(t_offset_ms=0, latitude=50.1, longitude=-122.1),
+            SessionPointInput(t_offset_ms=1000, latitude=50.001, longitude=-122.001),
         ],
     )
 
@@ -298,7 +305,7 @@ def test_upload_points_batch_populates_legacy_defaults_when_fields_omitted() -> 
         session_id=draft_session.id,
         user_id=user_id,
         points=[
-            SessionPointInputData(
+            SessionPointInput(
                 t_offset_ms=1500,
                 latitude=50.95,
                 longitude=-118.16,
@@ -328,7 +335,7 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
         session_id=draft_session.id,
         user_id=user_id,
         points=[
-            SessionPointInputData(
+            SessionPointInput(
                 t_offset_ms=0,
                 latitude=50.95,
                 longitude=-118.16,
@@ -396,7 +403,7 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
         session_id=draft_session.id,
         user_id=user_id,
         points=[
-            SessionPointInputData(
+            SessionPointInput(
                 t_offset_ms=0,
                 latitude=50.0,
                 longitude=-122.0,
