@@ -3,14 +3,14 @@ flutter_native_splash:
   ios: false
   web: false
 
-  color: "#0A1624"
-  color_dark: "#0A1624"
+  color: "#FFFFFF"
+  color_dark: "#FFFFFF"
   image: "assets/branding/splash_center_icon.png"
   image_dark: "assets/branding/splash_center_icon.png"
   android_gravity: center
 
   android_12:
-    color: "#0A1624"
-    color_dark: "#0A1624"
+    color: "#FFFFFF"
+    color_dark: "#FFFFFF"
     image: "assets/branding/splash_center_icon.png"
     image_dark: "assets/branding/splash_center_icon.png"
