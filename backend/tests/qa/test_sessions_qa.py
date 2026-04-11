@@ -1,4 +1,4 @@
-﻿from collections.abc import Callable
+from collections.abc import Callable
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta

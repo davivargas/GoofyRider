@@ -1,4 +1,4 @@
-﻿from app.models.favorite_resort import FavoriteResort
+from app.models.favorite_resort import FavoriteResort
 from app.models.resort import Resort
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus

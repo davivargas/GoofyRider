@@ -1,4 +1,4 @@
-﻿from datetime import UTC
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from uuid import uuid4

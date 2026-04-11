@@ -1,4 +1,4 @@
-﻿"""add weather cache table and dedupe session point offsets
+"""add weather cache table and dedupe session point offsets
 
 Revision ID: 0004_weather_cache
 Revises: 0003_sessions_points

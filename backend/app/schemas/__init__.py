@@ -1,4 +1,4 @@
-﻿from app.schemas.auth import LoginRequest
+from app.schemas.auth import LoginRequest
 from app.schemas.auth import RefreshTokenRequest
 from app.schemas.auth import RegisterRequest
 from app.schemas.auth import TokenPair
