@@ -1,4 +1,4 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../auth/presentation/auth_providers.dart';
@@ -12,10 +12,14 @@ final resortsApiProvider = Provider<ResortsApi>(
 );
 
 final resortRepositoryProvider = Provider<ResortRepository>(
-  (ref) => ResortRepositoryImpl(
-    api: ref.watch(resortsApiProvider),
-    localDatabase: ref.watch(driftLocalDatabaseProvider),
-  ),
+  (ref) {
+    ref.watch(authControllerProvider.select((state) => state.session?.user.id));
+    return ResortRepositoryImpl(
+      api: ref.watch(resortsApiProvider),
+      localDatabase: ref.watch(driftLocalDatabaseProvider),
+      currentUserIdGetter: () => ref.read(authControllerProvider).session?.user.id,
+    );
+  },
 );
 
 final resortsControllerProvider =

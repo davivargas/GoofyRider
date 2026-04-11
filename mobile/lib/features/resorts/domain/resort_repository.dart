@@ -1,4 +1,4 @@
-﻿import 'resort_models.dart';
+import 'resort_models.dart';
 
 abstract class ResortRepository {
   Future<ResortListResult> searchResorts({
