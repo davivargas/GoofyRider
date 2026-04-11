@@ -1,4 +1,4 @@
-﻿import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class StoredTokens {
   const StoredTokens({
@@ -43,23 +43,33 @@ class SecureTokenStorage implements TokenStorage {
 
   final FlutterSecureStorage _storage;
 
+  StoredTokens? _cached;
+  bool _cacheLoaded = false;
+
   @override
   Future<StoredTokens?> read() async {
+    if (_cacheLoaded) {
+      return _cached;
+    }
     final String? access = await _storage.read(key: _accessKey);
     final String? refresh = await _storage.read(key: _refreshKey);
     if (access == null || refresh == null) {
+      _cached = null;
+      _cacheLoaded = true;
       return null;
     }
     final String? userId = await _storage.read(key: _userIdKey);
     final String? email = await _storage.read(key: _emailKey);
     final String? displayName = await _storage.read(key: _displayNameKey);
-    return StoredTokens(
+    _cached = StoredTokens(
       accessToken: access,
       refreshToken: refresh,
       userId: userId,
       email: email,
       displayName: displayName,
     );
+    _cacheLoaded = true;
+    return _cached;
   }
 
   @override
@@ -69,6 +79,8 @@ class SecureTokenStorage implements TokenStorage {
     await _writeOptional(_userIdKey, tokens.userId);
     await _writeOptional(_emailKey, tokens.email);
     await _writeOptional(_displayNameKey, tokens.displayName);
+    _cached = tokens;
+    _cacheLoaded = true;
   }
 
   @override
@@ -78,6 +90,8 @@ class SecureTokenStorage implements TokenStorage {
     await _storage.delete(key: _userIdKey);
     await _storage.delete(key: _emailKey);
     await _storage.delete(key: _displayNameKey);
+    _cached = null;
+    _cacheLoaded = true;
   }
 
   Future<void> _writeOptional(String key, String? value) async {

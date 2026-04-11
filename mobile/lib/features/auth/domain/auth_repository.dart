@@ -1,4 +1,4 @@
-﻿import 'auth_models.dart';
+import 'auth_models.dart';
 
 abstract class AuthRepository {
   Future<AuthSession> login({
