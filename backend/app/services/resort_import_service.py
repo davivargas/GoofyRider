@@ -2,10 +2,10 @@ from datetime import UTC
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Callable
-from typing import Protocol
 from typing import TypeVar
 
 from app.models.resort import Resort
+from app.repositories.protocols import ResortRepositoryProtocol
 from app.services.ski_api_resort_source import ExternalResortRecord
 from app.services.ski_api_resort_source import ExternalResortSourceProtocol
 
@@ -19,32 +19,10 @@ class ResortImportSummary:
     deactivated_count: int
 
 
-class ResortImportRepositoryProtocol(Protocol):
-    def add(self, resort: Resort) -> None:
-        ...
-
-    def commit(self) -> None:
-        ...
-
-    def get_by_external_ref(self, external_source: str, external_id: str) -> Resort | None:
-        ...
-
-    def get_by_name_country_region(
-        self,
-        name: str,
-        country: str,
-        region: str,
-    ) -> Resort | None:
-        ...
-
-    def list_by_external_source(self, external_source: str) -> list[Resort]:
-        ...
-
-
 class ResortImportService:
     def __init__(
         self,
-        resort_repository: ResortImportRepositoryProtocol,
+        resort_repository: ResortRepositoryProtocol,
         resort_source: ExternalResortSourceProtocol,
         deactivate_missing: bool = False,
         clock: Callable[[], datetime] | None = None,

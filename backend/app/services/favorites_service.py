@@ -1,36 +1,16 @@
+import logging
 import uuid
-from typing import Protocol
 
 from sqlalchemy.exc import IntegrityError
 
 from app.models.resort import Resort
+from app.repositories.protocols import FavoriteResortRepositoryProtocol
+from app.repositories.protocols import ResortRepositoryProtocol
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 
 
-class ResortRepositoryProtocol(Protocol):
-    def get_by_id(self, resort_id: uuid.UUID) -> Resort | None:
-        ...
-
-
-class FavoriteResortRepositoryProtocol(Protocol):
-    def list_by_user_id(self, user_id: uuid.UUID) -> list[Resort]:
-        ...
-
-    def exists(self, user_id: uuid.UUID, resort_id: uuid.UUID) -> bool:
-        ...
-
-    def add(self, user_id: uuid.UUID, resort_id: uuid.UUID) -> None:
-        ...
-
-    def delete(self, user_id: uuid.UUID, resort_id: uuid.UUID) -> int:
-        ...
-
-    def commit(self) -> None:
-        ...
-
-    def rollback(self) -> None:
-        ...
+logger = logging.getLogger(__name__)
 
 
 class FavoritesService:
@@ -61,6 +41,7 @@ class FavoritesService:
             self._favorite_resort_repository.rollback()
             raise ConflictError("Resort is already in favorites.") from exc
 
+        logger.info("Favorite added: user=%s resort=%s", user_id, resort_id)
         return resort
 
     def remove_favorite(self, user_id: uuid.UUID, resort_id: uuid.UUID) -> None:
@@ -70,3 +51,4 @@ class FavoritesService:
 
         self._favorite_resort_repository.delete(user_id, resort_id)
         self._favorite_resort_repository.commit()
+        logger.info("Favorite removed: user=%s resort=%s", user_id, resort_id)
