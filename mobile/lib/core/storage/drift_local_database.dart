@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -7,6 +6,21 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../../features/session/domain/session_models.dart';
+import 'dao/pending_delete_dao.dart';
+import 'dao/remote_session_cache_dao.dart';
+import 'dao/resort_cache_dao.dart';
+import 'dao/session_dao.dart';
+import 'dao/session_point_dao.dart';
+import 'dao/tracking_diagnostics_dao.dart';
+import 'dao/weather_cache_dao.dart';
+
+export 'dao/pending_delete_dao.dart';
+export 'dao/remote_session_cache_dao.dart';
+export 'dao/resort_cache_dao.dart';
+export 'dao/session_dao.dart';
+export 'dao/session_point_dao.dart';
+export 'dao/tracking_diagnostics_dao.dart';
+export 'dao/weather_cache_dao.dart';
 
 class PendingRemoteSessionDeleteEntry {
   const PendingRemoteSessionDeleteEntry({
@@ -37,7 +51,23 @@ class DriftLocalDatabase extends GeneratedDatabase {
       const <TableInfo<Table, dynamic>>[];
 
   static const String _dbFileName = 'goofyrider_local.sqlite';
-  static const int _maxTrackingDiagnosticsPerSession = 400;
+
+  // ---------------------------------------------------------------------------
+  // DAO getters
+  // ---------------------------------------------------------------------------
+
+  SessionDao get sessions => SessionDao(this);
+  SessionPointDao get sessionPoints => SessionPointDao(this);
+  ResortCacheDao get resortCache => ResortCacheDao(this);
+  WeatherCacheDao get weatherCache => WeatherCacheDao(this);
+  RemoteSessionCacheDao get remoteSessionCache => RemoteSessionCacheDao(this);
+  TrackingDiagnosticsDao get trackingDiagnostics =>
+      TrackingDiagnosticsDao(this);
+  PendingDeleteDao get pendingDeletes => PendingDeleteDao(this);
+
+  // ---------------------------------------------------------------------------
+  // Factory / lifecycle
+  // ---------------------------------------------------------------------------
 
   static Future<DriftLocalDatabase> open() async {
     final Directory directory = await getApplicationDocumentsDirectory();
@@ -79,7 +109,20 @@ class DriftLocalDatabase extends GeneratedDatabase {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Initialization & migrations (kept in-place)
+  // ---------------------------------------------------------------------------
+
   Future<void> initialize() async {
+    final List<QueryRow> versionRows =
+        await customSelect('PRAGMA user_version').get();
+    final int currentVersion = versionRows.isNotEmpty
+        ? (versionRows.first.data.values.first as int? ?? 0)
+        : 0;
+    if (currentVersion >= schemaVersion) {
+      return;
+    }
+
     await customStatement('''
       CREATE TABLE IF NOT EXISTS local_ride_sessions (
         local_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,11 +218,14 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
     await customStatement('''
       CREATE TABLE IF NOT EXISTS cached_resorts (
-        resort_id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL DEFAULT '',
+        resort_id TEXT NOT NULL,
         payload_json TEXT NOT NULL,
-        fetched_at TEXT NOT NULL
+        fetched_at TEXT NOT NULL,
+        PRIMARY KEY(owner_user_id, resort_id)
       )
     ''');
+    await _migrateCachedResortSchema();
 
     await customStatement('''
       CREATE TABLE IF NOT EXISTS cached_weather (
@@ -233,334 +279,236 @@ class DriftLocalDatabase extends GeneratedDatabase {
     await _migrateLegacyDeletedRemoteSessionTombstones();
     await _enforceRemoteSessionIdentityUniqueness();
     await _enforceLocalSessionPointUniqueness();
+
+    await customStatement('PRAGMA user_version = $schemaVersion');
   }
 
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Session
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use sessions.insertLocalSession instead')
   Future<int> insertLocalSession({
     required DateTime startedAt,
     required String ownerUserId,
     String? resortId,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    return customInsert(
-      '''
-      INSERT INTO local_ride_sessions (
-        owner_user_id,
-        resort_id,
-        started_at,
-        state,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-        Variable<String>(resortId),
-        Variable<String>(startedAt.toUtc().toIso8601String()),
-        Variable<String>(LocalSessionState.recording.wireValue),
-        Variable<String>(now.toIso8601String()),
-        Variable<String>(now.toIso8601String()),
-      ],
-    );
-  }
+  }) =>
+      sessions.insertLocalSession(
+        startedAt: startedAt,
+        ownerUserId: ownerUserId,
+        resortId: resortId,
+      );
 
+  @Deprecated('Use sessions.updateSessionState instead')
   Future<void> updateSessionState(
     int localId,
     LocalSessionState newState, {
     String? remoteId,
     String? lastSyncError,
-  }) async {
-    final LocalSessionState canonicalState = _canonicalPersistedState(newState);
-    final DateTime now = DateTime.now().toUtc();
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET state = ?,
-          remote_id = COALESCE(?, remote_id),
-          last_sync_error = ?,
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(canonicalState.wireValue),
-        Variable<String>(remoteId),
-        Variable<String>(lastSyncError),
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localId),
-      ],
-    );
-  }
+  }) =>
+      sessions.updateSessionState(
+        localId,
+        newState,
+        remoteId: remoteId,
+        lastSyncError: lastSyncError,
+      );
 
-  /// Moves a session into `syncing` and bumps the attempt counter in one write
-  /// so retry bookkeeping cannot drift between separate updates.
-  Future<void> beginSyncAttempt(int localId) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET state = ?,
-          sync_attempt_count = sync_attempt_count + 1,
-          last_sync_error = NULL,
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(LocalSessionState.syncing.wireValue),
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localId),
-      ],
-    );
-  }
+  @Deprecated('Use sessions.beginSyncAttempt instead')
+  Future<void> beginSyncAttempt(int localId) =>
+      sessions.beginSyncAttempt(localId);
 
+  @Deprecated('Use sessions.incrementSyncAttempt instead')
   Future<void> incrementSyncAttempt(
     int localId, {
     String? error,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET sync_attempt_count = sync_attempt_count + 1,
-          last_sync_error = ?,
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(error),
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localId),
-      ],
-    );
-  }
+  }) =>
+      sessions.incrementSyncAttempt(localId, error: error);
 
-  /// Records a failed sync without incrementing the counter again because the
-  /// attempt was already counted when `beginSyncAttempt` started it.
+  @Deprecated('Use sessions.markSyncFailed instead')
   Future<void> markSyncFailed(
     int localId, {
     required String error,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET state = ?,
-          last_sync_error = ?,
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(LocalSessionState.syncFailed.wireValue),
-        Variable<String>(error),
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localId),
-      ],
-    );
-  }
+  }) =>
+      sessions.markSyncFailed(localId, error: error);
 
+  @Deprecated('Use sessions.completeLocalSession instead')
   Future<void> completeLocalSession({
     required int localId,
     required DateTime endedAt,
     required SessionStats stats,
     String? resortId,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET ended_at = ?,
-          active_duration_s = ?,
-          distance_m = ?,
-          max_speed_mps = ?,
-          avg_speed_mps = ?,
-          elevation_gain_m = ?,
-          elevation_loss_m = ?,
-          resort_id = COALESCE(?, resort_id),
-          state = ?,
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(endedAt.toUtc().toIso8601String()),
-        Variable<int>(stats.durationS),
-        Variable<double>(stats.distanceM),
-        Variable<double>(stats.maxSpeedMps),
-        Variable<double>(stats.avgSpeedMps),
-        Variable<int>(stats.elevationGainM),
-        Variable<int>(stats.elevationLossM),
-        Variable<String>(resortId),
-        Variable<String>(LocalSessionState.syncPending.wireValue),
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localId),
-      ],
-    );
-  }
+  }) =>
+      sessions.completeLocalSession(
+        localId: localId,
+        endedAt: endedAt,
+        stats: stats,
+        resortId: resortId,
+      );
 
+  @Deprecated('Use sessions.updateSessionResortId instead')
   Future<void> updateSessionResortId({
     required int localId,
     required String ownerUserId,
     required String resortId,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET resort_id = ?,
-          updated_at = ?
-      WHERE local_id = ?
-      AND owner_user_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<String>(resortId),
-        Variable<String>(now.toIso8601String()),
-        Variable<int>(localId),
-        Variable<String>(ownerUserId),
-      ],
-    );
-  }
-
-  Future<void> insertPoint({
-    required int localSessionId,
-    required NewSessionPoint point,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await transaction(() async {
-      await customInsert(
-        '''
-        INSERT OR IGNORE INTO local_session_points (
-          local_session_id,
-          recorded_at,
-          t_offset_ms,
-          latitude,
-          longitude,
-          accuracy_m,
-          elapsed_realtime_ns,
-          altitude_m,
-          vertical_accuracy_m,
-          speed_mps,
-          speed_accuracy_mps,
-          heading_deg,
-          bearing_accuracy_deg,
-          provider,
-          is_mocked,
-          quality_class,
-          quality_score,
-          quality_reason,
-          filtered_latitude,
-          filtered_longitude,
-          filtered_altitude_m,
-          fused_speed_mps,
-          derived_speed_mps,
-          distance_delta_m,
-          motion_state,
-          accepted_for_analytics,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''',
-        variables: <Variable>[
-          Variable<int>(localSessionId),
-          Variable<String>(point.recordedAt.toUtc().toIso8601String()),
-          Variable<int>(point.tOffsetMs),
-          Variable<double>(point.latitude),
-          Variable<double>(point.longitude),
-          Variable<double>(point.accuracyM),
-          Variable<int>(point.elapsedRealtimeNs),
-          Variable<double>(point.altitudeM),
-          Variable<double>(point.verticalAccuracyM),
-          Variable<double>(point.speedMps),
-          Variable<double>(point.speedAccuracyMps),
-          Variable<double>(point.headingDeg),
-          Variable<double>(point.bearingAccuracyDeg),
-          Variable<String>(point.provider),
-          Variable<int>(
-              point.isMocked == null ? null : (point.isMocked! ? 1 : 0)),
-          Variable<String>(point.qualityClass),
-          Variable<double>(point.qualityScore),
-          Variable<String>(point.qualityReason),
-          Variable<double>(point.filteredLatitude),
-          Variable<double>(point.filteredLongitude),
-          Variable<double>(point.filteredAltitudeM),
-          Variable<double>(point.fusedSpeedMps),
-          Variable<double>(point.derivedSpeedMps),
-          Variable<double>(point.distanceDeltaM),
-          Variable<String>(point.motionState),
-          Variable<int>(point.acceptedForAnalytics ? 1 : 0),
-          Variable<String>(now.toIso8601String()),
-        ],
+  }) =>
+      sessions.updateSessionResortId(
+        localId: localId,
+        ownerUserId: ownerUserId,
+        resortId: resortId,
       );
 
-      await _refreshSessionPointCount(
-        localSessionId: localSessionId,
-        updatedAt: now,
-      );
-    });
-  }
-
+  @Deprecated('Use sessions.getSessionById instead')
   Future<LocalRideSession?> getSessionById(
     int localId, {
     required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_ride_sessions
-      WHERE local_id = ?
-      AND owner_user_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<int>(localId),
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
+  }) =>
+      sessions.getSessionById(localId, ownerUserId: ownerUserId);
 
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapSession(rows.first);
-  }
+  @Deprecated('Use sessions.getSessionByLocalId instead')
+  Future<LocalRideSession?> getSessionByLocalId(int localId) =>
+      sessions.getSessionByLocalId(localId);
 
-  Future<LocalRideSession?> getSessionByLocalId(int localId) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_ride_sessions
-      WHERE local_id = ?
-      LIMIT 1
-      ''',
-      variables: <Variable>[
-        Variable<int>(localId),
-      ],
-    ).get();
-
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapSession(rows.first);
-  }
-
+  @Deprecated('Use sessions.getSessionByRemoteId instead')
   Future<LocalRideSession?> getSessionByRemoteId({
     required String ownerUserId,
     required String remoteId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_ride_sessions
-      WHERE owner_user_id = ?
-      AND remote_id = ?
-      ORDER BY local_id DESC
-      LIMIT 1
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-        Variable<String>(remoteId),
-      ],
-    ).get();
+  }) =>
+      sessions.getSessionByRemoteId(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
 
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapSession(rows.first);
-  }
+  @Deprecated('Use sessions.getInProgressSession instead')
+  Future<LocalRideSession?> getInProgressSession({
+    required String ownerUserId,
+  }) =>
+      sessions.getInProgressSession(ownerUserId: ownerUserId);
 
+  @Deprecated('Use sessions.listSessions instead')
+  Future<List<LocalRideSession>> listSessions({
+    required String ownerUserId,
+  }) =>
+      sessions.listSessions(ownerUserId: ownerUserId);
+
+  @Deprecated('Use sessions.listPendingSyncSessions instead')
+  Future<List<LocalRideSession>> listPendingSyncSessions({
+    required String ownerUserId,
+  }) =>
+      sessions.listPendingSyncSessions(ownerUserId: ownerUserId);
+
+  @Deprecated('Use sessions.unsyncedCount instead')
+  Future<int> unsyncedCount({
+    required String ownerUserId,
+  }) =>
+      sessions.unsyncedCount(ownerUserId: ownerUserId);
+
+  @Deprecated('Use sessions.deleteSessionCascade instead')
+  Future<bool> deleteSessionCascade({
+    required int localSessionId,
+    required String ownerUserId,
+    String? remoteId,
+    bool clearDeletedRemoteSessionTombstone = true,
+    bool? clearPendingRemoteSessionDelete,
+  }) =>
+      sessions.deleteSessionCascade(
+        localSessionId: localSessionId,
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        clearDeletedRemoteSessionTombstone: clearDeletedRemoteSessionTombstone,
+        clearPendingRemoteSessionDelete: clearPendingRemoteSessionDelete,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Session Points
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use sessionPoints.insertPoint instead')
+  Future<void> insertPoint({
+    required int localSessionId,
+    required NewSessionPoint point,
+  }) =>
+      sessionPoints.insertPoint(
+        localSessionId: localSessionId,
+        point: point,
+      );
+
+  @Deprecated('Use sessionPoints.latestAcceptedPoint instead')
+  Future<LocalSessionPoint?> latestAcceptedPoint(int localSessionId) =>
+      sessionPoints.latestAcceptedPoint(localSessionId);
+
+  @Deprecated('Use sessionPoints.listPoints instead')
+  Future<List<LocalSessionPoint>> listPoints(
+    int localSessionId, {
+    bool onlyAccepted = false,
+  }) =>
+      sessionPoints.listPoints(
+        localSessionId,
+        onlyAccepted: onlyAccepted,
+      );
+
+  @Deprecated('Use sessionPoints.replaceSessionPoints instead')
+  Future<void> replaceSessionPoints({
+    required int localSessionId,
+    required List<NewSessionPoint> points,
+  }) =>
+      sessionPoints.replaceSessionPoints(
+        localSessionId: localSessionId,
+        points: points,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Resort Cache
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use resortCache.upsertCachedResort instead')
+  Future<void> upsertCachedResort(
+    String resortId,
+    Map<String, dynamic> payload, {
+    String? ownerUserId,
+  }) =>
+      resortCache.upsertCachedResort(
+        resortId,
+        payload,
+        ownerUserId: ownerUserId,
+      );
+
+  @Deprecated('Use resortCache.readCachedResort instead')
+  Future<Map<String, dynamic>?> readCachedResort(
+    String resortId, {
+    String? ownerUserId,
+  }) =>
+      resortCache.readCachedResort(resortId, ownerUserId: ownerUserId);
+
+  @Deprecated('Use resortCache.readCachedResorts instead')
+  Future<List<Map<String, dynamic>>> readCachedResorts({
+    String? ownerUserId,
+  }) =>
+      resortCache.readCachedResorts(ownerUserId: ownerUserId);
+
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Weather Cache
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use weatherCache.upsertCachedWeather instead')
+  Future<void> upsertCachedWeather(
+    String resortId,
+    Map<String, dynamic> payload,
+  ) =>
+      weatherCache.upsertCachedWeather(resortId, payload);
+
+  @Deprecated('Use weatherCache.readCachedWeather instead')
+  Future<Map<String, dynamic>?> readCachedWeather(String resortId) =>
+      weatherCache.readCachedWeather(resortId);
+
+  @Deprecated('Use weatherCache.readCachedWeatherMetadata instead')
+  Future<List<Map<String, dynamic>>> readCachedWeatherMetadata() =>
+      weatherCache.readCachedWeatherMetadata();
+
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Remote Session Cache
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use remoteSessionCache.upsertRemoteSessionSummary instead')
   Future<int> upsertRemoteSessionSummary({
     required String ownerUserId,
     required String remoteId,
@@ -574,154 +522,201 @@ class DriftLocalDatabase extends GeneratedDatabase {
     required int? elevationLossM,
     required String? resortId,
     DateTime? createdAt,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customStatement(
-      '''
-      INSERT INTO local_ride_sessions (
-        owner_user_id,
-        remote_id,
-        resort_id,
-        started_at,
-        ended_at,
-        active_duration_s,
-        distance_m,
-        max_speed_mps,
-        avg_speed_mps,
-        elevation_gain_m,
-        elevation_loss_m,
-        state,
-        point_count,
-        sync_attempt_count,
-        last_sync_error,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(owner_user_id, remote_id)
-      DO UPDATE SET
-        resort_id = excluded.resort_id,
-        started_at = excluded.started_at,
-        ended_at = excluded.ended_at,
-        active_duration_s = excluded.active_duration_s,
-        distance_m = excluded.distance_m,
-        max_speed_mps = excluded.max_speed_mps,
-        avg_speed_mps = excluded.avg_speed_mps,
-        elevation_gain_m = excluded.elevation_gain_m,
-        elevation_loss_m = excluded.elevation_loss_m,
-        state = excluded.state,
-        last_sync_error = NULL,
-        updated_at = excluded.updated_at
-      ''',
-      <Object?>[
-        ownerUserId,
-        remoteId,
-        resortId,
-        startedAt.toUtc().toIso8601String(),
-        endedAt?.toUtc().toIso8601String(),
-        activeDurationS,
-        distanceM,
-        maxSpeedMps,
-        avgSpeedMps,
-        elevationGainM,
-        elevationLossM,
-        LocalSessionState.synced.wireValue,
-        0,
-        0,
-        null,
-        (createdAt ?? now).toUtc().toIso8601String(),
-        now.toIso8601String(),
-      ],
-    );
+  }) =>
+      remoteSessionCache.upsertRemoteSessionSummary(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        startedAt: startedAt,
+        endedAt: endedAt,
+        activeDurationS: activeDurationS,
+        distanceM: distanceM,
+        maxSpeedMps: maxSpeedMps,
+        avgSpeedMps: avgSpeedMps,
+        elevationGainM: elevationGainM,
+        elevationLossM: elevationLossM,
+        resortId: resortId,
+        createdAt: createdAt,
+      );
 
-    final LocalRideSession? persisted = await getSessionByRemoteId(
-      ownerUserId: ownerUserId,
-      remoteId: remoteId,
-    );
-    if (persisted == null) {
-      throw StateError('Remote-backed session summary was not persisted.');
-    }
-    return persisted.localId;
+  @Deprecated('Use remoteSessionCache.replaceCachedRemoteSessions instead')
+  Future<void> replaceCachedRemoteSessions({
+    required String ownerUserId,
+    required List<Map<String, dynamic>> sessions,
+  }) =>
+      remoteSessionCache.replaceCachedRemoteSessions(
+        ownerUserId: ownerUserId,
+        sessions: sessions,
+      );
+
+  @Deprecated('Use remoteSessionCache.readCachedRemoteSessions instead')
+  Future<List<Map<String, dynamic>>> readCachedRemoteSessions({
+    required String ownerUserId,
+  }) =>
+      remoteSessionCache.readCachedRemoteSessions(ownerUserId: ownerUserId);
+
+  @Deprecated(
+      'Use remoteSessionCache.readCachedRemoteSessionSummary instead')
+  Future<Map<String, dynamic>?> readCachedRemoteSessionSummary({
+    required String ownerUserId,
+    required String remoteId,
+  }) =>
+      remoteSessionCache.readCachedRemoteSessionSummary(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
+
+  @Deprecated(
+      'Use remoteSessionCache.deleteCachedRemoteSessionSummary instead')
+  Future<void> deleteCachedRemoteSessionSummary({
+    required String ownerUserId,
+    required String remoteId,
+  }) =>
+      remoteSessionCache.deleteCachedRemoteSessionSummary(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Tracking Diagnostics
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use trackingDiagnostics.insertTrackingDiagnostic instead')
+  Future<void> insertTrackingDiagnostic({
+    required int localSessionId,
+    required String eventType,
+    String? message,
+    Map<String, dynamic>? details,
+  }) =>
+      trackingDiagnostics.insertTrackingDiagnostic(
+        localSessionId: localSessionId,
+        eventType: eventType,
+        message: message,
+        details: details,
+      );
+
+  @Deprecated('Use trackingDiagnostics.listTrackingDiagnostics instead')
+  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
+    int localSessionId, {
+    int limit = 120,
+  }) =>
+      trackingDiagnostics.listTrackingDiagnostics(
+        localSessionId,
+        limit: limit,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Deprecated forwarding stubs — Pending Deletes
+  // ---------------------------------------------------------------------------
+
+  @Deprecated('Use pendingDeletes.enqueuePendingRemoteSessionDelete instead')
+  Future<void> enqueuePendingRemoteSessionDelete({
+    required String ownerUserId,
+    required String remoteId,
+  }) =>
+      pendingDeletes.enqueuePendingRemoteSessionDelete(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
+
+  @Deprecated(
+      'Use pendingDeletes.recordPendingRemoteSessionDeleteAttempt instead')
+  Future<void> recordPendingRemoteSessionDeleteAttempt({
+    required String ownerUserId,
+    required String remoteId,
+    required String lastError,
+    DateTime? nextAttemptAt,
+  }) =>
+      pendingDeletes.recordPendingRemoteSessionDeleteAttempt(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        lastError: lastError,
+        nextAttemptAt: nextAttemptAt,
+      );
+
+  @Deprecated(
+      'Use pendingDeletes.markPendingRemoteSessionDeleteFailed instead')
+  Future<void> markPendingRemoteSessionDeleteFailed({
+    required String ownerUserId,
+    required String remoteId,
+    required String lastError,
+  }) =>
+      pendingDeletes.markPendingRemoteSessionDeleteFailed(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+        lastError: lastError,
+      );
+
+  @Deprecated('Use pendingDeletes.clearPendingRemoteSessionDelete instead')
+  Future<void> clearPendingRemoteSessionDelete({
+    required String ownerUserId,
+    required String remoteId,
+  }) =>
+      pendingDeletes.clearPendingRemoteSessionDelete(
+        ownerUserId: ownerUserId,
+        remoteId: remoteId,
+      );
+
+  @Deprecated(
+      'Use pendingDeletes.listPendingRemoteSessionDeleteIds instead')
+  Future<Set<String>> listPendingRemoteSessionDeleteIds({
+    required String ownerUserId,
+  }) =>
+      pendingDeletes.listPendingRemoteSessionDeleteIds(
+        ownerUserId: ownerUserId,
+      );
+
+  @Deprecated('Use pendingDeletes.listPendingRemoteDeleteIds instead')
+  Future<List<String>> listPendingRemoteDeleteIds({
+    required String ownerUserId,
+  }) =>
+      pendingDeletes.listPendingRemoteDeleteIds(ownerUserId: ownerUserId);
+
+  @Deprecated(
+      'Use pendingDeletes.listRetryablePendingRemoteDeletes instead')
+  Future<List<PendingRemoteSessionDeleteEntry>>
+      listRetryablePendingRemoteDeletes({
+    required String ownerUserId,
+  }) =>
+          pendingDeletes.listRetryablePendingRemoteDeletes(
+            ownerUserId: ownerUserId,
+          );
+
+  // ---------------------------------------------------------------------------
+  // Kept in-place: clearCaches
+  // ---------------------------------------------------------------------------
+
+  Future<void> clearCaches() async {
+    await customStatement('DELETE FROM cached_weather');
+    await customStatement('DELETE FROM cached_resorts');
   }
 
-  Future<LocalRideSession?> getInProgressSession({
-    required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_ride_sessions
-      WHERE owner_user_id = ?
-      AND state IN ('recording', 'paused')
-      ORDER BY updated_at DESC
-      LIMIT 1
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
+  // ---------------------------------------------------------------------------
+  // Migration helpers (kept in-place — private)
+  // ---------------------------------------------------------------------------
 
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapSession(rows.first);
-  }
-
-  Future<List<LocalRideSession>> listSessions({
-    required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_ride_sessions
-      WHERE owner_user_id = ?
-      ORDER BY started_at DESC
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
-
-    return rows.map(_mapSession).toList(growable: false);
-  }
-
-  Future<List<LocalRideSession>> listPendingSyncSessions({
-    required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_ride_sessions
-      WHERE owner_user_id = ?
-      AND state IN ('syncPending', 'syncing', 'syncFailed')
-      ORDER BY updated_at DESC
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
-
-    return rows.map(_mapSession).toList(growable: false);
-  }
-
-  Future<int> unsyncedCount({
-    required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT COUNT(*) AS count_value
-      FROM local_ride_sessions
-      WHERE owner_user_id = ?
-      AND state IN ('syncPending', 'syncing', 'syncFailed')
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
-
-    if (rows.isEmpty) {
-      return 0;
-    }
-    return _asInt(rows.first.data['count_value']);
+  Future<void> _migrateToV2() async {
+    await _addColumnIfMissing(
+        'local_session_points', 'elapsed_realtime_ns INTEGER');
+    await _addColumnIfMissing(
+        'local_session_points', 'vertical_accuracy_m REAL');
+    await _addColumnIfMissing(
+        'local_session_points', 'speed_accuracy_mps REAL');
+    await _addColumnIfMissing(
+        'local_session_points', 'bearing_accuracy_deg REAL');
+    await _addColumnIfMissing('local_session_points', 'provider TEXT');
+    await _addColumnIfMissing('local_session_points', 'is_mocked INTEGER');
+    await _addColumnIfMissing('local_session_points', 'quality_class TEXT');
+    await _addColumnIfMissing('local_session_points', 'quality_score REAL');
+    await _addColumnIfMissing('local_session_points', 'quality_reason TEXT');
+    await _addColumnIfMissing('local_session_points', 'filtered_latitude REAL');
+    await _addColumnIfMissing(
+        'local_session_points', 'filtered_longitude REAL');
+    await _addColumnIfMissing(
+        'local_session_points', 'filtered_altitude_m REAL');
+    await _addColumnIfMissing('local_session_points', 'fused_speed_mps REAL');
+    await _addColumnIfMissing('local_session_points', 'derived_speed_mps REAL');
+    await _addColumnIfMissing('local_session_points', 'distance_delta_m REAL');
+    await _addColumnIfMissing('local_session_points', 'motion_state TEXT');
   }
 
   Future<void> _migrateToV3() async {
@@ -850,29 +845,6 @@ class DriftLocalDatabase extends GeneratedDatabase {
     );
   }
 
-  Future<void> _refreshSessionPointCount({
-    required int localSessionId,
-    required DateTime updatedAt,
-  }) {
-    return customUpdate(
-      '''
-      UPDATE local_ride_sessions
-      SET point_count = (
-            SELECT COUNT(*)
-            FROM local_session_points
-            WHERE local_session_id = ?
-          ),
-          updated_at = ?
-      WHERE local_id = ?
-      ''',
-      variables: <Variable>[
-        Variable<int>(localSessionId),
-        Variable<String>(updatedAt.toIso8601String()),
-        Variable<int>(localSessionId),
-      ],
-    );
-  }
-
   Future<void> _refreshAllSessionPointCounts() {
     return customStatement(
       '''
@@ -886,143 +858,55 @@ class DriftLocalDatabase extends GeneratedDatabase {
     );
   }
 
-  LocalSessionState _canonicalPersistedState(LocalSessionState state) {
-    if (state == LocalSessionState.locallyCompleted) {
-      return LocalSessionState.syncPending;
+  Future<void> _migrateCachedResortSchema() async {
+    final List<QueryRow> columns =
+        await customSelect('PRAGMA table_info(cached_resorts)').get();
+    final Set<String> columnNames = columns
+        .map((QueryRow row) => row.data['name']?.toString() ?? '')
+        .where((String name) => name.isNotEmpty)
+        .toSet();
+    if (columnNames.contains('owner_user_id')) {
+      return;
     }
-    return state;
-  }
 
-  Future<List<LocalSessionPoint>> listPoints(
-    int localSessionId, {
-    bool onlyAccepted = false,
-  }) async {
-    final String acceptedClause =
-        onlyAccepted ? 'AND accepted_for_analytics = 1' : '';
-    final List<QueryRow> rows = await customSelect(
+    final List<QueryRow> legacyRows = await customSelect(
       '''
-      SELECT *
-      FROM local_session_points
-      WHERE local_session_id = ?
-      $acceptedClause
-      ORDER BY recorded_at ASC
+      SELECT resort_id, payload_json, fetched_at
+      FROM cached_resorts
       ''',
-      variables: <Variable>[
-        Variable<int>(localSessionId),
-      ],
     ).get();
 
-    return rows.map(_mapPoint).toList(growable: false);
-  }
+    await customStatement('ALTER TABLE cached_resorts RENAME TO cached_resorts_legacy');
+    await customStatement('''
+      CREATE TABLE cached_resorts (
+        owner_user_id TEXT NOT NULL DEFAULT '',
+        resort_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        fetched_at TEXT NOT NULL,
+        PRIMARY KEY(owner_user_id, resort_id)
+      )
+    ''');
 
-  Future<void> replaceSessionPoints({
-    required int localSessionId,
-    required List<NewSessionPoint> points,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await transaction(() async {
+    for (final QueryRow row in legacyRows) {
       await customStatement(
-        'DELETE FROM local_session_points WHERE local_session_id = ?',
-        <Object?>[localSessionId],
+        '''
+        INSERT INTO cached_resorts (
+          owner_user_id,
+          resort_id,
+          payload_json,
+          fetched_at
+        ) VALUES (?, ?, ?, ?)
+        ''',
+        <Object?>[
+          '',
+          row.data['resort_id'],
+          row.data['payload_json'],
+          row.data['fetched_at'],
+        ],
       );
+    }
 
-      for (final NewSessionPoint point in points) {
-        await customInsert(
-          '''
-          INSERT OR IGNORE INTO local_session_points (
-            local_session_id,
-            recorded_at,
-            t_offset_ms,
-            latitude,
-            longitude,
-            accuracy_m,
-            elapsed_realtime_ns,
-            altitude_m,
-            vertical_accuracy_m,
-            speed_mps,
-            speed_accuracy_mps,
-            heading_deg,
-            bearing_accuracy_deg,
-            provider,
-            is_mocked,
-            quality_class,
-            quality_score,
-            quality_reason,
-            filtered_latitude,
-            filtered_longitude,
-            filtered_altitude_m,
-            fused_speed_mps,
-            derived_speed_mps,
-            distance_delta_m,
-            motion_state,
-            accepted_for_analytics,
-            created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ''',
-          variables: <Variable>[
-            Variable<int>(localSessionId),
-            Variable<String>(point.recordedAt.toUtc().toIso8601String()),
-            Variable<int>(point.tOffsetMs),
-            Variable<double>(point.latitude),
-            Variable<double>(point.longitude),
-            Variable<double>(point.accuracyM),
-            Variable<int>(point.elapsedRealtimeNs),
-            Variable<double>(point.altitudeM),
-            Variable<double>(point.verticalAccuracyM),
-            Variable<double>(point.speedMps),
-            Variable<double>(point.speedAccuracyMps),
-            Variable<double>(point.headingDeg),
-            Variable<double>(point.bearingAccuracyDeg),
-            Variable<String>(point.provider),
-            Variable<int>(
-              point.isMocked == null ? null : (point.isMocked! ? 1 : 0),
-            ),
-            Variable<String>(point.qualityClass),
-            Variable<double>(point.qualityScore),
-            Variable<String>(point.qualityReason),
-            Variable<double>(point.filteredLatitude),
-            Variable<double>(point.filteredLongitude),
-            Variable<double>(point.filteredAltitudeM),
-            Variable<double>(point.fusedSpeedMps),
-            Variable<double>(point.derivedSpeedMps),
-            Variable<double>(point.distanceDeltaM),
-            Variable<String>(point.motionState),
-            Variable<int>(point.acceptedForAnalytics ? 1 : 0),
-            Variable<String>(now.toIso8601String()),
-          ],
-        );
-      }
-
-      await _refreshSessionPointCount(
-        localSessionId: localSessionId,
-        updatedAt: now,
-      );
-    });
-  }
-
-  Future<void> _migrateToV2() async {
-    await _addColumnIfMissing(
-        'local_session_points', 'elapsed_realtime_ns INTEGER');
-    await _addColumnIfMissing(
-        'local_session_points', 'vertical_accuracy_m REAL');
-    await _addColumnIfMissing(
-        'local_session_points', 'speed_accuracy_mps REAL');
-    await _addColumnIfMissing(
-        'local_session_points', 'bearing_accuracy_deg REAL');
-    await _addColumnIfMissing('local_session_points', 'provider TEXT');
-    await _addColumnIfMissing('local_session_points', 'is_mocked INTEGER');
-    await _addColumnIfMissing('local_session_points', 'quality_class TEXT');
-    await _addColumnIfMissing('local_session_points', 'quality_score REAL');
-    await _addColumnIfMissing('local_session_points', 'quality_reason TEXT');
-    await _addColumnIfMissing('local_session_points', 'filtered_latitude REAL');
-    await _addColumnIfMissing(
-        'local_session_points', 'filtered_longitude REAL');
-    await _addColumnIfMissing(
-        'local_session_points', 'filtered_altitude_m REAL');
-    await _addColumnIfMissing('local_session_points', 'fused_speed_mps REAL');
-    await _addColumnIfMissing('local_session_points', 'derived_speed_mps REAL');
-    await _addColumnIfMissing('local_session_points', 'distance_delta_m REAL');
-    await _addColumnIfMissing('local_session_points', 'motion_state TEXT');
+    await customStatement('DROP TABLE IF EXISTS cached_resorts_legacy');
   }
 
   Future<void> _migratePendingRemoteDeleteSchema() async {
@@ -1110,710 +994,9 @@ class DriftLocalDatabase extends GeneratedDatabase {
     await customStatement('ALTER TABLE $table ADD COLUMN $columnDef');
   }
 
-  Future<LocalSessionPoint?> latestAcceptedPoint(int localSessionId) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_session_points
-      WHERE local_session_id = ?
-      AND accepted_for_analytics = 1
-      ORDER BY recorded_at DESC
-      LIMIT 1
-      ''',
-      variables: <Variable>[
-        Variable<int>(localSessionId),
-      ],
-    ).get();
-
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapPoint(rows.first);
-  }
-
-  Future<void> insertTrackingDiagnostic({
-    required int localSessionId,
-    required String eventType,
-    String? message,
-    Map<String, dynamic>? details,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customInsert(
-      '''
-      INSERT INTO local_session_tracking_diagnostics (
-        local_session_id,
-        occurred_at,
-        event_type,
-        message,
-        details_json
-      ) VALUES (?, ?, ?, ?, ?)
-      ''',
-      variables: <Variable>[
-        Variable<int>(localSessionId),
-        Variable<String>(now.toIso8601String()),
-        Variable<String>(eventType),
-        Variable<String>(message),
-        Variable<String>(
-          details == null ? null : jsonEncode(details),
-        ),
-      ],
-    );
-
-    await customStatement(
-      '''
-      DELETE FROM local_session_tracking_diagnostics
-      WHERE local_session_id = ?
-      AND id NOT IN (
-        SELECT id
-        FROM local_session_tracking_diagnostics
-        WHERE local_session_id = ?
-        ORDER BY occurred_at DESC
-        LIMIT $_maxTrackingDiagnosticsPerSession
-      )
-      ''',
-      <Object?>[
-        localSessionId,
-        localSessionId,
-      ],
-    );
-  }
-
-  Future<List<TrackingDiagnosticEvent>> listTrackingDiagnostics(
-    int localSessionId, {
-    int limit = 120,
-  }) async {
-    final int safeLimit =
-        limit.clamp(1, _maxTrackingDiagnosticsPerSession).toInt();
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT *
-      FROM local_session_tracking_diagnostics
-      WHERE local_session_id = ?
-      ORDER BY occurred_at DESC
-      LIMIT ?
-      ''',
-      variables: <Variable>[
-        Variable<int>(localSessionId),
-        Variable<int>(safeLimit),
-      ],
-    ).get();
-
-    return rows.map(_mapTrackingDiagnostic).toList(growable: false);
-  }
-
-  Future<void> upsertCachedResort(
-    String resortId,
-    Map<String, dynamic> payload,
-  ) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customStatement(
-      '''
-      INSERT INTO cached_resorts (resort_id, payload_json, fetched_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(resort_id)
-      DO UPDATE SET
-        payload_json = excluded.payload_json,
-        fetched_at = excluded.fetched_at
-      ''',
-      <Object?>[
-        resortId,
-        jsonEncode(payload),
-        now.toIso8601String(),
-      ],
-    );
-  }
-
-  Future<Map<String, dynamic>?> readCachedResort(String resortId) async {
-    final List<QueryRow> rows = await customSelect(
-      'SELECT * FROM cached_resorts WHERE resort_id = ?',
-      variables: <Variable>[Variable<String>(resortId)],
-    ).get();
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    final QueryRow row = rows.first;
-    final Map<String, dynamic> payload =
-        jsonDecode(row.data['payload_json'] as String) as Map<String, dynamic>;
-    payload['cached_fetched_at'] = row.data['fetched_at'];
-    return payload;
-  }
-
-  Future<List<Map<String, dynamic>>> readCachedResorts() async {
-    final List<QueryRow> rows = await customSelect(
-      'SELECT * FROM cached_resorts ORDER BY fetched_at DESC',
-    ).get();
-
-    return rows.map((QueryRow row) {
-      final Map<String, dynamic> payload =
-          jsonDecode(row.data['payload_json'] as String)
-              as Map<String, dynamic>;
-      payload['cached_fetched_at'] = row.data['fetched_at'];
-      return payload;
-    }).toList(growable: false);
-  }
-
-  Future<void> upsertCachedWeather(
-    String resortId,
-    Map<String, dynamic> payload,
-  ) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customStatement(
-      '''
-      INSERT INTO cached_weather (resort_id, payload_json, fetched_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(resort_id)
-      DO UPDATE SET
-        payload_json = excluded.payload_json,
-        fetched_at = excluded.fetched_at
-      ''',
-      <Object?>[
-        resortId,
-        jsonEncode(payload),
-        now.toIso8601String(),
-      ],
-    );
-  }
-
-  Future<Map<String, dynamic>?> readCachedWeather(String resortId) async {
-    final List<QueryRow> rows = await customSelect(
-      'SELECT * FROM cached_weather WHERE resort_id = ?',
-      variables: <Variable>[Variable<String>(resortId)],
-    ).get();
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    final QueryRow row = rows.first;
-    final Map<String, dynamic> payload =
-        jsonDecode(row.data['payload_json'] as String) as Map<String, dynamic>;
-    payload['cached_fetched_at'] = row.data['fetched_at'];
-    return payload;
-  }
-
-  Future<List<Map<String, dynamic>>> readCachedWeatherMetadata() async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT resort_id, payload_json, fetched_at
-      FROM cached_weather
-      ORDER BY fetched_at DESC
-      ''',
-    ).get();
-
-    return rows.map((QueryRow row) {
-      final String payloadJson = row.data['payload_json'] as String;
-      final Map<String, dynamic> payload =
-          jsonDecode(payloadJson) as Map<String, dynamic>;
-      return <String, dynamic>{
-        'resort_id': row.data['resort_id'],
-        'cached_fetched_at': row.data['fetched_at'],
-        'payload_size_bytes': payloadJson.length,
-        'payload_keys': payload.keys.toList(growable: false),
-      };
-    }).toList(growable: false);
-  }
-
-  Future<void> replaceCachedRemoteSessions({
-    required String ownerUserId,
-    required List<Map<String, dynamic>> sessions,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await transaction(() async {
-      await customStatement(
-        'DELETE FROM cached_remote_session_summaries WHERE owner_user_id = ?',
-        <Object?>[ownerUserId],
-      );
-
-      for (final Map<String, dynamic> session in sessions) {
-        final String? remoteId = session['id'] as String?;
-        if (remoteId == null || remoteId.isEmpty) {
-          continue;
-        }
-
-        await customStatement(
-          '''
-          INSERT INTO cached_remote_session_summaries (
-            owner_user_id,
-            remote_id,
-            payload_json,
-            fetched_at
-          ) VALUES (?, ?, ?, ?)
-          ''',
-          <Object?>[
-            ownerUserId,
-            remoteId,
-            jsonEncode(session),
-            now.toIso8601String(),
-          ],
-        );
-      }
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> readCachedRemoteSessions({
-    required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT payload_json
-      FROM cached_remote_session_summaries
-      WHERE owner_user_id = ?
-      ORDER BY fetched_at DESC
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
-
-    return rows
-        .map(
-          (QueryRow row) => jsonDecode(row.data['payload_json'] as String)
-              as Map<String, dynamic>,
-        )
-        .toList(growable: false);
-  }
-
-  Future<Map<String, dynamic>?> readCachedRemoteSessionSummary({
-    required String ownerUserId,
-    required String remoteId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT payload_json
-      FROM cached_remote_session_summaries
-      WHERE owner_user_id = ?
-      AND remote_id = ?
-      LIMIT 1
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-        Variable<String>(remoteId),
-      ],
-    ).get();
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return jsonDecode(rows.first.data['payload_json'] as String)
-        as Map<String, dynamic>;
-  }
-
-  Future<void> deleteCachedRemoteSessionSummary({
-    required String ownerUserId,
-    required String remoteId,
-  }) async {
-    await customStatement(
-      '''
-      DELETE FROM cached_remote_session_summaries
-      WHERE owner_user_id = ?
-      AND remote_id = ?
-      ''',
-      <Object?>[
-        ownerUserId,
-        remoteId,
-      ],
-    );
-  }
-
-  Future<void> enqueuePendingRemoteSessionDelete({
-    required String ownerUserId,
-    required String remoteId,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customStatement(
-      '''
-      INSERT INTO pending_remote_session_deletes (
-        owner_user_id,
-        remote_id,
-        requested_at,
-        last_attempt_at,
-        attempt_count,
-        last_error,
-        state,
-        next_attempt_at
-      )
-      VALUES (?, ?, ?, NULL, 0, NULL, 'pending', NULL)
-      ON CONFLICT(owner_user_id, remote_id)
-      DO UPDATE SET
-        requested_at = excluded.requested_at,
-        last_attempt_at = NULL,
-        attempt_count = 0,
-        last_error = NULL,
-        state = 'pending',
-        next_attempt_at = NULL
-      ''',
-      <Object?>[
-        ownerUserId,
-        remoteId,
-        now.toIso8601String(),
-      ],
-    );
-  }
-
-  Future<void> recordPendingRemoteSessionDeleteAttempt({
-    required String ownerUserId,
-    required String remoteId,
-    required String lastError,
-    DateTime? nextAttemptAt,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    final DateTime effectiveNextAttemptAt = (nextAttemptAt ?? now).toUtc();
-    await customStatement(
-      '''
-      INSERT INTO pending_remote_session_deletes (
-        owner_user_id,
-        remote_id,
-        requested_at,
-        last_attempt_at,
-        attempt_count,
-        last_error,
-        state,
-        next_attempt_at
-      )
-      VALUES (?, ?, ?, ?, 1, ?, 'pending', ?)
-      ON CONFLICT(owner_user_id, remote_id)
-      DO UPDATE SET
-        last_attempt_at = excluded.last_attempt_at,
-        attempt_count = pending_remote_session_deletes.attempt_count + 1,
-        last_error = excluded.last_error,
-        state = 'pending',
-        next_attempt_at = excluded.next_attempt_at
-      ''',
-      <Object?>[
-        ownerUserId,
-        remoteId,
-        now.toIso8601String(),
-        now.toIso8601String(),
-        lastError,
-        effectiveNextAttemptAt.toIso8601String(),
-      ],
-    );
-  }
-
-  Future<void> markPendingRemoteSessionDeleteFailed({
-    required String ownerUserId,
-    required String remoteId,
-    required String lastError,
-  }) async {
-    final DateTime now = DateTime.now().toUtc();
-    await customStatement(
-      '''
-      INSERT INTO pending_remote_session_deletes (
-        owner_user_id,
-        remote_id,
-        requested_at,
-        last_attempt_at,
-        attempt_count,
-        last_error,
-        state,
-        next_attempt_at
-      )
-      VALUES (?, ?, ?, ?, 1, ?, 'failed', NULL)
-      ON CONFLICT(owner_user_id, remote_id)
-      DO UPDATE SET
-        last_attempt_at = excluded.last_attempt_at,
-        attempt_count = pending_remote_session_deletes.attempt_count + 1,
-        last_error = excluded.last_error,
-        state = 'failed',
-        next_attempt_at = NULL
-      ''',
-      <Object?>[
-        ownerUserId,
-        remoteId,
-        now.toIso8601String(),
-        now.toIso8601String(),
-        lastError,
-      ],
-    );
-  }
-
-  Future<void> clearPendingRemoteSessionDelete({
-    required String ownerUserId,
-    required String remoteId,
-  }) async {
-    await customStatement(
-      '''
-      DELETE FROM pending_remote_session_deletes
-      WHERE owner_user_id = ?
-      AND remote_id = ?
-      ''',
-      <Object?>[
-        ownerUserId,
-        remoteId,
-      ],
-    );
-  }
-
-  Future<Set<String>> listPendingRemoteSessionDeleteIds({
-    required String ownerUserId,
-  }) async {
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT remote_id
-      FROM pending_remote_session_deletes
-      WHERE owner_user_id = ?
-      AND state = 'pending'
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-      ],
-    ).get();
-
-    return rows.map((QueryRow row) => row.data['remote_id'] as String).toSet();
-  }
-
-  Future<List<String>> listPendingRemoteDeleteIds({
-    required String ownerUserId,
-  }) async {
-    final String now = DateTime.now().toUtc().toIso8601String();
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT remote_id
-      FROM pending_remote_session_deletes
-      WHERE owner_user_id = ?
-      AND state = 'pending'
-      AND (
-        next_attempt_at IS NULL
-        OR next_attempt_at <= ?
-      )
-      ORDER BY requested_at ASC
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-        Variable<String>(now),
-      ],
-    ).get();
-
-    return rows
-        .map((QueryRow row) => row.data['remote_id'] as String)
-        .toList(growable: false);
-  }
-
-  Future<List<PendingRemoteSessionDeleteEntry>>
-      listRetryablePendingRemoteDeletes({
-    required String ownerUserId,
-  }) async {
-    final String now = DateTime.now().toUtc().toIso8601String();
-    final List<QueryRow> rows = await customSelect(
-      '''
-      SELECT owner_user_id, remote_id, attempt_count
-      FROM pending_remote_session_deletes
-      WHERE owner_user_id = ?
-      AND state = 'pending'
-      AND (
-        next_attempt_at IS NULL
-        OR next_attempt_at <= ?
-      )
-      ORDER BY requested_at ASC
-      ''',
-      variables: <Variable>[
-        Variable<String>(ownerUserId),
-        Variable<String>(now),
-      ],
-    ).get();
-
-    return rows
-        .map(
-          (QueryRow row) => PendingRemoteSessionDeleteEntry(
-            ownerUserId: row.data['owner_user_id'] as String,
-            remoteId: row.data['remote_id'] as String,
-            attemptCount: _asInt(row.data['attempt_count']),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  // Compatibility wrappers kept so existing call sites/tests can migrate
-  // incrementally from legacy tombstone naming.
-  Future<void> upsertDeletedRemoteSession({
-    required String ownerUserId,
-    required String remoteId,
-    String? lastError,
-  }) async {
-    await enqueuePendingRemoteSessionDelete(
-      ownerUserId: ownerUserId,
-      remoteId: remoteId,
-    );
-    if (lastError != null && lastError.isNotEmpty) {
-      await recordPendingRemoteSessionDeleteAttempt(
-        ownerUserId: ownerUserId,
-        remoteId: remoteId,
-        lastError: lastError,
-      );
-    }
-  }
-
-  Future<void> deleteDeletedRemoteSessionTombstone({
-    required String ownerUserId,
-    required String remoteId,
-  }) {
-    return clearPendingRemoteSessionDelete(
-      ownerUserId: ownerUserId,
-      remoteId: remoteId,
-    );
-  }
-
-  Future<Set<String>> listDeletedRemoteSessionIds({
-    required String ownerUserId,
-  }) {
-    return listPendingRemoteSessionDeleteIds(ownerUserId: ownerUserId);
-  }
-
-  Future<bool> deleteSessionCascade({
-    required int localSessionId,
-    required String ownerUserId,
-    String? remoteId,
-    bool clearDeletedRemoteSessionTombstone = true,
-    bool? clearPendingRemoteSessionDelete,
-  }) async {
-    final bool shouldClearPendingRemoteDelete =
-        clearPendingRemoteSessionDelete ?? clearDeletedRemoteSessionTombstone;
-    int deletedSessions = 0;
-    await transaction(() async {
-      await customStatement(
-        '''
-        DELETE FROM local_session_tracking_diagnostics
-        WHERE local_session_id = ?
-        ''',
-        <Object?>[localSessionId],
-      );
-
-      await customStatement(
-        '''
-        DELETE FROM local_session_points
-        WHERE local_session_id = ?
-        ''',
-        <Object?>[localSessionId],
-      );
-
-      deletedSessions = await customUpdate(
-        '''
-        DELETE FROM local_ride_sessions
-        WHERE local_id = ?
-        AND owner_user_id = ?
-        ''',
-        variables: <Variable>[
-          Variable<int>(localSessionId),
-          Variable<String>(ownerUserId),
-        ],
-      );
-
-      final String? trimmedRemoteId = remoteId?.trim();
-      if (trimmedRemoteId != null && trimmedRemoteId.isNotEmpty) {
-        await customStatement(
-          '''
-          DELETE FROM cached_remote_session_summaries
-          WHERE owner_user_id = ?
-          AND remote_id = ?
-          ''',
-          <Object?>[
-            ownerUserId,
-            trimmedRemoteId,
-          ],
-        );
-        if (shouldClearPendingRemoteDelete) {
-          await customStatement(
-            '''
-            DELETE FROM pending_remote_session_deletes
-            WHERE owner_user_id = ?
-            AND remote_id = ?
-            ''',
-            <Object?>[
-              ownerUserId,
-              trimmedRemoteId,
-            ],
-          );
-        }
-      }
-    });
-
-    return deletedSessions > 0;
-  }
-
-  Future<void> clearCaches() async {
-    await customStatement('DELETE FROM cached_weather');
-    await customStatement('DELETE FROM cached_resorts');
-  }
-
-  LocalRideSession _mapSession(QueryRow row) {
-    final Map<String, Object?> data = row.data;
-
-    return LocalRideSession(
-      localId: _asInt(data['local_id']),
-      ownerUserId: data['owner_user_id'] as String?,
-      remoteId: data['remote_id'] as String?,
-      resortId: data['resort_id'] as String?,
-      startedAt: DateTime.parse(data['started_at'] as String).toUtc(),
-      endedAt: data['ended_at'] == null
-          ? null
-          : DateTime.parse(data['ended_at'] as String).toUtc(),
-      activeDurationS: _asInt(data['active_duration_s']),
-      distanceM: _asDouble(data['distance_m']),
-      maxSpeedMps: _asDouble(data['max_speed_mps']),
-      avgSpeedMps: _asDouble(data['avg_speed_mps']),
-      elevationGainM: data['elevation_gain_m'] == null
-          ? null
-          : _asInt(data['elevation_gain_m']),
-      elevationLossM: data['elevation_loss_m'] == null
-          ? null
-          : _asInt(data['elevation_loss_m']),
-      state: LocalSessionStateCodec.fromWire(data['state'] as String),
-      pointCount: _asInt(data['point_count']),
-      syncAttemptCount: _asInt(data['sync_attempt_count']),
-      lastSyncError: data['last_sync_error'] as String?,
-      createdAt: DateTime.parse(data['created_at'] as String).toUtc(),
-      updatedAt: DateTime.parse(data['updated_at'] as String).toUtc(),
-    );
-  }
-
-  LocalSessionPoint _mapPoint(QueryRow row) {
-    final Map<String, Object?> data = row.data;
-    return LocalSessionPoint(
-      id: _asInt(data['id']),
-      localSessionId: _asInt(data['local_session_id']),
-      recordedAt: DateTime.parse(data['recorded_at'] as String).toUtc(),
-      tOffsetMs: _asInt(data['t_offset_ms']),
-      latitude: _asDouble(data['latitude']),
-      longitude: _asDouble(data['longitude']),
-      accuracyM: _asNullableDouble(data['accuracy_m']),
-      altitudeM: _asNullableDouble(data['altitude_m']),
-      speedMps: _asNullableDouble(data['speed_mps']),
-      headingDeg: _asNullableDouble(data['heading_deg']),
-      acceptedForAnalytics: _asInt(data['accepted_for_analytics']) == 1,
-      elapsedRealtimeNs: _asNullableInt(data['elapsed_realtime_ns']),
-      verticalAccuracyM: _asNullableDouble(data['vertical_accuracy_m']),
-      speedAccuracyMps: _asNullableDouble(data['speed_accuracy_mps']),
-      bearingAccuracyDeg: _asNullableDouble(data['bearing_accuracy_deg']),
-      provider: data['provider'] as String?,
-      isMocked: _asNullableBool(data['is_mocked']),
-      qualityClass: data['quality_class'] as String?,
-      qualityScore: _asNullableDouble(data['quality_score']),
-      qualityReason: data['quality_reason'] as String?,
-      filteredLatitude: _asNullableDouble(data['filtered_latitude']),
-      filteredLongitude: _asNullableDouble(data['filtered_longitude']),
-      filteredAltitudeM: _asNullableDouble(data['filtered_altitude_m']),
-      fusedSpeedMps: _asNullableDouble(data['fused_speed_mps']),
-      derivedSpeedMps: _asNullableDouble(data['derived_speed_mps']),
-      distanceDeltaM: _asNullableDouble(data['distance_delta_m']),
-      motionState: data['motion_state'] as String?,
-    );
-  }
-
-  TrackingDiagnosticEvent _mapTrackingDiagnostic(QueryRow row) {
-    final Map<String, Object?> data = row.data;
-    final String? detailsJson = data['details_json'] as String?;
-    return TrackingDiagnosticEvent(
-      id: _asInt(data['id']),
-      localSessionId: _asInt(data['local_session_id']),
-      occurredAt: DateTime.parse(data['occurred_at'] as String).toUtc(),
-      eventType: data['event_type'] as String,
-      message: data['message'] as String?,
-      details: _parseJsonMap(detailsJson),
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Private type-conversion helpers (kept for migration code)
+  // ---------------------------------------------------------------------------
 
   int _asInt(Object? value) {
     if (value is int) {
@@ -1823,69 +1006,5 @@ class DriftLocalDatabase extends GeneratedDatabase {
       return value.toInt();
     }
     return int.parse(value.toString());
-  }
-
-  double _asDouble(Object? value) {
-    if (value is double) {
-      return value;
-    }
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.parse(value.toString());
-  }
-
-  double? _asNullableDouble(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is double) {
-      return value;
-    }
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.tryParse(value.toString());
-  }
-
-  int? _asNullableInt(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    return int.tryParse(value.toString());
-  }
-
-  bool? _asNullableBool(Object? value) {
-    final int? integerValue = _asNullableInt(value);
-    if (integerValue == null) {
-      return null;
-    }
-    return integerValue == 1;
-  }
-
-  Map<String, dynamic> _parseJsonMap(String? raw) {
-    if (raw == null || raw.isEmpty) {
-      return const <String, dynamic>{};
-    }
-    try {
-      final Object? decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map(
-          (Object? key, Object? value) => MapEntry(key.toString(), value),
-        );
-      }
-    } catch (_) {
-      return const <String, dynamic>{};
-    }
-    return const <String, dynamic>{};
   }
 }
