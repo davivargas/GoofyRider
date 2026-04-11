@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 
 from sqlalchemy import func
 from sqlalchemy import select
@@ -40,3 +40,24 @@ class RideSessionRepository(SqlAlchemyRepository):
             .limit(page_size)
         )
         return list(self._db.scalars(stmt).all())
+
+    def list_by_user_with_count(
+        self, user_id: uuid.UUID, page: int, page_size: int
+    ) -> tuple[list[RideSession], int]:
+        count_stmt = (
+            select(func.count())
+            .select_from(RideSession)
+            .where(RideSession.user_id == user_id)
+        )
+        total = int(self._db.scalar(count_stmt) or 0)
+
+        list_stmt = (
+            select(RideSession)
+            .options(joinedload(RideSession.resort))
+            .where(RideSession.user_id == user_id)
+            .order_by(RideSession.started_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        sessions = list(self._db.scalars(list_stmt).all())
+        return sessions, total
