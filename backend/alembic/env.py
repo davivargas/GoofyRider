@@ -1,11 +1,11 @@
-﻿from logging.config import fileConfig
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from app.core.config import get_database_url
-from app.core.database import Base
+from app.models.base import Base
 from app.models import FavoriteResort
 from app.models import RideSession
 from app.models import SessionPoint
