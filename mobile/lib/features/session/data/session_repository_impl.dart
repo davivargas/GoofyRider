@@ -25,7 +25,10 @@ class SessionRepositoryImpl implements SessionRepository {
         _api = api,
         _currentUserIdGetter = currentUserIdGetter,
         _resortAttributionService =
-            SessionResortAttributionService(localDatabase: localDatabase),
+            SessionResortAttributionService(
+              localDatabase: localDatabase,
+              currentUserIdGetter: currentUserIdGetter,
+            ),
         _stateMachine = stateMachine;
 
   static final RegExp _uuidLikeIdPattern = RegExp(
@@ -336,6 +339,7 @@ class SessionRepositoryImpl implements SessionRepository {
         : _computeActiveDurationSeconds(points);
     final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
       points: points,
+      localSessionId: localSessionId,
     );
     final SessionStats stats = _buildSessionStats(
       points: points,
@@ -508,7 +512,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }) async {
     final List<LocalSessionPoint> acceptedPoints =
         await _localDatabase.listPoints(localSessionId, onlyAccepted: true);
-    final List<LocalSessionPoint> dedupedUploadable = _dedupeByOffset(
+    final List<LocalSessionPoint> dedupedUploadable = _dedupeByElapsedOffset(
       acceptedPoints,
     );
     final _PointSanitizationResult sanitizedResult = _sanitizePointsForSync(
@@ -557,7 +561,7 @@ class SessionRepositoryImpl implements SessionRepository {
           'drop_reasons': dropReasonCounts,
           'dropped_offsets_sample': droppedDuringIsolation
               .take(5)
-              .map((_DroppedSyncPoint dropped) => dropped.point.tOffsetMs)
+              .map((_DroppedSyncPoint dropped) => dropped.point.elapsedOffsetMs)
               .toList(growable: false),
         },
       );
@@ -741,7 +745,7 @@ class SessionRepositoryImpl implements SessionRepository {
     final List<String> sanitizedFields = <String>[];
     final Map<String, dynamic> payload = <String, dynamic>{
       't_offset_ms': _sanitizeNonNegativeIntForSync(
-        point.tOffsetMs,
+        point.elapsedOffsetMs,
         fieldName: 't_offset_ms',
         sanitizedFields: sanitizedFields,
       ),
@@ -866,7 +870,7 @@ class SessionRepositoryImpl implements SessionRepository {
         'drop_reasons': _collectDropReasonCounts(result.droppedPoints),
         'dropped_offsets_sample': result.droppedPoints
             .take(5)
-            .map((_DroppedSyncPoint dropped) => dropped.point.tOffsetMs)
+            .map((_DroppedSyncPoint dropped) => dropped.point.elapsedOffsetMs)
             .toList(growable: false),
       },
     );
@@ -1234,7 +1238,10 @@ class SessionRepositoryImpl implements SessionRepository {
       if (remoteId == null || remoteId.isEmpty) {
         continue;
       }
-      await _cacheEmbeddedResortSummary(raw['resort'] as Map<String, dynamic>?);
+      await _cacheEmbeddedResortSummary(
+        raw['resort'] as Map<String, dynamic>?,
+        ownerUserId: ownerUserId,
+      );
 
       await _localDatabase.upsertRemoteSessionSummary(
         ownerUserId: ownerUserId,
@@ -1385,6 +1392,9 @@ class SessionRepositoryImpl implements SessionRepository {
 
   Future<void> _cacheEmbeddedResortSummary(
     Map<String, dynamic>? resortSummary,
+    {
+    required String ownerUserId,
+    }
   ) async {
     if (resortSummary == null) {
       return;
@@ -1409,6 +1419,7 @@ class SessionRepositoryImpl implements SessionRepository {
         'elevation_top_m': resortSummary['elevation_top_m'],
         'is_favorite': false,
       },
+      ownerUserId: ownerUserId,
     );
   }
 
@@ -1450,9 +1461,9 @@ class SessionRepositoryImpl implements SessionRepository {
           );
 
     return sorted.map((Map<String, dynamic> raw) {
-      final int tOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
+      final int elapsedOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
       final DateTime recordedAt = _parseRemoteDateTime(raw['recorded_at']) ??
-          sessionStartedAt.toUtc().add(Duration(milliseconds: tOffsetMs));
+          sessionStartedAt.toUtc().add(Duration(milliseconds: elapsedOffsetMs));
       final String? qualityClass =
           canonicalizeQualityClassForSync(raw['quality_class'] as String?);
       final String? motionState =
@@ -1461,7 +1472,7 @@ class SessionRepositoryImpl implements SessionRepository {
           _remoteNullableBool(raw['accepted_for_analytics']);
       return NewSessionPoint(
         recordedAt: recordedAt,
-        tOffsetMs: tOffsetMs,
+        tOffsetMs: elapsedOffsetMs,
         latitude: _remoteDouble(raw['latitude']),
         longitude: _remoteDouble(raw['longitude']),
         accuracyM: _remoteNullableDouble(raw['accuracy_m']),
@@ -1510,15 +1521,15 @@ class SessionRepositoryImpl implements SessionRepository {
     return true;
   }
 
-  List<LocalSessionPoint> _dedupeByOffset(List<LocalSessionPoint> points) {
-    final Set<int> seenOffsets = <int>{};
+  List<LocalSessionPoint> _dedupeByElapsedOffset(List<LocalSessionPoint> points) {
+    final Set<int> seenElapsedOffsets = <int>{};
     final List<LocalSessionPoint> uniquePoints = <LocalSessionPoint>[];
 
     for (final LocalSessionPoint point in points) {
-      if (seenOffsets.contains(point.tOffsetMs)) {
+      if (seenElapsedOffsets.contains(point.elapsedOffsetMs)) {
         continue;
       }
-      seenOffsets.add(point.tOffsetMs);
+      seenElapsedOffsets.add(point.elapsedOffsetMs);
       uniquePoints.add(point);
     }
     return uniquePoints;

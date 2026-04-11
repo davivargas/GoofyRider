@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_state_machine.dart';
 

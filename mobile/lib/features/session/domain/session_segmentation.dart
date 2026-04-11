@@ -3,6 +3,37 @@ import 'location_tracking_repository.dart';
 import 'session_models.dart';
 import 'tracking_pipeline.dart';
 
+/// LRU-style in-memory cache for [SessionTimelineAnalysis] results.
+///
+/// Keyed by `(localSessionId, pointCount)` so repeated views of the same
+/// session skip the expensive [TrackingPipelineEngine] replay.
+class _TimelineAnalysisCache {
+  static const int _maxEntries = 5;
+
+  final Map<String, SessionTimelineAnalysis> _cache = {};
+  final List<String> _keys = [];
+
+  String _key(int localSessionId, int pointCount) =>
+      '$localSessionId:$pointCount';
+
+  SessionTimelineAnalysis? get(int localSessionId, int pointCount) {
+    return _cache[_key(localSessionId, pointCount)];
+  }
+
+  void put(int localSessionId, int pointCount, SessionTimelineAnalysis analysis) {
+    final key = _key(localSessionId, pointCount);
+    if (_cache.containsKey(key)) return;
+    if (_keys.length >= _maxEntries) {
+      final evicted = _keys.removeAt(0);
+      _cache.remove(evicted);
+    }
+    _keys.add(key);
+    _cache[key] = analysis;
+  }
+}
+
+final _timelineCache = _TimelineAnalysisCache();
+
 class SessionTimelineAnalysis {
   const SessionTimelineAnalysis({
     required this.segments,
@@ -30,9 +61,19 @@ class SessionTimelineAnalysis {
 /// When a stored `distanceDeltaM` is present, it is treated as authoritative,
 /// including explicit zeroes from the pipeline. That keeps stationary accepted
 /// intervals from being re-inflated by a fallback haversine recomputation.
+///
+/// When [localSessionId] is provided, results are cached in an LRU cache keyed
+/// by `(localSessionId, points.length)` so repeated views of the same session
+/// avoid re-replaying the tracking pipeline.
 SessionTimelineAnalysis analyzeSessionTimeline({
   required List<LocalSessionPoint> points,
+  int? localSessionId,
 }) {
+  if (localSessionId != null) {
+    final cached = _timelineCache.get(localSessionId, points.length);
+    if (cached != null) return cached;
+  }
+
   final List<LocalSessionPoint> accepted = points
       .where((LocalSessionPoint point) => point.acceptedForAnalytics)
       .toList(growable: false)
@@ -119,7 +160,7 @@ SessionTimelineAnalysis analyzeSessionTimeline({
     segments.add(currentSegment.build());
   }
 
-  return SessionTimelineAnalysis(
+  final result = SessionTimelineAnalysis(
     segments: segments,
     distanceM: distanceByTypeM.values.fold<double>(
       0,
@@ -138,6 +179,12 @@ SessionTimelineAnalysis analyzeSessionTimeline({
     liftDistanceM: distanceByTypeM[SessionActivityType.lift]!,
     idleDistanceM: distanceByTypeM[SessionActivityType.idle]!,
   );
+
+  if (localSessionId != null) {
+    _timelineCache.put(localSessionId, points.length, result);
+  }
+
+  return result;
 }
 
 List<SessionActivityType> _resolvedActivityTypes(
@@ -280,12 +327,12 @@ class _SegmentBuilder {
     return _SegmentBuilder._(
       type: type,
       startedAt: previous.recordedAt,
-      startOffsetMs: previous.tOffsetMs,
+      startOffsetMs: previous.elapsedOffsetMs,
       points: <LocalSessionPoint>[previous, current],
       durationMs: durationMs,
       distanceM: distanceM,
       endedAt: current.recordedAt,
-      endOffsetMs: current.tOffsetMs,
+      endOffsetMs: current.elapsedOffsetMs,
     );
   }
 
@@ -307,7 +354,7 @@ class _SegmentBuilder {
     this.durationMs += durationMs;
     this.distanceM += distanceM;
     endedAt = point.recordedAt;
-    endOffsetMs = point.tOffsetMs;
+    endOffsetMs = point.elapsedOffsetMs;
   }
 
   SessionTimelineSegment build() {

@@ -3,6 +3,32 @@ import 'session_models.dart';
 class SessionStateMachine {
   const SessionStateMachine();
 
+  static const Map<LocalSessionState, Set<LocalSessionState>>
+      _allowedTransitions = <LocalSessionState, Set<LocalSessionState>>{
+    LocalSessionState.idle: <LocalSessionState>{
+      LocalSessionState.recording,
+    },
+    LocalSessionState.recording: <LocalSessionState>{
+      LocalSessionState.paused,
+      LocalSessionState.syncPending,
+    },
+    LocalSessionState.paused: <LocalSessionState>{
+      LocalSessionState.recording,
+      LocalSessionState.syncPending,
+    },
+    LocalSessionState.syncPending: <LocalSessionState>{
+      LocalSessionState.syncing,
+    },
+    LocalSessionState.syncing: <LocalSessionState>{
+      LocalSessionState.synced,
+      LocalSessionState.syncFailed,
+    },
+    LocalSessionState.syncFailed: <LocalSessionState>{
+      LocalSessionState.syncing,
+    },
+    LocalSessionState.synced: <LocalSessionState>{},
+  };
+
   LocalSessionState transition(
     LocalSessionState current,
     LocalSessionState target,
@@ -17,34 +43,7 @@ class SessionStateMachine {
   }
 
   Set<LocalSessionState> _allowed(LocalSessionState current) {
-    switch (current) {
-      case LocalSessionState.idle:
-        return <LocalSessionState>{LocalSessionState.recording};
-      case LocalSessionState.recording:
-        return <LocalSessionState>{
-          LocalSessionState.paused,
-          LocalSessionState.syncPending,
-        };
-      case LocalSessionState.paused:
-        return <LocalSessionState>{
-          LocalSessionState.recording,
-          LocalSessionState.syncPending,
-        };
-      case LocalSessionState.locallyCompleted:
-        // Canonicalization absorbs this legacy value before transition checks.
-        return <LocalSessionState>{};
-      case LocalSessionState.syncPending:
-        return <LocalSessionState>{LocalSessionState.syncing};
-      case LocalSessionState.syncing:
-        return <LocalSessionState>{
-          LocalSessionState.synced,
-          LocalSessionState.syncFailed,
-        };
-      case LocalSessionState.syncFailed:
-        return <LocalSessionState>{LocalSessionState.syncing};
-      case LocalSessionState.synced:
-        return <LocalSessionState>{};
-    }
+    return _allowedTransitions[current] ?? const <LocalSessionState>{};
   }
 
   LocalSessionState _canonical(LocalSessionState value) {
