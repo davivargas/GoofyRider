@@ -3,7 +3,7 @@ from app.core.config import get_ski_api_host
 from app.core.config import get_ski_api_key
 from app.core.config import get_ski_api_page_size
 from app.core.config import get_ski_api_timeout_seconds
-from app.core.database import SessionLocal
+from app.core.database import get_session_local
 from app.repositories.resort_repository import ResortRepository
 from app.services.exceptions import ServiceUnavailableError
 from app.services.exceptions import ValidationError
@@ -12,7 +12,8 @@ from app.services.ski_api_resort_source import SkiApiResortSource
 
 
 def import_resorts() -> tuple[int, int, int]:
-    with SessionLocal() as db:
+    db = get_session_local()()
+    try:
         resort_repository = ResortRepository(db)
         resort_source = SkiApiResortSource(
             base_url=get_ski_api_base_url(),
@@ -27,6 +28,8 @@ def import_resorts() -> tuple[int, int, int]:
             deactivate_missing=False,
         )
         summary = import_service.import_resorts()
+    finally:
+        db.close()
 
     return (
         summary.created_count,

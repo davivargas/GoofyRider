@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from collections.abc import Callable
 from collections.abc import Generator
 
@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.database import SessionLocal
+from app.core.database import get_session_local
 from app.core.dependencies import get_db
 from app.main import app
 from app.models.resort import Resort
@@ -24,7 +24,7 @@ TABLES_TO_TRUNCATE = [
 
 @pytest.fixture
 def db() -> Generator[Session, None, None]:
-    session = SessionLocal()
+    session = get_session_local()()
     try:
         _truncate_known_tables(session)
         yield session

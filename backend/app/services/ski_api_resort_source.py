@@ -113,6 +113,7 @@ class SkiApiResortSource:
         page_size: int,
         timeout_seconds: int,
         page_fetcher: SkiApiPageFetcherProtocol | None = None,
+        client: httpx.Client | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -120,6 +121,7 @@ class SkiApiResortSource:
         self._page_size = page_size
         self._timeout_seconds = timeout_seconds
         self._page_fetcher = page_fetcher
+        self._client = client
 
     def fetch_resorts(self) -> list[ExternalResortRecord]:
         resorts: list[ExternalResortRecord] = []
@@ -143,14 +145,23 @@ class SkiApiResortSource:
         )
 
         try:
-            with httpx.Client(timeout=float(self._timeout_seconds)) as client:
-                response = client.get(
+            if self._client is not None:
+                response = self._client.get(
                     f"{self._base_url}/resort",
                     params={"page": page, "per_page": self._page_size},
                     headers=headers,
                 )
                 response.raise_for_status()
                 payload = response.json()
+            else:
+                with httpx.Client(timeout=float(self._timeout_seconds)) as client:
+                    response = client.get(
+                        f"{self._base_url}/resort",
+                        params={"page": page, "per_page": self._page_size},
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
         except httpx.HTTPError as exc:
             raise ServiceUnavailableError("Ski API provider unavailable.") from exc
         except ValueError as exc:
