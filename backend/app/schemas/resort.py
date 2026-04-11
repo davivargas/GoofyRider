@@ -1,9 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field
-
 from app.schemas.base import ORMBaseModel
+from app.schemas.base import PaginatedResponse
 
 
 class ResortPublic(ORMBaseModel):
@@ -19,8 +18,5 @@ class ResortPublic(ORMBaseModel):
     created_at: datetime
 
 
-class ResortListResponse(ORMBaseModel):
-    items: list[ResortPublic]
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1)
-    total: int = Field(ge=0)
+class ResortListResponse(PaginatedResponse[ResortPublic]):
+    pass
