@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 
-import '../constants/app_constants.dart';
 import '../errors/failures.dart';
 
 AppFailure mapDioException(DioException exception) {
@@ -73,12 +72,6 @@ String? _connectionFriendlyMessage(DioException exception) {
 
   final String host = exception.requestOptions.uri.host;
   final int port = exception.requestOptions.uri.port;
-  if (host == '10.0.2.2' && AppConstants.isUsingImplicitEmulatorApiBaseUrl) {
-    return 'Could not connect to $host:$port. '
-        '10.0.2.2 only works on the Android emulator. '
-        'For a physical device, run with '
-        '--dart-define=API_BASE_URL=http://<your-lan-ip>:8000/v1.';
-  }
   return 'Could not connect to $host:$port. '
       'Check that the API is running and reachable from this device.';
 }

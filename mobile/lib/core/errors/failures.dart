@@ -1,4 +1,4 @@
-﻿sealed class AppFailure implements Exception {
+sealed class AppFailure implements Exception {
   const AppFailure(this.message, {this.details});
 
   final String message;

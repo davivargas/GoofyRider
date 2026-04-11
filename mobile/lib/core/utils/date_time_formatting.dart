@@ -1,4 +1,4 @@
-﻿import 'package:intl/intl.dart';
+import 'package:intl/intl.dart';
 
 extension DateTimeFormatting on DateTime {
   String toDayLabel() {

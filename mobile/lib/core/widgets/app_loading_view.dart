@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class AppLoadingView extends StatelessWidget {
   const AppLoadingView({super.key, this.label});

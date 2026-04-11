@@ -1,4 +1,4 @@
-﻿class RoutePaths {
+class RoutePaths {
   RoutePaths._();
 
   static const String login = '/login';
