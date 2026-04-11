@@ -41,17 +41,21 @@ final sessionRepositoryProvider = Provider<SessionRepository>(
 
 final recordingControllerProvider =
     StateNotifierProvider<RecordingController, RecordingViewState>(
-  (ref) => RecordingController(
-    sessionRepository: ref.watch(sessionRepositoryProvider),
-    locationTrackingRepository: ref.watch(locationTrackingRepositoryProvider),
-  ),
+  (ref) {
+    final controller = RecordingController(
+      sessionRepository: ref.watch(sessionRepositoryProvider),
+      locationTrackingRepository: ref.watch(locationTrackingRepositoryProvider),
+    );
+    controller.initialize();
+    return controller;
+  },
 );
 
 final historyProvider = FutureProvider.autoDispose(
   (ref) {
     ref.watch(
       recordingControllerProvider.select(
-        (RecordingViewState state) => state.historyRevision,
+        (RecordingViewState state) => state.sync.historyRevision,
       ),
     );
     return ref
@@ -91,7 +95,7 @@ final unsyncedSessionCountProvider = FutureProvider.autoDispose(
   (ref) {
     ref.watch(
       recordingControllerProvider.select(
-        (RecordingViewState state) => state.historyRevision,
+        (RecordingViewState state) => state.sync.historyRevision,
       ),
     );
     return ref.watch(sessionRepositoryProvider).unsyncedCount();
