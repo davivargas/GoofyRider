@@ -2,14 +2,11 @@ import uuid
 
 from fastapi import APIRouter
 from fastapi import Depends
-from fastapi import HTTPException
 from fastapi import Query
-from fastapi import status
 
 from app.core.dependencies import get_resort_service
 from app.schemas.resort import ResortListResponse
 from app.schemas.resort import ResortPublic
-from app.services.exceptions import NotFoundError
 from app.services.resort_service import ResortService
 
 router = APIRouter(prefix="/resorts", tags=["resorts"])
@@ -42,12 +39,5 @@ def get_resort(
     resort_id: uuid.UUID,
     resort_service: ResortService = Depends(get_resort_service),
 ) -> ResortPublic:
-    try:
-        resort = resort_service.get_resort(resort_id=resort_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
+    resort = resort_service.get_resort(resort_id=resort_id)
     return ResortPublic.model_validate(resort)

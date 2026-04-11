@@ -1,17 +1,12 @@
-﻿import uuid
+import uuid
 
 from fastapi import APIRouter
 from fastapi import Depends
-from fastapi import HTTPException
-from fastapi import status
 
 from app.core.dependencies import get_weather_service
 from app.schemas.weather import WeatherCurrentSummary
 from app.schemas.weather import WeatherForecastSummary
 from app.schemas.weather import ResortWeatherResponse
-from app.services.exceptions import NotFoundError
-from app.services.exceptions import ServiceUnavailableError
-from app.services.exceptions import ValidationError
 from app.services.weather_service import WeatherService
 
 router = APIRouter(prefix="/weather", tags=["weather"])
@@ -22,24 +17,7 @@ def get_resort_weather(
     resort_id: uuid.UUID,
     weather_service: WeatherService = Depends(get_weather_service),
 ) -> ResortWeatherResponse:
-    try:
-        weather = weather_service.get_resort_weather(resort_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    except ServiceUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
-
+    weather = weather_service.get_resort_weather(resort_id)
     return ResortWeatherResponse(
         resort_id=weather.resort_id,
         observed_at=weather.observed_at,
