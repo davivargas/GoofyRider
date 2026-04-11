@@ -1,4 +1,4 @@
-﻿class ServiceError(Exception):
+class ServiceError(Exception):
     """Base class for application service errors."""
 
 

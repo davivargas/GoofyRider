@@ -2,7 +2,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
+from app.api.exception_handlers import register_service_exception_handlers
 from app.api.health import router as health_router
 from app.api.router import api_router
 from app.core.config import get_resort_sync_enabled
@@ -29,13 +31,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_service_exception_handlers(app)
+
 app.include_router(health_router)
 app.include_router(api_router)
 
 
-@app.get("/", tags=["root"])
-async def root() -> dict[str, str]:
-    """
-    Simple root endpoint for quick browser verification.
-    """
-    return {"message": "GoofyRider API is running"}
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/health")
