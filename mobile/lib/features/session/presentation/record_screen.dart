@@ -81,7 +81,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
       _handleErrorAlert(state);
     });
 
-    final List<LatLng> route = state.route;
+    final List<LatLng> route = state.tracking.route;
     _maybeFollowRider(state, route);
 
     final LatLng center =
@@ -91,12 +91,12 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
       appBar: AppBar(
         title: const Text('Record'),
         actions: <Widget>[
-          if (showDebugDiagnostics && state.lastSyncMessage != null)
+          if (showDebugDiagnostics && state.sync.lastSyncMessage != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Center(
                 child: Text(
-                  state.lastSyncMessage!,
+                  state.sync.lastSyncMessage!,
                   style: theme.textTheme.labelSmall,
                 ),
               ),
@@ -197,21 +197,21 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final DateTime nowUtc = DateTime.now().toUtc();
     final List<String> labels = <String>[
       'Phase: ${state.phase.name}',
-      'Elapsed: ${state.elapsed.toHoursMinutesSeconds()}',
-      if (state.lowAccuracy) 'Low GPS accuracy',
-      if (!state.hasLocationPermission) 'Location permission required',
+      'Elapsed: ${state.tracking.elapsed.toHoursMinutesSeconds()}',
+      if (state.tracking.lowAccuracy) 'Low GPS accuracy',
+      if (!state.permission.hasLocationPermission) 'Location permission required',
       if (state.phase == RecordScreenPhase.recording &&
-          state.hasConfirmedBackgroundTracking)
+          state.permission.hasConfirmedBackgroundTracking)
         'Background tracking active',
       if (state.phase == RecordScreenPhase.recording &&
-          !state.hasConfirmedBackgroundTracking)
+          !state.permission.hasConfirmedBackgroundTracking)
         'Background tracking limited: allow "All the time".',
       if (state.phase == RecordScreenPhase.recording &&
-          state.lastSampleAtUtc != null)
-        'Last sample ${nowUtc.difference(state.lastSampleAtUtc!).toHoursMinutesSeconds()} ago',
+          state.tracking.lastSampleAtUtc != null)
+        'Last sample ${nowUtc.difference(state.tracking.lastSampleAtUtc!).toHoursMinutesSeconds()} ago',
       if (state.phase == RecordScreenPhase.recording &&
-          state.lastPersistedPointAtUtc != null)
-        'Last DB write ${nowUtc.difference(state.lastPersistedPointAtUtc!).toHoursMinutesSeconds()} ago',
+          state.tracking.lastPersistedPointAtUtc != null)
+        'Last DB write ${nowUtc.difference(state.tracking.lastPersistedPointAtUtc!).toHoursMinutesSeconds()} ago',
       if (state.streamRestartCount > 0)
         'Stream restarts: ${state.streamRestartCount}',
       if (state.preselectedResortId != null) 'Resort selected',
@@ -239,7 +239,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
             ),
           ),
         ),
-        if (state.needsAlwaysOnPermission)
+        if (state.permission.needsAlwaysOnPermission)
           Card(
             color: Colors.black54,
             child: Padding(
@@ -264,7 +264,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
               ),
             ),
           ),
-        if (state.permissionState == LocationPermissionState.serviceDisabled)
+        if (state.permission.permissionState == LocationPermissionState.serviceDisabled)
           Card(
             color: Colors.black54,
             child: Padding(
@@ -292,13 +292,13 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     SpeedUnit speedUnit,
     DistanceUnit distanceUnit,
   ) {
-    final SessionStats stats = state.liveStats;
+    final SessionStats stats = state.tracking.liveStats;
     final String verticalLabel = stats.elevationLossM == null
         ? '--'
         : distanceUnit.formatFromMeters(stats.elevationLossM!.toDouble());
-    final String altitudeLabel = state.currentAltitudeM == null
+    final String altitudeLabel = state.tracking.currentAltitudeM == null
         ? '--'
-        : distanceUnit.formatFromMeters(state.currentAltitudeM!);
+        : distanceUnit.formatFromMeters(state.tracking.currentAltitudeM!);
 
     return SizedBox(
       width: double.infinity,
@@ -309,7 +309,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           runSpacing: 10,
           children: <Widget>[
             _statCard('Current',
-                speedUnit.formatFromMetersPerSecond(state.currentSpeedMps)),
+                speedUnit.formatFromMetersPerSecond(state.tracking.currentSpeedMps)),
             _statCard(
                 'Max', speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps)),
             _statCard(
@@ -318,8 +318,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
             _statCard('Altitude', altitudeLabel),
             _statCard('Ride avg',
                 speedUnit.formatFromMetersPerSecond(stats.rideAvgSpeedMps)),
-            _statCard('Duration', state.elapsed.toHoursMinutesSeconds()),
-            _statCard('Points', '${state.route.length}'),
+            _statCard('Duration', state.tracking.elapsed.toHoursMinutesSeconds()),
+            _statCard('Points', '${state.tracking.route.length}'),
             _statCard('Updated', DateTime.now().toTimeLabel()),
           ],
         ),
@@ -328,7 +328,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   }
 
   Widget _gpsSignalBadge(RecordingViewState state) {
-    final Color signalColor = switch (state.gpsSignal.bars) {
+    final Color signalColor = switch (state.tracking.gpsSignal.bars) {
       4 => const Color(0xFF6EDB8F),
       3 => const Color(0xFF9BE070),
       2 => const Color(0xFFF6C667),
@@ -337,7 +337,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     };
 
     return Semantics(
-      label: 'GPS signal ${state.gpsSignal.description}',
+      label: 'GPS signal ${state.tracking.gpsSignal.description}',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -349,7 +349,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             _GpsSignalBars(
-              bars: state.gpsSignal.bars,
+              bars: state.tracking.gpsSignal.bars,
               color: signalColor,
             ),
             const SizedBox(height: 2),
@@ -494,7 +494,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   }
 
   void _handleErrorAlert(RecordingViewState state) {
-    final String? error = state.errorMessage;
+    final String? error = state.permission.errorMessage;
     if (!mounted) {
       return;
     }
@@ -511,11 +511,11 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
 
     final RecordingController controller =
         ref.read(recordingControllerProvider.notifier);
-    final bool canOpenPermissionSettings = state.permissionState ==
+    final bool canOpenPermissionSettings = state.permission.permissionState ==
             LocationPermissionState.grantedForegroundOnly ||
-        state.permissionState == LocationPermissionState.deniedForever;
+        state.permission.permissionState == LocationPermissionState.deniedForever;
     final bool canOpenLocationSettings =
-        state.permissionState == LocationPermissionState.serviceDisabled;
+        state.permission.permissionState == LocationPermissionState.serviceDisabled;
 
     final SnackBarAction? action;
     if (canOpenPermissionSettings) {
