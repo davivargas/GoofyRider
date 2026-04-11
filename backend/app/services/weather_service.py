@@ -1,21 +1,27 @@
+import logging
 import uuid
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from typing import Protocol
-from typing import cast
 
 import httpx
+from sqlalchemy.exc import IntegrityError
 
-from app.models.resort import Resort
 from app.models.weather_cache import WeatherCache
+from app.repositories.protocols import ResortRepositoryProtocol
+from app.repositories.protocols import WeatherCacheRepositoryProtocol
+from app.schemas.weather_codes import _as_object_sequence
+from app.schemas.weather_codes import _to_optional_float
+from app.schemas.weather_codes import weather_code_to_text
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ServiceUnavailableError
 from app.services.exceptions import ValidationError
 
-CACHE_TTL_MINUTES = 60
+logger = logging.getLogger(__name__)
+
+WEATHER_CACHE_TTL_MINUTES = 60
 
 
 @dataclass(frozen=True)
@@ -31,25 +37,6 @@ class WeatherSnapshotData:
     weather_code_text: str | None
 
 
-class ResortRepositoryProtocol(Protocol):
-    def get_by_id(self, resort_id: uuid.UUID) -> Resort | None:
-        ...
-
-
-class WeatherCacheRepositoryProtocol(Protocol):
-    def get_by_resort_id(self, resort_id: uuid.UUID) -> WeatherCache | None:
-        ...
-
-    def add(self, cache: WeatherCache) -> None:
-        ...
-
-    def commit(self) -> None:
-        ...
-
-    def refresh(self, instance: object) -> None:
-        ...
-
-
 class WeatherProviderProtocol(Protocol):
     def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData:
         ...
@@ -57,6 +44,9 @@ class WeatherProviderProtocol(Protocol):
 
 class OpenMeteoWeatherProvider:
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
+
+    def __init__(self, client: httpx.Client | None = None) -> None:
+        self._client = client
 
     def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData:
         params: dict[str, str | int | float] = {
@@ -68,10 +58,15 @@ class OpenMeteoWeatherProvider:
             "forecast_days": 2,
         }
 
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(self.BASE_URL, params=params)
+        if self._client is not None:
+            response = self._client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             payload = response.json()
+        else:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(self.BASE_URL, params=params)
+                response.raise_for_status()
+                payload = response.json()
 
         current = payload.get("current", {})
         daily = payload.get("daily", {})
@@ -129,7 +124,9 @@ class WeatherService:
 
         cached = self._weather_cache_repository.get_by_resort_id(resort_id)
         now = datetime.now(UTC)
-        if cached is not None and now - cached.fetched_at <= timedelta(minutes=CACHE_TTL_MINUTES):
+        if cached is not None and now - cached.fetched_at <= timedelta(
+            minutes=WEATHER_CACHE_TTL_MINUTES
+        ):
             return cached
 
         try:
@@ -139,6 +136,7 @@ class WeatherService:
             )
         except (httpx.HTTPError, ValueError) as exc:
             if cached is not None:
+                logger.warning("Weather provider unavailable, using cache for resort: %s", resort_id)
                 return cached
             raise ServiceUnavailableError("Weather provider unavailable.") from exc
 
@@ -156,7 +154,27 @@ class WeatherService:
                 weather_code_text=snapshot.weather_code_text,
                 fetched_at=now,
             )
-            self._weather_cache_repository.add(cached)
+            try:
+                self._weather_cache_repository.add(cached)
+                self._weather_cache_repository.commit()
+            except IntegrityError:
+                self._weather_cache_repository.rollback()
+                cached = self._weather_cache_repository.get_by_resort_id(resort_id)
+                if cached is None:
+                    raise ServiceUnavailableError(
+                        "Weather cache conflict: unable to resolve."
+                    )
+                cached.observed_at = snapshot.observed_at
+                cached.temp_c = snapshot.temp_c
+                cached.wind_kph = snapshot.wind_kph
+                cached.snowfall_cm_24h = snapshot.snowfall_cm_24h
+                cached.conditions_text = snapshot.conditions_text
+                cached.today_high_c = snapshot.today_high_c
+                cached.today_low_c = snapshot.today_low_c
+                cached.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
+                cached.weather_code_text = snapshot.weather_code_text
+                cached.fetched_at = now
+                self._weather_cache_repository.commit()
         else:
             cached.observed_at = snapshot.observed_at
             cached.temp_c = snapshot.temp_c
@@ -168,47 +186,10 @@ class WeatherService:
             cached.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
             cached.weather_code_text = snapshot.weather_code_text
             cached.fetched_at = now
+            self._weather_cache_repository.commit()
 
-        self._weather_cache_repository.commit()
         self._weather_cache_repository.refresh(cached)
+        logger.info("Weather fetched for resort: %s", resort_id)
         return cached
 
 
-def _to_optional_float(value: object) -> float | None:
-    if value is None:
-        return None
-    if not isinstance(value, (int, float, str, bytes, bytearray)):
-        raise ValueError("Weather numeric fields must be numbers.")
-    return float(value)
-
-
-def weather_code_to_text(raw_code: object) -> str | None:
-    if raw_code is None:
-        return None
-
-    if not isinstance(raw_code, (int, float, str, bytes, bytearray)):
-        raise ValueError("Weather weather_code must be numeric.")
-
-    code = int(raw_code)
-    if code == 0:
-        return "Clear"
-    if code in {1, 2, 3}:
-        return "Partly cloudy"
-    if code in {45, 48}:
-        return "Fog"
-    if code in {51, 53, 55, 56, 57}:
-        return "Drizzle"
-    if code in {61, 63, 65, 66, 67, 80, 81, 82}:
-        return "Rain"
-    if code in {71, 73, 75, 77, 85, 86}:
-        return "Snow"
-    if code in {95, 96, 99}:
-        return "Thunderstorm"
-    return "Mixed"
-
-
-def _as_object_sequence(value: object) -> Sequence[object]:
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        sequence_value = cast(Sequence[object], value)
-        return tuple(sequence_value)
-    return ()
