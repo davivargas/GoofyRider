@@ -23,19 +23,19 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_DB: goofyrider
+          POSTGRES_DB: goofyrider_test
           POSTGRES_USER: goofyrider_user
           POSTGRES_PASSWORD: goofyrider_password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U goofyrider_user -d goofyrider"
+          --health-cmd "pg_isready -U goofyrider_user -d goofyrider_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql+psycopg://goofyrider_user:goofyrider_password@localhost:5432/goofyrider
+      DATABASE_URL: postgresql+psycopg://goofyrider_user:goofyrider_password@localhost:5432/goofyrider_test
       JWT_SECRET_KEY: ci-jwt-secret-key-at-least-32-characters
 
     steps:

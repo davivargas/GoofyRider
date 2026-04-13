@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.database_safety import assert_safe_test_database_name
 from app.core.database import get_session_local
 from app.core.dependencies import get_db
 from app.main import app
@@ -96,6 +97,9 @@ def register_user(client: TestClient) -> Callable[..., dict[str, str]]:
 
 def _truncate_known_tables(session: Session) -> None:
     session.rollback()
+    database_name = session.execute(text("SELECT current_database()")).scalar_one()
+    assert_safe_test_database_name(database_name)
+
     existing_tables = set(
         session.execute(
             text(
