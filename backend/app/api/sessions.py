@@ -2,7 +2,10 @@ import uuid
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Request
 from fastapi import status
+from pydantic import ValidationError as PydanticValidationError
 
 from app.core.dependencies import get_current_user
 from app.core.dependencies import get_session_service
@@ -17,6 +20,26 @@ from app.schemas.session import SessionPointsListResponse
 from app.services.session_service import SessionService
 
 router = APIRouter(tags=["sessions"])
+
+
+async def _parse_session_completion_payload(request: Request) -> SessionCompleteRequest:
+    try:
+        body = await request.json()
+    except ValueError:
+        body = {}
+    try:
+        return SessionCompleteRequest.model_validate(body)
+    except PydanticValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "Invalid session completion payload.",
+                "errors": [
+                    {"field": str(error["loc"][-1]), "message": error["msg"]}
+                    for error in exc.errors()
+                ],
+            },
+        ) from exc
 
 
 @router.post("/sessions", response_model=RideSessionPublic, status_code=status.HTTP_201_CREATED)
@@ -50,7 +73,7 @@ def upload_session_points_batch(
 @router.post("/sessions/{session_id}/complete", response_model=RideSessionPublic)
 def complete_session(
     session_id: uuid.UUID,
-    payload: SessionCompleteRequest,
+    payload: SessionCompleteRequest = Depends(_parse_session_completion_payload),
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
