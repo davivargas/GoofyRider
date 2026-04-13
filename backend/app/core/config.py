@@ -5,6 +5,7 @@ from urllib.parse import quote_plus
 from dotenv import load_dotenv
 from pydantic import PositiveInt
 from pydantic import ValidationError as PydanticValidationError
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
@@ -38,111 +39,79 @@ class AppSettings(BaseSettings):
     resort_sync_enabled: bool = True
     resort_sync_interval_days: PositiveInt = 7
 
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def _validate_jwt_secret_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if len(value) < 32:
+            raise ValueError("JWT_SECRET_KEY must be at least 32 characters long.")
+        return value
 
-def get_database_url() -> str:
-    settings = _get_settings()
-    if settings.database_url:
-        return settings.database_url
+    @field_validator("ski_api_base_url")
+    @classmethod
+    def _validate_ski_api_base_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if not normalized:
+            raise ValueError("SKI_API_BASE_URL must not be empty.")
+        return normalized
 
-    return _build_database_url_from_postgres_env(settings)
+    @field_validator("ski_api_host", "ski_api_key")
+    @classmethod
+    def _blank_string_becomes_none(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        return value
 
+    def resolve_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
 
-def get_jwt_secret_key() -> str:
-    secret_key = _get_settings().jwt_secret_key
-    if not secret_key:
-        raise ValueError("JWT_SECRET_KEY is not set.")
+        user = self.postgres_user or ""
+        password = self.postgres_password or ""
+        host = self.postgres_host or ""
+        db_name = self.postgres_db or ""
 
-    if len(secret_key) < 32:
-        raise ValueError("JWT_SECRET_KEY must be at least 32 characters long.")
+        if not all([user, password, host, db_name]):
+            raise ValueError("DATABASE_URL is not set.")
 
-    return secret_key
+        encoded_password = quote_plus(password)
+        return (
+            f"postgresql+psycopg://{user}:{encoded_password}@{host}:{self.postgres_port}/{db_name}"
+        )
 
-
-def get_jwt_algorithm() -> str:
-    return _get_settings().jwt_algorithm
-
-
-def get_access_token_expire_minutes() -> int:
-    return _get_settings().access_token_expire_minutes
-
-
-def get_refresh_token_expire_days() -> int:
-    return _get_settings().refresh_token_expire_days
-
-
-def get_sqlalchemy_echo() -> bool:
-    return _get_settings().sqlalchemy_echo
-
-
-def get_ski_api_base_url() -> str:
-    normalized = _get_settings().ski_api_base_url.rstrip("/")
-    if not normalized:
-        raise ValueError("SKI_API_BASE_URL must not be empty.")
-    return normalized
-
-
-def get_ski_api_host() -> str | None:
-    return _get_settings().ski_api_host or None
-
-
-def get_ski_api_key() -> str | None:
-    return _get_settings().ski_api_key or None
-
-
-def get_ski_api_page_size() -> int:
-    return _get_settings().ski_api_page_size
-
-
-def get_ski_api_timeout_seconds() -> int:
-    return _get_settings().ski_api_timeout_seconds
-
-
-def get_resort_sync_enabled() -> bool:
-    return _get_settings().resort_sync_enabled
-
-
-def get_resort_sync_interval_days() -> int:
-    return _get_settings().resort_sync_interval_days
-
-
-def _build_database_url_from_postgres_env(settings: AppSettings) -> str:
-    user = settings.postgres_user or ""
-    password = settings.postgres_password or ""
-    host = settings.postgres_host or ""
-    db_name = settings.postgres_db or ""
-
-    if not all([user, password, host, db_name]):
-        raise ValueError("DATABASE_URL is not set.")
-
-    port = settings.postgres_port
-    encoded_password = quote_plus(password)
-    return f"postgresql+psycopg://{user}:{encoded_password}@{host}:{port}/{db_name}"
-
-
-def _get_settings() -> AppSettings:
-    """Build settings, translating Pydantic validation errors into ValueError."""
-    try:
-        return _get_settings_cached()
-    except PydanticValidationError as exc:
-        _get_settings_cached.cache_clear()
-        _raise_settings_validation_error(exc)
+    def require_jwt_secret_key(self) -> str:
+        if not self.jwt_secret_key:
+            raise ValueError("JWT_SECRET_KEY is not set.")
+        return self.jwt_secret_key
 
 
 @lru_cache(maxsize=1)
-def _get_settings_cached() -> AppSettings:
-    return AppSettings()
+def get_settings() -> AppSettings:
+    try:
+        return AppSettings()
+    except PydanticValidationError as exc:
+        get_settings.cache_clear()
+        _raise_settings_validation_error(exc)
+
+
+def get_database_url() -> str:
+    return get_settings().resolve_database_url()
 
 
 def _raise_settings_validation_error(exc: PydanticValidationError) -> NoReturn:
-    """Translate a Pydantic ValidationError into a human-friendly ValueError."""
     for error in exc.errors():
         field_name = str(error["loc"][0]).upper() if error.get("loc") else "UNKNOWN"
         error_type = error.get("type", "")
 
+        if error_type == "value_error":
+            message = error.get("msg", "")
+            prefix = "Value error, "
+            if message.startswith(prefix):
+                raise ValueError(message[len(prefix) :]) from exc
+            raise ValueError(message) from exc
         if error_type in {"greater_than", "greater_than_equal"}:
-            raise ValueError(
-                f"{field_name} must be a positive integer."
-            ) from exc
+            raise ValueError(f"{field_name} must be a positive integer.") from exc
         if error_type in {"int_parsing", "int_type"}:
             raise ValueError(f"{field_name} must be an integer.") from exc
         if error_type in {"bool_parsing", "bool_type"}:

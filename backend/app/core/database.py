@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_database_url
-from app.core.config import get_sqlalchemy_echo
+from app.core.config import get_settings
 from app.models.base import Base
 
 __all__ = ["Base", "get_engine", "get_session_local"]
@@ -16,7 +16,7 @@ __all__ = ["Base", "get_engine", "get_session_local"]
 def get_engine() -> Engine:
     return create_engine(
         get_database_url(),
-        echo=get_sqlalchemy_echo(),
+        echo=get_settings().sqlalchemy_echo,
     )
 
 
@@ -27,5 +27,3 @@ def get_session_local() -> sessionmaker[Session]:
         autoflush=False,
         bind=get_engine(),
     )
-
-
