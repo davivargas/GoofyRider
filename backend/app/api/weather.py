@@ -4,9 +4,9 @@ from fastapi import APIRouter
 from fastapi import Depends
 
 from app.core.dependencies import get_weather_service
+from app.schemas.weather import ResortWeatherResponse
 from app.schemas.weather import WeatherCurrentSummary
 from app.schemas.weather import WeatherForecastSummary
-from app.schemas.weather import ResortWeatherResponse
 from app.services.weather_service import WeatherService
 
 router = APIRouter(prefix="/weather", tags=["weather"])

@@ -18,12 +18,12 @@ from app.schemas.weather import ResortWeatherResponse
 
 __all__ = [
     "LoginRequest",
-    "RideSessionPublic",
     "RefreshTokenRequest",
     "RegisterRequest",
     "ResortListResponse",
     "ResortPublic",
     "ResortWeatherResponse",
+    "RideSessionPublic",
     "SessionCompleteRequest",
     "SessionCreateRequest",
     "SessionListResponse",

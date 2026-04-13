@@ -1,5 +1,5 @@
-import uuid
 from collections.abc import Sequence
+import uuid
 
 from sqlalchemy import select
 

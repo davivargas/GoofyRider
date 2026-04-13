@@ -1,5 +1,5 @@
-import pytest
 from pydantic import ValidationError
+import pytest
 
 from app.schemas.auth import RegisterRequest
 from app.schemas.session import SessionCompleteRequest

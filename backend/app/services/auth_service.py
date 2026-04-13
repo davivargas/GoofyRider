@@ -1,6 +1,6 @@
 import logging
-import uuid
 from typing import TypedDict
+import uuid
 
 from pydantic import TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
@@ -19,7 +19,6 @@ from app.repositories.protocols import UserRepositoryProtocol
 from app.services.exceptions import AuthenticationError
 from app.services.exceptions import ConflictError
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +29,7 @@ class TokenPairPayload(TypedDict):
 
 
 SUBJECT_UUID_ADAPTER = TypeAdapter(uuid.UUID)
+
 
 class AuthService:
     def __init__(self, user_repository: UserRepositoryProtocol) -> None:

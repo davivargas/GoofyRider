@@ -1,6 +1,6 @@
 import asyncio
-import logging
 from collections.abc import Callable
+import logging
 
 from app.scripts.import_resorts import import_resorts
 from app.services.exceptions import ServiceUnavailableError

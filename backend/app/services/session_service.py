@@ -1,9 +1,9 @@
-import logging
-import uuid
 from collections.abc import Sequence
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+import logging
+import uuid
 
 from sqlalchemy.exc import IntegrityError
 
@@ -19,7 +19,6 @@ from app.schemas.session import SessionPointInput
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
-
 
 logger = logging.getLogger(__name__)
 
@@ -159,10 +158,7 @@ class SessionService:
         points: Sequence[SessionPointInput],
         existing_elapsed_offsets_ms: set[int],
     ) -> list[SessionPointInput]:
-        return [
-            p for p in points
-            if p.elapsed_offset_ms not in existing_elapsed_offsets_ms
-        ]
+        return [p for p in points if p.elapsed_offset_ms not in existing_elapsed_offsets_ms]
 
     def _insert_new_points_with_idempotency(
         self,
@@ -188,9 +184,11 @@ class SessionService:
         except IntegrityError:
             self._session_point_repository.rollback()
 
-        latest_existing_elapsed_offsets_ms = self._session_point_repository.existing_elapsed_offsets_ms(
-            session_id=session_id,
-            elapsed_offsets_ms=[point.elapsed_offset_ms for point in points],
+        latest_existing_elapsed_offsets_ms = (
+            self._session_point_repository.existing_elapsed_offsets_ms(
+                session_id=session_id,
+                elapsed_offsets_ms=[point.elapsed_offset_ms for point in points],
+            )
         )
         retry_new_points = self._filter_new_points(points, latest_existing_elapsed_offsets_ms)
         if not retry_new_points:
@@ -209,9 +207,7 @@ class SessionService:
         except IntegrityError as exc:
             self._session_point_repository.rollback()
             logger.warning("Duplicate points detected for session: %s", session_id)
-            raise ConflictError(
-                "Duplicate point offsets detected while uploading points."
-            ) from exc
+            raise ConflictError("Duplicate point offsets detected while uploading points.") from exc
 
     def _build_models(
         self,
@@ -224,8 +220,7 @@ class SessionService:
                 session_id=session_id,
                 t_offset_ms=point.elapsed_offset_ms,
                 recorded_at=point.recorded_at
-                or ride_session.started_at
-                + timedelta(milliseconds=point.elapsed_offset_ms),
+                or ride_session.started_at + timedelta(milliseconds=point.elapsed_offset_ms),
                 latitude=point.latitude,
                 longitude=point.longitude,
                 accuracy_m=point.accuracy_m,

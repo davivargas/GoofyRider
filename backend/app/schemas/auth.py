@@ -5,7 +5,6 @@ from pydantic import EmailStr
 from pydantic import StringConstraints
 from pydantic import field_validator
 
-
 NormalizedEmail = Annotated[
     EmailStr,
     StringConstraints(max_length=255, strip_whitespace=True),

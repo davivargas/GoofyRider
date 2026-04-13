@@ -6,9 +6,9 @@ defining its own inline Protocol class.
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Sequence
 from typing import Protocol
+import uuid
 
 from app.models.resort import Resort
 from app.models.ride_session import RideSession
@@ -84,9 +84,7 @@ class RideSessionRepositoryProtocol(Protocol):
 
     def count_by_user(self, user_id: uuid.UUID) -> int: ...
 
-    def list_by_user(
-        self, user_id: uuid.UUID, page: int, page_size: int
-    ) -> list[RideSession]: ...
+    def list_by_user(self, user_id: uuid.UUID, page: int, page_size: int) -> list[RideSession]: ...
 
     def list_by_user_with_count(
         self, user_id: uuid.UUID, page: int, page_size: int

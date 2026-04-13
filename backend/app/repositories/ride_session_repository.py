@@ -45,9 +45,7 @@ class RideSessionRepository(SqlAlchemyRepository):
         self, user_id: uuid.UUID, page: int, page_size: int
     ) -> tuple[list[RideSession], int]:
         count_stmt = (
-            select(func.count())
-            .select_from(RideSession)
-            .where(RideSession.user_id == user_id)
+            select(func.count()).select_from(RideSession).where(RideSession.user_id == user_id)
         )
         total = int(self._db.scalar(count_stmt) or 0)
 

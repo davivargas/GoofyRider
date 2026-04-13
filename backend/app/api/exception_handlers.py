@@ -1,9 +1,11 @@
+from collections.abc import Awaitable
 from collections.abc import Callable
 
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi import status
 from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
 from app.services.exceptions import AuthenticationError
 from app.services.exceptions import ConflictError
@@ -15,8 +17,9 @@ from app.services.exceptions import ValidationError
 
 def _service_error_handler(
     status_code: int,
-) -> Callable[[Request, ServiceError], JSONResponse]:
-    async def handler(_: Request, exc: ServiceError) -> JSONResponse:
+) -> Callable[[Request, Exception], Awaitable[Response]]:
+    async def handler(_: Request, exc: Exception) -> Response:
+        assert isinstance(exc, ServiceError)
         return JSONResponse(
             status_code=status_code,
             content={"detail": str(exc)},

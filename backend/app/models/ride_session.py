@@ -1,7 +1,7 @@
-import uuid
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
+import uuid
 
 from sqlalchemy import DateTime
 from sqlalchemy import Enum as SqlEnum
@@ -30,9 +30,7 @@ class RideSessionStatus(str, Enum):
 
 class RideSession(Base):
     __tablename__ = "ride_sessions"
-    __table_args__ = (
-        Index("ix_ride_sessions_user_id_started_at", "user_id", "started_at"),
-    )
+    __table_args__ = (Index("ix_ride_sessions_user_id_started_at", "user_id", "started_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

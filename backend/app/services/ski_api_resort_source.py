@@ -1,6 +1,6 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 import re
-from collections.abc import Mapping
 from typing import Any
 from typing import Protocol
 from typing import cast
@@ -95,13 +95,11 @@ class ExternalResortRecord:
 
 
 class ExternalResortSourceProtocol(Protocol):
-    def fetch_resorts(self) -> list[ExternalResortRecord]:
-        ...
+    def fetch_resorts(self) -> list[ExternalResortRecord]: ...
 
 
 class SkiApiPageFetcherProtocol(Protocol):
-    def __call__(self, page: int, page_size: int) -> object:
-        ...
+    def __call__(self, page: int, page_size: int) -> object: ...
 
 
 class SkiApiResortSource:
@@ -125,7 +123,7 @@ class SkiApiResortSource:
 
     def fetch_resorts(self) -> list[ExternalResortRecord]:
         resorts: list[ExternalResortRecord] = []
-        next_page = 1
+        next_page: int | None = 1
 
         while next_page is not None:
             payload = self._fetch_page(page=next_page)
@@ -315,7 +313,7 @@ def _optional_int(value: Any) -> int | None:
     parsed = _optional_float(value)
     if parsed is None:
         return None
-    return int(round(parsed))
+    return round(parsed)
 
 
 def _require_object_payload(

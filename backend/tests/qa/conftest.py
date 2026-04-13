@@ -1,14 +1,14 @@
-import uuid
 from collections.abc import Callable
 from collections.abc import Generator
+import uuid
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.database_safety import assert_safe_test_database_name
 from app.core.database import get_session_local
+from app.core.database_safety import assert_safe_test_database_name
 from app.core.dependencies import get_db
 from app.main import app
 from app.models.resort import Resort

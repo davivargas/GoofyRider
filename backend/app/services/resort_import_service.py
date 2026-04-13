@@ -1,7 +1,7 @@
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
-from dataclasses import dataclass
-from typing import Callable
 from typing import TypeVar
 
 from app.models.resort import Resort

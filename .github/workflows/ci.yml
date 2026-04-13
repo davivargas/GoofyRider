@@ -55,6 +55,16 @@ jobs:
           pip install -e .[dev]
           python -m pip check
 
+      - name: Lint backend
+        working-directory: backend
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type-check backend
+        working-directory: backend
+        run: mypy
+
       - name: Run migrations
         working-directory: backend
         run: alembic upgrade head

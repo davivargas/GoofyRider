@@ -273,8 +273,7 @@ def test_sessions_upload_points_rejects_completed_session(
     )
     assert upload_after_complete.status_code == 409
     assert (
-        upload_after_complete.json()["detail"]
-        == "Points can only be uploaded to draft sessions."
+        upload_after_complete.json()["detail"] == "Points can only be uploaded to draft sessions."
     )
 
 

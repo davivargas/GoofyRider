@@ -117,7 +117,7 @@ def _build_session(user_id, status: RideSessionStatus = RideSessionStatus.DRAFT)
 def test_create_session_rejects_unknown_resort() -> None:
     service = _build_service()
 
-    with pytest.raises(NotFoundError, match="Resort not found."):
+    with pytest.raises(NotFoundError, match=r"Resort not found."):
         service.create_session(
             user_id=uuid4(),
             request=SessionCreateRequest(
@@ -133,7 +133,7 @@ def test_upload_points_batch_rejects_non_draft_session() -> None:
     ride_sessions.sessions[completed_session.id] = completed_session
     service = _build_service(ride_session_repository=ride_sessions)
 
-    with pytest.raises(ConflictError, match="Points can only be uploaded to draft sessions."):
+    with pytest.raises(ConflictError, match=r"Points can only be uploaded to draft sessions."):
         service.upload_points_batch(
             session_id=completed_session.id,
             user_id=user_id,
@@ -151,7 +151,7 @@ def test_complete_session_rejects_end_before_start() -> None:
     service = _build_service(ride_session_repository=ride_sessions)
     ended_at = draft_session.started_at - timedelta(seconds=1)
 
-    with pytest.raises(ValidationError, match="ended_at cannot be earlier than started_at."):
+    with pytest.raises(ValidationError, match=r"ended_at cannot be earlier than started_at."):
         service.complete_session(
             session_id=draft_session.id,
             user_id=user_id,
@@ -477,8 +477,8 @@ def test_delete_session_rejects_unknown_or_unowned_session() -> None:
     ride_sessions.sessions[session.id] = session
     service = _build_service(ride_session_repository=ride_sessions)
 
-    with pytest.raises(NotFoundError, match="Session not found."):
+    with pytest.raises(NotFoundError, match=r"Session not found."):
         service.delete_session(session_id=session.id, user_id=attacker_id)
 
-    with pytest.raises(NotFoundError, match="Session not found."):
+    with pytest.raises(NotFoundError, match=r"Session not found."):
         service.delete_session(session_id=uuid4(), user_id=owner_id)

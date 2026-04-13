@@ -9,7 +9,6 @@ from app.repositories.protocols import ResortRepositoryProtocol
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 
-
 logger = logging.getLogger(__name__)
 
 

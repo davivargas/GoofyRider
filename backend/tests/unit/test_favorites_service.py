@@ -58,7 +58,7 @@ def test_add_favorite_rejects_unknown_resort() -> None:
         favorite_resort_repository=FakeFavoriteResortRepository(),
     )
 
-    with pytest.raises(NotFoundError, match="Resort not found."):
+    with pytest.raises(NotFoundError, match=r"Resort not found."):
         service.add_favorite(user_id=uuid4(), resort_id=uuid4())
 
 
@@ -74,7 +74,7 @@ def test_add_favorite_rejects_duplicate() -> None:
         favorite_resort_repository=favorites_repository,
     )
 
-    with pytest.raises(ConflictError, match="Resort is already in favorites."):
+    with pytest.raises(ConflictError, match=r"Resort is already in favorites."):
         service.add_favorite(user_id=user_id, resort_id=resort.id)
 
 
@@ -84,5 +84,5 @@ def test_remove_favorite_rejects_missing_favorite() -> None:
         favorite_resort_repository=FakeFavoriteResortRepository(),
     )
 
-    with pytest.raises(NotFoundError, match="Favorite resort not found."):
+    with pytest.raises(NotFoundError, match=r"Favorite resort not found."):
         service.remove_favorite(user_id=uuid4(), resort_id=uuid4())

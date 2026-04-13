@@ -7,11 +7,11 @@ from app.models.user import User
 from app.models.weather_cache import WeatherCache
 
 __all__ = [
-    "User",
-    "Resort",
     "FavoriteResort",
+    "Resort",
     "RideSession",
     "RideSessionStatus",
     "SessionPoint",
+    "User",
     "WeatherCache",
 ]

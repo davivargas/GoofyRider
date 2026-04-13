@@ -33,10 +33,7 @@ def normalize_motion_state(value: str | None) -> str | None:
         return None
     if normalized in CANONICAL_MOTION_STATES:
         return normalized
-    raise ValueError(
-        "motion_state must be one of: "
-        + ", ".join(sorted(CANONICAL_MOTION_STATES))
-    )
+    raise ValueError("motion_state must be one of: " + ", ".join(sorted(CANONICAL_MOTION_STATES)))
 
 
 def normalize_quality_class(value: str | None) -> str | None:
@@ -46,8 +43,7 @@ def normalize_quality_class(value: str | None) -> str | None:
     if normalized in CANONICAL_QUALITY_CLASSES:
         return normalized
     raise ValueError(
-        "quality_class must be one of: "
-        + ", ".join(sorted(CANONICAL_QUALITY_CLASSES))
+        "quality_class must be one of: " + ", ".join(sorted(CANONICAL_QUALITY_CLASSES))
     )
 
 

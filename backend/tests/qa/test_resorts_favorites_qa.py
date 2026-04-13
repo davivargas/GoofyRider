@@ -1,5 +1,5 @@
-import uuid
 from collections.abc import Callable
+import uuid
 
 from fastapi.testclient import TestClient
 
