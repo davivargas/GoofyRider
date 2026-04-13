@@ -1,15 +1,16 @@
-import uuid
 from datetime import datetime
+import uuid
 
 from sqlalchemy import BigInteger
 from sqlalchemy import Boolean
 from sqlalchemy import DateTime
+from sqlalchemy import Enum
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
-from sqlalchemy import UniqueConstraint
 from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
@@ -17,6 +18,38 @@ from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 
 from app.models.base import Base
+
+PROVIDER_ENUM_VALUES = ("gps", "fused", "network", "passive", "unknown")
+MOTION_STATE_ENUM_VALUES = (
+    "initializing_fix",
+    "active_descent",
+    "lift_uphill",
+    "stopped_idle",
+    "low_confidence_recovery",
+)
+QUALITY_CLASS_ENUM_VALUES = ("accept", "accept_low_confidence", "reject")
+
+_provider_type = Enum(
+    *PROVIDER_ENUM_VALUES,
+    name="provider_type",
+    native_enum=True,
+    create_type=False,
+    validate_strings=True,
+)
+_motion_state_type = Enum(
+    *MOTION_STATE_ENUM_VALUES,
+    name="motion_state",
+    native_enum=True,
+    create_type=False,
+    validate_strings=True,
+)
+_quality_class_type = Enum(
+    *QUALITY_CLASS_ENUM_VALUES,
+    name="quality_class",
+    native_enum=True,
+    create_type=False,
+    validate_strings=True,
+)
 
 
 class SessionPoint(Base):
@@ -90,7 +123,7 @@ class SessionPoint(Base):
         nullable=True,
     )
     provider: Mapped[str | None] = mapped_column(
-        Text,
+        _provider_type,
         nullable=True,
     )
     is_mocked: Mapped[bool | None] = mapped_column(
@@ -98,7 +131,7 @@ class SessionPoint(Base):
         nullable=True,
     )
     quality_class: Mapped[str | None] = mapped_column(
-        Text,
+        _quality_class_type,
         nullable=True,
     )
     quality_score: Mapped[float | None] = mapped_column(
@@ -134,7 +167,7 @@ class SessionPoint(Base):
         nullable=True,
     )
     motion_state: Mapped[str | None] = mapped_column(
-        Text,
+        _motion_state_type,
         nullable=True,
     )
     accepted_for_analytics: Mapped[bool] = mapped_column(
