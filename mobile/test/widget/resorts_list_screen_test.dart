@@ -16,17 +16,25 @@ class NoopResortRepository implements ResortRepository {
   Future<List<ResortSummary>> listFavoriteResorts() async => <ResortSummary>[];
 
   @override
-  Future<ResortListResult> searchResorts({required String query, String? region}) async {
-    return const ResortListResult(items: <ResortSummary>[], total: 0, usedCache: false, isStale: false);
+  Future<ResortListResult> searchResorts(
+      {required String query, String? region}) async {
+    return const ResortListResult(
+        items: <ResortSummary>[], total: 0, usedCache: false, isStale: false);
   }
 
   @override
-  Future<ResortSummary> toggleFavoriteResort(ResortSummary resort) async => resort;
+  Future<ResortSummary> toggleFavoriteResort(ResortSummary resort) async =>
+      resort;
 }
 
 class TestResortsController extends ResortsController {
-  TestResortsController(AsyncValue<ResortListResult> initial)
-      : super(NoopResortRepository()) {
+  TestResortsController({
+    required Ref ref,
+    required AsyncValue<ResortListResult> initial,
+  }) : super(
+          ref: ref,
+          repository: NoopResortRepository(),
+        ) {
     state = initial;
   }
 }
@@ -38,8 +46,13 @@ void main() {
         overrides: <Override>[
           resortsControllerProvider.overrideWith(
             (Ref ref) => TestResortsController(
-              const AsyncValue.data(
-                ResortListResult(items: <ResortSummary>[], total: 0, usedCache: false, isStale: false),
+              ref: ref,
+              initial: const AsyncValue.data(
+                ResortListResult(
+                    items: <ResortSummary>[],
+                    total: 0,
+                    usedCache: false,
+                    isStale: false),
               ),
             ),
           ),
@@ -52,7 +65,8 @@ void main() {
     expect(find.text('No resorts found'), findsOneWidget);
   });
 
-  testWidgets('resorts screen shows list in success state', (WidgetTester tester) async {
+  testWidgets('resorts screen shows list in success state',
+      (WidgetTester tester) async {
     const ResortSummary resort = ResortSummary(
       id: 'r-1',
       name: 'Whistler',
@@ -74,8 +88,13 @@ void main() {
         overrides: <Override>[
           resortsControllerProvider.overrideWith(
             (Ref ref) => TestResortsController(
-              const AsyncValue.data(
-                ResortListResult(items: <ResortSummary>[resort], total: 1, usedCache: false, isStale: false),
+              ref: ref,
+              initial: const AsyncValue.data(
+                ResortListResult(
+                    items: <ResortSummary>[resort],
+                    total: 1,
+                    usedCache: false,
+                    isStale: false),
               ),
             ),
           ),
@@ -87,5 +106,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Whistler'), findsOneWidget);
     expect(find.byType(ListTile), findsWidgets);
+  });
+
+  testWidgets('resorts screen uses amber favorite icon for favorite resort',
+      (WidgetTester tester) async {
+    const ResortSummary resort = ResortSummary(
+      id: 'r-1',
+      name: 'Whistler',
+      country: 'Canada',
+      region: 'British Columbia',
+      city: 'Whistler',
+      latitude: 50.1,
+      longitude: -122.9,
+      elevationBaseM: 700,
+      elevationTopM: 2200,
+      isFavorite: true,
+      cachedWeatherText: 'Snow',
+      cachedWeatherTempC: -2,
+      isStale: false,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          resortsControllerProvider.overrideWith(
+            (Ref ref) => TestResortsController(
+              ref: ref,
+              initial: const AsyncValue.data(
+                ResortListResult(
+                    items: <ResortSummary>[resort],
+                    total: 1,
+                    usedCache: false,
+                    isStale: false),
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: ResortsListScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final Icon favoriteIcon = tester.widget<Icon>(find.byIcon(Icons.favorite));
+    expect(favoriteIcon.color, Colors.amber);
   });
 }

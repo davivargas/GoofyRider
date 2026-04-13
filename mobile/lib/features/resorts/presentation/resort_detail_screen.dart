@@ -23,16 +23,21 @@ class ResortDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<ResortSummary> resortValue = ref.watch(resortDetailProvider(resortId));
+    final AsyncValue<ResortSummary> resortValue =
+        ref.watch(resortDetailControllerProvider(resortId));
+    final bool isFavoriteToggleInFlight =
+        ref.watch(resortDetailToggleInFlightProvider(resortId));
 
     return resortValue.when(
-      loading: () => const Scaffold(body: AppLoadingView(label: 'Loading resort...')),
+      loading: () =>
+          const Scaffold(body: AppLoadingView(label: 'Loading resort...')),
       error: (Object error, StackTrace _) => Scaffold(
         appBar: AppBar(),
         body: AppErrorView(message: error.toString()),
       ),
       data: (ResortSummary resort) {
-        final AsyncValue<ResortWeather?> weather = ref.watch(resortWeatherProvider(resort.id));
+        final AsyncValue<ResortWeather?> weather =
+            ref.watch(resortWeatherProvider(resort.id));
 
         final LatLng center = LatLng(
           resort.latitude ?? 50,
@@ -75,8 +80,10 @@ class ResortDetailScreen extends ConsumerWidget {
                     ),
                     children: <Widget>[
                       TileLayer(
-                        urlTemplate: MapTileProviderConfig.openStreetMap.urlTemplate,
-                        subdomains: MapTileProviderConfig.openStreetMap.subdomains,
+                        urlTemplate:
+                            MapTileProviderConfig.openStreetMap.urlTemplate,
+                        subdomains:
+                            MapTileProviderConfig.openStreetMap.subdomains,
                         userAgentPackageName: 'com.goofyrider.mobile',
                       ),
                       MarkerLayer(
@@ -85,7 +92,8 @@ class ResortDetailScreen extends ConsumerWidget {
                             point: center,
                             width: 40,
                             height: 40,
-                            child: const Icon(Icons.place, color: Colors.redAccent),
+                            child: const Icon(Icons.place,
+                                color: Colors.redAccent),
                           ),
                         ],
                       ),
@@ -99,7 +107,8 @@ class ResortDetailScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(16),
                   child: weather.when(
                     loading: () => const Text('Loading conditions...'),
-                    error: (_, __) => const Text('Conditions unavailable right now.'),
+                    error: (_, __) =>
+                        const Text('Conditions unavailable right now.'),
                     data: (ResortWeather? value) {
                       if (value == null) {
                         return const Text('Conditions unavailable right now.');
@@ -113,8 +122,10 @@ class ResortDetailScreen extends ConsumerWidget {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
-                          Text('Temp: ${value.tempC?.toStringAsFixed(1) ?? '--'} C'),
-                          Text('Wind: ${value.windKph?.toStringAsFixed(1) ?? '--'} kph'),
+                          Text(
+                              'Temp: ${value.tempC?.toStringAsFixed(1) ?? '--'} C'),
+                          Text(
+                              'Wind: ${value.windKph?.toStringAsFixed(1) ?? '--'} kph'),
                           Text(
                             'Snow 24h: ${value.snowfallCm24h?.toStringAsFixed(1) ?? '--'} cm',
                           ),
@@ -146,9 +157,17 @@ class ResortDetailScreen extends ConsumerWidget {
                 child: const Text('Start recording here'),
               ),
               TextButton.icon(
-                onPressed: () => ref.read(resortsControllerProvider.notifier).toggleFavorite(resort),
-                icon: Icon(resort.isFavorite ? Icons.favorite : Icons.favorite_border),
-                label: Text(resort.isFavorite ? 'Remove favorite' : 'Add favorite'),
+                onPressed: isFavoriteToggleInFlight
+                    ? null
+                    : () => ref
+                        .read(resortDetailControllerProvider(resortId).notifier)
+                        .toggleFavorite(),
+                icon: Icon(
+                  resort.isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: resort.isFavorite ? Colors.amber : null,
+                ),
+                label: Text(
+                    resort.isFavorite ? 'Remove favorite' : 'Add favorite'),
               ),
             ],
           ),
