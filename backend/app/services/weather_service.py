@@ -1,10 +1,10 @@
-import logging
-import uuid
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+import logging
 from typing import Protocol
+import uuid
 
 import httpx
 from sqlalchemy.exc import IntegrityError
@@ -38,8 +38,7 @@ class WeatherSnapshotData:
 
 
 class WeatherProviderProtocol(Protocol):
-    def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData:
-        ...
+    def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData: ...
 
 
 class OpenMeteoWeatherProvider:
@@ -84,7 +83,9 @@ class OpenMeteoWeatherProvider:
 
         snowfall_daily = _as_object_sequence(daily.get("snowfall_sum"))
         snowfall_today = _to_optional_float(snowfall_daily[0]) if len(snowfall_daily) > 0 else None
-        snowfall_next = _to_optional_float(snowfall_daily[1]) if len(snowfall_daily) > 1 else snowfall_today
+        snowfall_next = (
+            _to_optional_float(snowfall_daily[1]) if len(snowfall_daily) > 1 else snowfall_today
+        )
 
         weather_codes = _as_object_sequence(daily.get("weather_code"))
         today_code_raw = weather_codes[0] if len(weather_codes) > 0 else None
@@ -136,60 +137,56 @@ class WeatherService:
             )
         except (httpx.HTTPError, ValueError) as exc:
             if cached is not None:
-                logger.warning("Weather provider unavailable, using cache for resort: %s", resort_id)
+                logger.warning(
+                    "Weather provider unavailable, using cache for resort: %s", resort_id
+                )
                 return cached
             raise ServiceUnavailableError("Weather provider unavailable.") from exc
 
         if cached is None:
-            cached = WeatherCache(
-                resort_id=resort_id,
-                observed_at=snapshot.observed_at,
-                temp_c=snapshot.temp_c,
-                wind_kph=snapshot.wind_kph,
-                snowfall_cm_24h=snapshot.snowfall_cm_24h,
-                conditions_text=snapshot.conditions_text,
-                today_high_c=snapshot.today_high_c,
-                today_low_c=snapshot.today_low_c,
-                snowfall_next_24h_cm=snapshot.snowfall_next_24h_cm,
-                weather_code_text=snapshot.weather_code_text,
-                fetched_at=now,
-            )
-            try:
-                self._weather_cache_repository.add(cached)
-                self._weather_cache_repository.commit()
-            except IntegrityError:
-                self._weather_cache_repository.rollback()
-                cached = self._weather_cache_repository.get_by_resort_id(resort_id)
-                if cached is None:
-                    raise ServiceUnavailableError(
-                        "Weather cache conflict: unable to resolve."
-                    )
-                cached.observed_at = snapshot.observed_at
-                cached.temp_c = snapshot.temp_c
-                cached.wind_kph = snapshot.wind_kph
-                cached.snowfall_cm_24h = snapshot.snowfall_cm_24h
-                cached.conditions_text = snapshot.conditions_text
-                cached.today_high_c = snapshot.today_high_c
-                cached.today_low_c = snapshot.today_low_c
-                cached.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
-                cached.weather_code_text = snapshot.weather_code_text
-                cached.fetched_at = now
-                self._weather_cache_repository.commit()
+            cached = self._insert_or_recover_cache(resort_id, snapshot, now)
         else:
-            cached.observed_at = snapshot.observed_at
-            cached.temp_c = snapshot.temp_c
-            cached.wind_kph = snapshot.wind_kph
-            cached.snowfall_cm_24h = snapshot.snowfall_cm_24h
-            cached.conditions_text = snapshot.conditions_text
-            cached.today_high_c = snapshot.today_high_c
-            cached.today_low_c = snapshot.today_low_c
-            cached.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
-            cached.weather_code_text = snapshot.weather_code_text
-            cached.fetched_at = now
+            self._apply_snapshot(cached, snapshot, now)
             self._weather_cache_repository.commit()
 
         self._weather_cache_repository.refresh(cached)
         logger.info("Weather fetched for resort: %s", resort_id)
         return cached
 
+    @staticmethod
+    def _apply_snapshot(
+        cache: WeatherCache,
+        snapshot: WeatherSnapshotData,
+        fetched_at: datetime,
+    ) -> None:
+        cache.observed_at = snapshot.observed_at
+        cache.temp_c = snapshot.temp_c
+        cache.wind_kph = snapshot.wind_kph
+        cache.snowfall_cm_24h = snapshot.snowfall_cm_24h
+        cache.conditions_text = snapshot.conditions_text
+        cache.today_high_c = snapshot.today_high_c
+        cache.today_low_c = snapshot.today_low_c
+        cache.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
+        cache.weather_code_text = snapshot.weather_code_text
+        cache.fetched_at = fetched_at
 
+    def _insert_or_recover_cache(
+        self,
+        resort_id: uuid.UUID,
+        snapshot: WeatherSnapshotData,
+        now: datetime,
+    ) -> WeatherCache:
+        cache = WeatherCache(resort_id=resort_id)
+        self._apply_snapshot(cache, snapshot, now)
+        try:
+            self._weather_cache_repository.add(cache)
+            self._weather_cache_repository.commit()
+        except IntegrityError as exc:
+            self._weather_cache_repository.rollback()
+            existing = self._weather_cache_repository.get_by_resort_id(resort_id)
+            if existing is None:
+                raise ServiceUnavailableError("Weather cache conflict: unable to resolve.") from exc
+            self._apply_snapshot(existing, snapshot, now)
+            self._weather_cache_repository.commit()
+            return existing
+        return cache

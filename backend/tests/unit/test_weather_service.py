@@ -4,6 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models.resort import Resort
 from app.models.weather_cache import WeatherCache
@@ -33,6 +34,9 @@ class FakeWeatherCacheRepository:
 
     def commit(self) -> None:
         self.committed = True
+
+    def rollback(self) -> None:
+        return None
 
     def refresh(self, _instance: object) -> None:
         return None
@@ -120,6 +124,56 @@ def test_weather_service_fetches_when_cache_missing() -> None:
     assert cache_repo.committed is True
 
 
+def test_weather_service_recovers_from_concurrent_insert() -> None:
+    resort = _build_resort()
+    provider = FakeWeatherProvider()
+
+    class RacingCacheRepository(FakeWeatherCacheRepository):
+        def __init__(self) -> None:
+            super().__init__(existing=None)
+            self.reads = 0
+            self.committed_count = 0
+            self._winning_cache = WeatherCache(
+                resort_id=resort.id,
+                observed_at=datetime.now(UTC) - timedelta(hours=2),
+                temp_c=-9.9,
+                wind_kph=99.0,
+                snowfall_cm_24h=0.0,
+                conditions_text="Stale racer",
+                today_high_c=0.0,
+                today_low_c=-1.0,
+                snowfall_next_24h_cm=0.0,
+                weather_code_text="Stale racer",
+                fetched_at=datetime.now(UTC) - timedelta(hours=2),
+            )
+
+        def get_by_resort_id(self, _resort_id):
+            self.reads += 1
+            if self.reads == 1:
+                return None
+            return self._winning_cache
+
+        def add(self, cache: WeatherCache) -> None:
+            raise IntegrityError("duplicate", None, Exception("duplicate"))
+
+        def commit(self) -> None:
+            self.committed_count += 1
+
+    cache_repo = RacingCacheRepository()
+    service = WeatherService(
+        resort_repository=FakeResortRepository(resort),
+        weather_cache_repository=cache_repo,
+        weather_provider=provider,
+    )
+
+    result = service.get_resort_weather(resort.id)
+
+    assert result is cache_repo._winning_cache
+    assert result.conditions_text == "Snow"
+    assert provider.called == 1
+    assert cache_repo.committed_count == 1
+
+
 def test_weather_service_missing_resort_raises_not_found() -> None:
     service = WeatherService(
         resort_repository=FakeResortRepository(None),
@@ -127,5 +181,5 @@ def test_weather_service_missing_resort_raises_not_found() -> None:
         weather_provider=FakeWeatherProvider(),
     )
 
-    with pytest.raises(NotFoundError, match="Resort not found."):
+    with pytest.raises(NotFoundError, match=r"Resort not found."):
         service.get_resort_weather(uuid4())
