@@ -1,11 +1,9 @@
 import uuid
-from typing import Any
 
 from fastapi import APIRouter
-from fastapi import Body
 from fastapi import Depends
 from fastapi import HTTPException
-from fastapi import Query
+from fastapi import Request
 from fastapi import status
 from pydantic import ValidationError as PydanticValidationError
 
@@ -15,48 +13,33 @@ from app.models.user import User
 from app.schemas.session import RideSessionPublic
 from app.schemas.session import SessionCompleteRequest
 from app.schemas.session import SessionCreateRequest
-from app.schemas.session import SessionListResponse
 from app.schemas.session import SessionPointPublic
 from app.schemas.session import SessionPointsBatchRequest
 from app.schemas.session import SessionPointsBatchResponse
 from app.schemas.session import SessionPointsListResponse
-from app.services.exceptions import ConflictError
-from app.services.exceptions import NotFoundError
-from app.services.exceptions import ValidationError
-from app.services.session_service import SessionCompletionInput
-from app.services.session_service import SessionCreateInput
-from app.services.session_service import SessionPointInputData
 from app.services.session_service import SessionService
 
 router = APIRouter(tags=["sessions"])
 
 
-def _validate_complete_payload(payload: dict[str, Any]) -> SessionCompleteRequest:
+async def _parse_session_completion_payload(request: Request) -> SessionCompleteRequest:
     try:
-        return SessionCompleteRequest.model_validate(payload)
+        body = await request.json()
+    except ValueError:
+        body = {}
+    try:
+        return SessionCompleteRequest.model_validate(body)
     except PydanticValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "message": "Invalid session completion payload.",
-                "errors": _format_complete_payload_validation_errors(exc),
+                "errors": [
+                    {"field": str(error["loc"][-1]), "message": error["msg"]}
+                    for error in exc.errors()
+                ],
             },
         ) from exc
-
-
-def _format_complete_payload_validation_errors(
-    exc: PydanticValidationError,
-) -> list[dict[str, str]]:
-    errors: list[dict[str, str]] = []
-    for error in exc.errors():
-        location = ".".join(str(part) for part in error["loc"] if part != "body") or "payload"
-        errors.append(
-            {
-                "field": location,
-                "message": f"{location}: {error['msg']}",
-            }
-        )
-    return errors
 
 
 @router.post("/sessions", response_model=RideSessionPublic, status_code=status.HTTP_201_CREATED)
@@ -65,15 +48,10 @@ def create_session(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
-    request = SessionCreateInput(user_id=current_user.id, **payload.model_dump())
-    try:
-        ride_session = session_service.create_session(request)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
+    ride_session = session_service.create_session(
+        user_id=current_user.id,
+        request=payload,
+    )
     return RideSessionPublic.model_validate(ride_session)
 
 
@@ -84,58 +62,26 @@ def upload_session_points_batch(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> SessionPointsBatchResponse:
-    points = [SessionPointInputData(**point.model_dump()) for point in payload.points]
-    try:
-        inserted_count = session_service.upload_points_batch(
-            session_id=session_id,
-            user_id=current_user.id,
-            points=points,
-        )
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-    except ConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-
+    inserted_count = session_service.upload_points_batch(
+        session_id=session_id,
+        user_id=current_user.id,
+        points=payload.points,
+    )
     return SessionPointsBatchResponse(session_id=session_id, inserted_count=inserted_count)
 
 
 @router.post("/sessions/{session_id}/complete", response_model=RideSessionPublic)
 def complete_session(
     session_id: uuid.UUID,
-    payload: dict[str, Any] = Body(...),
+    payload: SessionCompleteRequest = Depends(_parse_session_completion_payload),
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
-    validated_payload = _validate_complete_payload(payload)
-    completion = SessionCompletionInput(**validated_payload.model_dump())
-    try:
-        ride_session = session_service.complete_session(
-            session_id=session_id,
-            user_id=current_user.id,
-            completion=completion,
-        )
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-    except ConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-
+    ride_session = session_service.complete_session(
+        session_id=session_id,
+        user_id=current_user.id,
+        completion=payload,
+    )
     return RideSessionPublic.model_validate(ride_session)
 
 
@@ -145,17 +91,10 @@ def get_session_detail(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> RideSessionPublic:
-    try:
-        session = session_service.get_session(
-            session_id=session_id,
-            user_id=current_user.id,
-        )
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
+    session = session_service.get_session(
+        session_id=session_id,
+        user_id=current_user.id,
+    )
     return RideSessionPublic.model_validate(session)
 
 
@@ -165,17 +104,10 @@ def list_session_points(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> SessionPointsListResponse:
-    try:
-        points = session_service.list_session_points(
-            session_id=session_id,
-            user_id=current_user.id,
-        )
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
+    points = session_service.list_session_points(
+        session_id=session_id,
+        user_id=current_user.id,
+    )
     return SessionPointsListResponse(
         session_id=session_id,
         items=[SessionPointPublic.model_validate(point) for point in points],
@@ -188,33 +120,7 @@ def delete_session(
     current_user: User = Depends(get_current_user),
     session_service: SessionService = Depends(get_session_service),
 ) -> None:
-    try:
-        session_service.delete_session(
-            session_id=session_id,
-            user_id=current_user.id,
-        )
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
-
-@router.get("/users/me/sessions", response_model=SessionListResponse)
-def list_user_sessions(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
-    session_service: SessionService = Depends(get_session_service),
-) -> SessionListResponse:
-    sessions, total = session_service.list_user_sessions(
+    session_service.delete_session(
+        session_id=session_id,
         user_id=current_user.id,
-        page=page,
-        page_size=page_size,
-    )
-    return SessionListResponse(
-        items=[RideSessionPublic.model_validate(session) for session in sessions],
-        page=page,
-        page_size=page_size,
-        total=total,
     )

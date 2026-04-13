@@ -1,3 +1,4 @@
+from datetime import UTC
 from datetime import datetime
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from pydantic import model_validator
 
 from app.models.ride_session import RideSessionStatus
 from app.schemas.base import ORMBaseModel
+from app.schemas.base import PaginatedResponse
 from app.schemas.session_vocabulary import normalize_motion_state
 from app.schemas.session_vocabulary import normalize_provider
 from app.schemas.session_vocabulary import normalize_quality_class
@@ -45,6 +47,10 @@ class SessionPointInput(BaseModel):
     motion_state: str | None = None
     accepted_for_analytics: bool = True
 
+    @property
+    def elapsed_offset_ms(self) -> int:
+        return self.t_offset_ms
+
     @field_validator("provider", mode="before")
     @classmethod
     def normalize_provider_value(cls, value: str | None) -> str | None:
@@ -78,6 +84,15 @@ class SessionCompleteRequest(BaseModel):
     avg_speed_mps: float | None = Field(default=None, ge=0)
     elevation_gain_m: int | None = Field(default=None, ge=0)
     elevation_loss_m: int | None = Field(default=None, ge=0)
+
+    @field_validator("ended_at", mode="before")
+    @classmethod
+    def ensure_timezone_aware(cls, value: datetime | str | None) -> datetime | str | None:
+        if value is None:
+            return value
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
     @model_validator(mode="after")
     def validate_speed_bounds(self) -> "SessionCompleteRequest":
@@ -149,8 +164,5 @@ class SessionPointsListResponse(BaseModel):
     items: list[SessionPointPublic]
 
 
-class SessionListResponse(BaseModel):
-    items: list[RideSessionPublic]
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1)
-    total: int = Field(ge=0)
+class SessionListResponse(PaginatedResponse[RideSessionPublic]):
+    pass

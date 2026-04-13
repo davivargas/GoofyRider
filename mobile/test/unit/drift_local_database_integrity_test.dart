@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart'
@@ -460,6 +461,119 @@ void main() {
           'ix_local_ride_sessions_owner_state_updated',
         ]),
       );
+    });
+
+    test('cached resorts isolate favorite state per user', () async {
+      await database.upsertCachedResort(
+        'resort-1',
+        <String, dynamic>{
+          'id': 'resort-1',
+          'name': 'Whistler Blackcomb',
+          'country': 'Canada',
+          'region': 'BC',
+          'is_favorite': false,
+        },
+      );
+      await database.upsertCachedResort(
+        'resort-1',
+        <String, dynamic>{
+          'id': 'resort-1',
+          'name': 'Whistler Blackcomb',
+          'country': 'Canada',
+          'region': 'BC',
+          'is_favorite': true,
+        },
+        ownerUserId: 'user-1',
+      );
+
+      final Map<String, dynamic>? userOneResort = await database.readCachedResort(
+        'resort-1',
+        ownerUserId: 'user-1',
+      );
+      final Map<String, dynamic>? userTwoResort = await database.readCachedResort(
+        'resort-1',
+        ownerUserId: 'user-2',
+      );
+      final List<Map<String, dynamic>> userTwoResorts =
+          await database.readCachedResorts(ownerUserId: 'user-2');
+
+      expect(userOneResort?['is_favorite'], isTrue);
+      expect(userTwoResort?['is_favorite'], isFalse);
+      expect(userTwoResorts.single['is_favorite'], isFalse);
+    });
+
+    test('legacy cached resorts migrate to owner-aware schema without shared favorites',
+        () async {
+      final bool previousDontWarn =
+          driftRuntimeOptions.dontWarnAboutMultipleDatabases;
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      final Directory tempDirectory =
+          await Directory.systemTemp.createTemp('goofyrider_legacy_cache_db_');
+      DriftLocalDatabase? fileDatabase;
+      addTearDown(() async {
+        driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousDontWarn;
+        final DriftLocalDatabase? databaseToClose = fileDatabase;
+        fileDatabase = null;
+        if (databaseToClose != null) {
+          await databaseToClose.close();
+        }
+        if (await tempDirectory.exists()) {
+          await tempDirectory.delete(recursive: true);
+        }
+      });
+
+      final String dbPath =
+          '${tempDirectory.path}${Platform.pathSeparator}legacy_cached_resorts.sqlite';
+      fileDatabase = DriftLocalDatabase.connectForTesting(
+        DatabaseConnection(NativeDatabase(File(dbPath))),
+      );
+
+      await fileDatabase!.customStatement('''
+        CREATE TABLE cached_resorts (
+          resort_id TEXT PRIMARY KEY,
+          payload_json TEXT NOT NULL,
+          fetched_at TEXT NOT NULL
+        )
+      ''');
+      await fileDatabase!.customStatement(
+        '''
+        INSERT INTO cached_resorts (
+          resort_id,
+          payload_json,
+          fetched_at
+        ) VALUES (?, ?, ?)
+        ''',
+        <Object?>[
+          'resort-legacy',
+          jsonEncode(<String, dynamic>{
+            'id': 'resort-legacy',
+            'name': 'Legacy Favorite',
+            'country': 'Canada',
+            'region': 'BC',
+            'is_favorite': true,
+          }),
+          DateTime.utc(2026, 1, 4, 12).toIso8601String(),
+        ],
+      );
+      await fileDatabase!.close();
+      fileDatabase = null;
+
+      fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
+
+      final List<QueryRow> columns = await fileDatabase!.customSelect(
+        'PRAGMA table_info(cached_resorts)',
+      ).get();
+      final Set<String> columnNames = columns
+          .map((QueryRow row) => row.data['name'] as String)
+          .toSet();
+      final Map<String, dynamic>? migratedResort =
+          await fileDatabase!.readCachedResort(
+        'resort-legacy',
+        ownerUserId: 'user-2',
+      );
+
+      expect(columnNames, contains('owner_user_id'));
+      expect(migratedResort?['is_favorite'], isFalse);
     });
   });
 }

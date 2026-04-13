@@ -1,12 +1,12 @@
 import base64
-import hashlib
-import hmac
-import secrets
+from collections.abc import Mapping
+from collections.abc import Sequence
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
-from collections.abc import Mapping
-from collections.abc import Sequence
+import hashlib
+import hmac
+import secrets
 from typing import Any
 from typing import Protocol
 from typing import cast
@@ -15,10 +15,7 @@ import jwt
 from jwt import ExpiredSignatureError
 from jwt import InvalidTokenError
 
-from app.core.config import get_access_token_expire_minutes
-from app.core.config import get_jwt_algorithm
-from app.core.config import get_jwt_secret_key
-from app.core.config import get_refresh_token_expire_days
+from app.core.config import get_settings
 
 TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_REFRESH = "refresh"
@@ -39,8 +36,7 @@ class JwtDecodeProtocol(Protocol):
         key: object = "",
         algorithms: Sequence[str] | None = None,
         **kwargs: Any,
-    ) -> dict[str, Any]:
-        ...
+    ) -> dict[str, Any]: ...
 
 
 class JwtEncodeProtocol(Protocol):
@@ -50,12 +46,11 @@ class JwtEncodeProtocol(Protocol):
         key: object,
         algorithm: str | None = None,
         **kwargs: Any,
-    ) -> str:
-        ...
+    ) -> str: ...
 
 
-jwt_decode = cast(JwtDecodeProtocol, getattr(jwt, "decode"))
-jwt_encode = cast(JwtEncodeProtocol, getattr(jwt, "encode"))
+jwt_decode = cast(JwtDecodeProtocol, jwt.decode)
+jwt_encode = cast(JwtEncodeProtocol, jwt.encode)
 
 
 def hash_password(password: str) -> str:
@@ -69,12 +64,7 @@ def hash_password(password: str) -> str:
     )
     salt_b64 = base64.b64encode(salt).decode("ascii")
     digest_b64 = base64.b64encode(digest).decode("ascii")
-    return (
-        f"{PASSWORD_HASH_ALGORITHM}"
-        f"${PASSWORD_HASH_ITERATIONS}"
-        f"${salt_b64}"
-        f"${digest_b64}"
-    )
+    return f"{PASSWORD_HASH_ALGORITHM}${PASSWORD_HASH_ITERATIONS}${salt_b64}${digest_b64}"
 
 
 def verify_password(password: str, stored_password_hash: str) -> bool:
@@ -104,21 +94,22 @@ def verify_password(password: str, stored_password_hash: str) -> bool:
 
 
 def create_access_token(subject: str) -> str:
-    expires = timedelta(minutes=get_access_token_expire_minutes())
+    expires = timedelta(minutes=get_settings().access_token_expire_minutes)
     return _create_token(subject=subject, token_type=TOKEN_TYPE_ACCESS, expires_delta=expires)
 
 
 def create_refresh_token(subject: str) -> str:
-    expires = timedelta(days=get_refresh_token_expire_days())
+    expires = timedelta(days=get_settings().refresh_token_expire_days)
     return _create_token(subject=subject, token_type=TOKEN_TYPE_REFRESH, expires_delta=expires)
 
 
 def decode_token(token: str, expected_token_type: str | None = None) -> dict[str, Any]:
+    settings = get_settings()
     try:
         payload = jwt_decode(
             token,
-            get_jwt_secret_key(),
-            algorithms=[get_jwt_algorithm()],
+            settings.require_jwt_secret_key(),
+            algorithms=[settings.jwt_algorithm],
         )
     except ExpiredSignatureError as exc:
         raise TokenValidationError("Token has expired.") from exc
@@ -146,4 +137,9 @@ def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> st
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
-    return jwt_encode(payload, get_jwt_secret_key(), algorithm=get_jwt_algorithm())
+    settings = get_settings()
+    return jwt_encode(
+        payload,
+        settings.require_jwt_secret_key(),
+        algorithm=settings.jwt_algorithm,
+    )

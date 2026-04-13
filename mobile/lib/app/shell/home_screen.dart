@@ -14,6 +14,8 @@ import '../../features/resorts/domain/resort_models.dart';
 import '../../features/resorts/presentation/resort_providers.dart';
 import '../../features/session/domain/session_models.dart';
 import '../../features/session/presentation/session_providers.dart';
+import '../../features/weather/domain/weather_models.dart';
+import '../../features/weather/presentation/weather_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -180,41 +182,7 @@ class HomeScreen extends ConsumerWidget {
                     separatorBuilder: (_, __) => const SizedBox(width: 10),
                     itemBuilder: (BuildContext context, int index) {
                       final ResortSummary resort = resorts[index];
-                      return GestureDetector(
-                        onTap: () => context.go(
-                          RoutePaths.resortDetail
-                              .replaceAll(':resortId', resort.id),
-                        ),
-                        child: Container(
-                          width: 220,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF123048),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: <Widget>[
-                              Text(
-                                resort.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text('${resort.region}, ${resort.country}'),
-                              Text(
-                                resort.cachedWeatherText == null
-                                    ? 'Conditions unavailable'
-                                    : '${resort.cachedWeatherText} • ${resort.cachedWeatherTempC?.toStringAsFixed(1) ?? '--'} C',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
+                      return _FavoriteResortCard(resort: resort);
                     },
                   ),
                 );
@@ -225,4 +193,93 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _FavoriteResortCard extends ConsumerWidget {
+  const _FavoriteResortCard({required this.resort});
+
+  final ResortSummary resort;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<ResortWeather?> weather =
+        ref.watch(resortWeatherProvider(resort.id));
+
+    final String conditions = _resolveConditionsText(weather, resort);
+    final String temp = _resolveTemperatureText(weather, resort);
+
+    return GestureDetector(
+      onTap: () => context.go(
+        RoutePaths.resortDetail.replaceAll(':resortId', resort.id),
+      ),
+      child: Container(
+        width: 220,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF123048),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            Text(
+              resort.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '${resort.region}, ${resort.country}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              '$conditions • $temp C',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _resolveConditionsText(
+  AsyncValue<ResortWeather?> weather,
+  ResortSummary resort,
+) {
+  final String? liveText = weather.valueOrNull?.conditionsText;
+  if (liveText != null && liveText.trim().isNotEmpty) {
+    return liveText;
+  }
+
+  final String? cachedText = resort.cachedWeatherText;
+  if (cachedText != null && cachedText.trim().isNotEmpty) {
+    return cachedText;
+  }
+
+  return 'Conditions unavailable';
+}
+
+String _resolveTemperatureText(
+  AsyncValue<ResortWeather?> weather,
+  ResortSummary resort,
+) {
+  final double? liveTemp = weather.valueOrNull?.tempC;
+  if (liveTemp != null) {
+    return liveTemp.toStringAsFixed(1);
+  }
+
+  final double? cachedTemp = resort.cachedWeatherTempC;
+  if (cachedTemp != null) {
+    return cachedTemp.toStringAsFixed(1);
+  }
+
+  return '--';
 }

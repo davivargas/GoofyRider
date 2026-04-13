@@ -175,6 +175,9 @@ cd backend
 .venv\Scripts\python.exe -m pytest
 ```
 
+`tests/qa` truncates database tables as part of setup/teardown, so point
+`DATABASE_URL` at a dedicated test database such as `goofyrider_test`.
+
 ### Mobile
 
 ```bash

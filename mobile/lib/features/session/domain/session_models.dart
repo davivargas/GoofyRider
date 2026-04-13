@@ -109,7 +109,44 @@ class LocalRideSession {
       state == LocalSessionState.recording || state == LocalSessionState.paused;
 }
 
-class LocalSessionPoint {
+/// Abstract base declaring the shared fields of every session-point variant.
+///
+/// Concrete subclasses keep their own `const` constructors and `final` fields
+/// which automatically satisfy the abstract getters declared here.
+abstract class SessionPointBase {
+  const SessionPointBase();
+
+  DateTime get recordedAt;
+  int get tOffsetMs;
+  double get latitude;
+  double get longitude;
+  double? get accuracyM;
+  double? get altitudeM;
+  double? get speedMps;
+  double? get headingDeg;
+  bool get acceptedForAnalytics;
+  int? get elapsedRealtimeNs;
+  double? get verticalAccuracyM;
+  double? get speedAccuracyMps;
+  double? get bearingAccuracyDeg;
+  String? get provider;
+  bool? get isMocked;
+  String? get qualityClass;
+  double? get qualityScore;
+  String? get qualityReason;
+  double? get filteredLatitude;
+  double? get filteredLongitude;
+  double? get filteredAltitudeM;
+  double? get fusedSpeedMps;
+  double? get derivedSpeedMps;
+  double? get distanceDeltaM;
+  String? get motionState;
+
+  /// Alias kept for call-site readability.
+  int get elapsedOffsetMs => tOffsetMs;
+}
+
+class LocalSessionPoint extends SessionPointBase {
   const LocalSessionPoint({
     required this.id,
     required this.localSessionId,
@@ -142,30 +179,55 @@ class LocalSessionPoint {
 
   final int id;
   final int localSessionId;
+  @override
   final DateTime recordedAt;
+  @override
   final int tOffsetMs;
+  @override
   final double latitude;
+  @override
   final double longitude;
+  @override
   final double? accuracyM;
+  @override
   final double? altitudeM;
+  @override
   final double? speedMps;
+  @override
   final double? headingDeg;
+  @override
   final bool acceptedForAnalytics;
+  @override
   final int? elapsedRealtimeNs;
+  @override
   final double? verticalAccuracyM;
+  @override
   final double? speedAccuracyMps;
+  @override
   final double? bearingAccuracyDeg;
+  @override
   final String? provider;
+  @override
   final bool? isMocked;
+  @override
   final String? qualityClass;
+  @override
   final double? qualityScore;
+  @override
   final String? qualityReason;
+  @override
   final double? filteredLatitude;
+  @override
   final double? filteredLongitude;
+  @override
   final double? filteredAltitudeM;
+  @override
   final double? fusedSpeedMps;
+  @override
   final double? derivedSpeedMps;
+  @override
   final double? distanceDeltaM;
+  @override
   final String? motionState;
 }
 
@@ -187,7 +249,7 @@ class TrackingDiagnosticEvent {
   final Map<String, dynamic> details;
 }
 
-class NewSessionPoint {
+class NewSessionPoint extends SessionPointBase {
   const NewSessionPoint({
     required this.recordedAt,
     required this.tOffsetMs,
@@ -216,30 +278,55 @@ class NewSessionPoint {
     this.motionState,
   });
 
+  @override
   final DateTime recordedAt;
+  @override
   final int tOffsetMs;
+  @override
   final double latitude;
+  @override
   final double longitude;
+  @override
   final double? accuracyM;
+  @override
   final double? altitudeM;
+  @override
   final double? speedMps;
+  @override
   final double? headingDeg;
+  @override
   final bool acceptedForAnalytics;
+  @override
   final int? elapsedRealtimeNs;
+  @override
   final double? verticalAccuracyM;
+  @override
   final double? speedAccuracyMps;
+  @override
   final double? bearingAccuracyDeg;
+  @override
   final String? provider;
+  @override
   final bool? isMocked;
+  @override
   final String? qualityClass;
+  @override
   final double? qualityScore;
+  @override
   final String? qualityReason;
+  @override
   final double? filteredLatitude;
+  @override
   final double? filteredLongitude;
+  @override
   final double? filteredAltitudeM;
+  @override
   final double? fusedSpeedMps;
+  @override
   final double? derivedSpeedMps;
+  @override
   final double? distanceDeltaM;
+  @override
   final String? motionState;
 }
 

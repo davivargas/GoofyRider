@@ -1,11 +1,13 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
+
+import 'auth_api_models.dart';
 
 class AuthApi {
   AuthApi(this._dio);
 
   final Dio _dio;
 
-  Future<Map<String, dynamic>> login({
+  Future<TokenPairResponse> login({
     required String email,
     required String password,
   }) async {
@@ -16,10 +18,10 @@ class AuthApi {
         'password': password,
       },
     );
-    return response.data as Map<String, dynamic>;
+    return TokenPairResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> register({
+  Future<TokenPairResponse> register({
     required String email,
     required String password,
     required String displayName,
@@ -32,10 +34,10 @@ class AuthApi {
         'display_name': displayName,
       },
     );
-    return response.data as Map<String, dynamic>;
+    return TokenPairResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> refresh({required String refreshToken}) async {
+  Future<TokenPairResponse> refresh({required String refreshToken}) async {
     final Response<dynamic> response = await _dio.post<dynamic>(
       '/auth/refresh',
       data: <String, dynamic>{'refresh_token': refreshToken},
@@ -45,10 +47,10 @@ class AuthApi {
         },
       ),
     );
-    return response.data as Map<String, dynamic>;
+    return TokenPairResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> me({required String accessToken}) async {
+  Future<UserProfileResponse> me({required String accessToken}) async {
     final Response<dynamic> response = await _dio.get<dynamic>(
       '/auth/me',
       options: Options(
@@ -57,7 +59,7 @@ class AuthApi {
         },
       ),
     );
-    return response.data as Map<String, dynamic>;
+    return UserProfileResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
   Future<void> logout({required String refreshToken}) async {

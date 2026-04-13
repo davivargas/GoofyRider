@@ -4,6 +4,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:goofyrider_mobile/core/storage/token_storage.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_api.dart';
+import 'package:goofyrider_mobile/features/auth/data/auth_api_models.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_repository_impl.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 
@@ -29,11 +30,11 @@ void main() {
     displayName: 'Tester',
   );
 
-  Map<String, dynamic> userProfilePayload() => <String, dynamic>{
-        'id': userProfile.id,
-        'email': userProfile.email,
-        'display_name': userProfile.displayName,
-      };
+  UserProfileResponse userProfileResponse() => UserProfileResponse(
+        id: userProfile.id,
+        email: userProfile.email,
+        displayName: userProfile.displayName,
+      );
 
   test('login persists the token pair before hydrating the profile', () async {
     final MockAuthApi authApi = MockAuthApi();
@@ -42,10 +43,10 @@ void main() {
       authApi: authApi,
       tokenStorage: tokenStorage,
     );
-    final Map<String, dynamic> loginPayload = <String, dynamic>{
-      'access_token': tokenPair.accessToken,
-      'refresh_token': tokenPair.refreshToken,
-    };
+    final TokenPairResponse loginPayload = TokenPairResponse(
+      accessToken: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+    );
 
     when(() => authApi.login(
       email: 'test@example.com',
@@ -53,7 +54,7 @@ void main() {
     )).thenAnswer((_) async => loginPayload);
     when(() => tokenStorage.write(any<StoredTokens>())).thenAnswer((_) async {});
     when(() => authApi.me(accessToken: tokenPair.accessToken))
-        .thenAnswer((_) async => userProfilePayload());
+        .thenAnswer((_) async => userProfileResponse());
 
     final AuthSession session = await repository.login(
       email: 'Test@Example.com',
@@ -79,10 +80,10 @@ void main() {
       authApi: authApi,
       tokenStorage: tokenStorage,
     );
-    final Map<String, dynamic> registerPayload = <String, dynamic>{
-      'access_token': tokenPair.accessToken,
-      'refresh_token': tokenPair.refreshToken,
-    };
+    final TokenPairResponse registerPayload = TokenPairResponse(
+      accessToken: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+    );
     final DioException meFailure = DioException(
       requestOptions: RequestOptions(path: '/auth/me'),
       type: DioExceptionType.connectionError,
@@ -175,10 +176,10 @@ void main() {
       ),
       type: DioExceptionType.badResponse,
     );
-    final Map<String, dynamic> refreshPayload = <String, dynamic>{
-      'access_token': 'new-access-token',
-      'refresh_token': 'refresh-token',
-    };
+    final TokenPairResponse refreshPayload = TokenPairResponse(
+      accessToken: 'new-access-token',
+      refreshToken: 'refresh-token',
+    );
     final DioException rejectedMe = DioException(
       requestOptions: meRequest,
       response: Response<dynamic>(

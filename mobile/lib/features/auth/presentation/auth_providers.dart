@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/auth_token_interceptor.dart';
-import '../../../core/network/dio_client.dart';
 import '../../../core/providers.dart';
 import '../data/auth_api.dart';
 import '../data/auth_repository_impl.dart';
@@ -26,12 +25,13 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
 );
 
 final authorizedDioProvider = Provider<Dio>((ref) {
-  final Dio dio = buildBaseDio();
+  final Dio baseDio = ref.watch(baseDioProvider);
+  final Dio authorizedDio = Dio(baseDio.options.copyWith());
   final AuthController controller = ref.read(authControllerProvider.notifier);
 
-  dio.interceptors.add(
+  authorizedDio.interceptors.add(
     AuthTokenInterceptor(
-      dio: dio,
+      dio: authorizedDio,
       accessTokenGetter: controller.currentAccessToken,
       refreshTokenGetter: controller.currentRefreshToken,
       refreshCallback: controller.refreshAccessToken,
@@ -39,5 +39,5 @@ final authorizedDioProvider = Provider<Dio>((ref) {
     ),
   );
 
-  return dio;
+  return authorizedDio;
 });

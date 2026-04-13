@@ -1,4 +1,4 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/failures.dart';
 import '../domain/auth_models.dart';
@@ -36,6 +36,11 @@ class AuthController extends StateNotifier<AuthState> {
         status: AuthStatus.unauthenticated,
         errorMessage: failure.message,
       );
+    } catch (error) {
+      state = AuthState(
+        status: AuthStatus.unauthenticated,
+        errorMessage: 'An unexpected error occurred. Please try again.',
+      );
     }
   }
 
@@ -52,6 +57,11 @@ class AuthController extends StateNotifier<AuthState> {
       state = AuthState(
         status: AuthStatus.unauthenticated,
         errorMessage: failure.message,
+      );
+    } catch (error) {
+      state = AuthState(
+        status: AuthStatus.unauthenticated,
+        errorMessage: 'An unexpected error occurred. Please try again.',
       );
     }
   }

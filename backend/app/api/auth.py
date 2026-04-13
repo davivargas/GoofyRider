@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 from fastapi import Depends
-from fastapi import HTTPException
 from fastapi import Response
 from fastapi import status
 
@@ -13,8 +12,6 @@ from app.schemas.auth import RegisterRequest
 from app.schemas.auth import TokenPair
 from app.schemas.user import UserPublic
 from app.services.auth_service import AuthService
-from app.services.exceptions import AuthenticationError
-from app.services.exceptions import ConflictError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,18 +21,11 @@ def register(
     payload: RegisterRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenPair:
-    try:
-        token_pair = auth_service.register(
-            email=payload.email,
-            password=payload.password,
-            display_name=payload.display_name,
-        )
-    except ConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-
+    token_pair = auth_service.register(
+        email=payload.email,
+        password=payload.password,
+        display_name=payload.display_name,
+    )
     return TokenPair.model_validate(token_pair)
 
 
@@ -44,14 +34,7 @@ def login(
     payload: LoginRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenPair:
-    try:
-        token_pair = auth_service.login(email=payload.email, password=payload.password)
-    except AuthenticationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
-
+    token_pair = auth_service.login(email=payload.email, password=payload.password)
     return TokenPair.model_validate(token_pair)
 
 
@@ -60,14 +43,7 @@ def refresh(
     payload: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenPair:
-    try:
-        token_pair = auth_service.refresh(payload.refresh_token)
-    except AuthenticationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
-
+    token_pair = auth_service.refresh(payload.refresh_token)
     return TokenPair.model_validate(token_pair)
 
 

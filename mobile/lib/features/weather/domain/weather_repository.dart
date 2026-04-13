@@ -1,4 +1,4 @@
-﻿import 'weather_models.dart';
+import 'weather_models.dart';
 
 abstract class WeatherRepository {
   Future<ResortWeather?> getResortWeather(String resortId);

@@ -1,4 +1,4 @@
-﻿from app.models.favorite_resort import FavoriteResort
+from app.models.favorite_resort import FavoriteResort
 from app.models.resort import Resort
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
@@ -7,11 +7,11 @@ from app.models.user import User
 from app.models.weather_cache import WeatherCache
 
 __all__ = [
-    "User",
-    "Resort",
     "FavoriteResort",
+    "Resort",
     "RideSession",
     "RideSessionStatus",
     "SessionPoint",
+    "User",
     "WeatherCache",
 ]

@@ -1,6 +1,6 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 import re
-from collections.abc import Mapping
 from typing import Any
 from typing import Protocol
 from typing import cast
@@ -95,13 +95,11 @@ class ExternalResortRecord:
 
 
 class ExternalResortSourceProtocol(Protocol):
-    def fetch_resorts(self) -> list[ExternalResortRecord]:
-        ...
+    def fetch_resorts(self) -> list[ExternalResortRecord]: ...
 
 
 class SkiApiPageFetcherProtocol(Protocol):
-    def __call__(self, page: int, page_size: int) -> object:
-        ...
+    def __call__(self, page: int, page_size: int) -> object: ...
 
 
 class SkiApiResortSource:
@@ -113,6 +111,7 @@ class SkiApiResortSource:
         page_size: int,
         timeout_seconds: int,
         page_fetcher: SkiApiPageFetcherProtocol | None = None,
+        client: httpx.Client | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -120,10 +119,11 @@ class SkiApiResortSource:
         self._page_size = page_size
         self._timeout_seconds = timeout_seconds
         self._page_fetcher = page_fetcher
+        self._client = client
 
     def fetch_resorts(self) -> list[ExternalResortRecord]:
         resorts: list[ExternalResortRecord] = []
-        next_page = 1
+        next_page: int | None = 1
 
         while next_page is not None:
             payload = self._fetch_page(page=next_page)
@@ -143,14 +143,23 @@ class SkiApiResortSource:
         )
 
         try:
-            with httpx.Client(timeout=float(self._timeout_seconds)) as client:
-                response = client.get(
+            if self._client is not None:
+                response = self._client.get(
                     f"{self._base_url}/resort",
                     params={"page": page, "per_page": self._page_size},
                     headers=headers,
                 )
                 response.raise_for_status()
                 payload = response.json()
+            else:
+                with httpx.Client(timeout=float(self._timeout_seconds)) as client:
+                    response = client.get(
+                        f"{self._base_url}/resort",
+                        params={"page": page, "per_page": self._page_size},
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
         except httpx.HTTPError as exc:
             raise ServiceUnavailableError("Ski API provider unavailable.") from exc
         except ValueError as exc:
@@ -304,7 +313,7 @@ def _optional_int(value: Any) -> int | None:
     parsed = _optional_float(value)
     if parsed is None:
         return None
-    return int(round(parsed))
+    return round(parsed)
 
 
 def _require_object_payload(

@@ -1,5 +1,5 @@
-﻿import uuid
 from datetime import datetime
+import uuid
 
 from sqlalchemy import DateTime
 from sqlalchemy import Float
@@ -16,9 +16,7 @@ from app.models.base import Base
 
 class WeatherCache(Base):
     __tablename__ = "weather_cache"
-    __table_args__ = (
-        UniqueConstraint("resort_id", name="uq_weather_cache_resort_id"),
-    )
+    __table_args__ = (UniqueConstraint("resort_id", name="uq_weather_cache_resort_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

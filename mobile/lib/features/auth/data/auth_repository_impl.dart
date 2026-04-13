@@ -5,6 +5,7 @@ import '../../../core/storage/token_storage.dart';
 import '../domain/auth_models.dart';
 import '../domain/auth_repository.dart';
 import 'auth_api.dart';
+import 'auth_api_models.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
@@ -22,7 +23,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
   }) async {
     try {
-      final Map<String, dynamic> tokenPayload = await _authApi.login(
+      final TokenPairResponse tokenPayload = await _authApi.login(
         email: email.trim().toLowerCase(),
         password: password,
       );
@@ -39,7 +40,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String displayName,
   }) async {
     try {
-      final Map<String, dynamic> tokenPayload = await _authApi.register(
+      final TokenPairResponse tokenPayload = await _authApi.register(
         email: email.trim().toLowerCase(),
         password: password,
         displayName: displayName.trim(),
@@ -118,16 +119,15 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String?> refreshAccessToken(String refreshToken) async {
     try {
-      final Map<String, dynamic> payload =
+      final TokenPairResponse payload =
           await _authApi.refresh(refreshToken: refreshToken);
-      final String accessToken = payload['access_token'] as String;
+      final String accessToken = payload.accessToken;
       final StoredTokens? existing = await _tokenStorage.read();
       if (existing != null) {
         await _tokenStorage.write(
           StoredTokens(
             accessToken: accessToken,
-            refreshToken:
-                payload['refresh_token'] as String? ?? existing.refreshToken,
+            refreshToken: payload.refreshToken,
             userId: existing.userId,
             email: existing.email,
             displayName: existing.displayName,
@@ -151,10 +151,10 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   Future<AuthSession> _hydrateAndPersistSession(
-    Map<String, dynamic> tokenPayload,
+    TokenPairResponse tokenPayload,
   ) async {
-    final String accessToken = tokenPayload['access_token'] as String;
-    final String refreshToken = tokenPayload['refresh_token'] as String;
+    final String accessToken = tokenPayload.accessToken;
+    final String refreshToken = tokenPayload.refreshToken;
 
     await _tokenStorage.write(
       StoredTokens(
@@ -163,12 +163,16 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    final Map<String, dynamic> mePayload =
+    final UserProfileResponse mePayload =
         await _authApi.me(accessToken: accessToken);
     final AuthSession session = AuthSession(
       accessToken: accessToken,
       refreshToken: refreshToken,
-      user: UserProfile.fromJson(mePayload),
+      user: UserProfile(
+        id: mePayload.id,
+        email: mePayload.email,
+        displayName: mePayload.displayName,
+      ),
     );
 
     await _tokenStorage.write(
@@ -187,13 +191,17 @@ class AuthRepositoryImpl implements AuthRepository {
     required String accessToken,
     required String refreshToken,
   }) async {
-    final Map<String, dynamic> mePayload = await _authApi.me(
+    final UserProfileResponse mePayload = await _authApi.me(
       accessToken: accessToken,
     );
     final AuthSession session = AuthSession(
       accessToken: accessToken,
       refreshToken: refreshToken,
-      user: UserProfile.fromJson(mePayload),
+      user: UserProfile(
+        id: mePayload.id,
+        email: mePayload.email,
+        displayName: mePayload.displayName,
+      ),
     );
 
     await _tokenStorage.write(

@@ -257,7 +257,18 @@ void main() {
     localDatabase = MockDriftLocalDatabase();
     api = MockSessionApi();
     when(() => localDatabase.beginSyncAttempt(any())).thenAnswer((_) async {});
-    when(() => localDatabase.readCachedResorts())
+    when(
+      () => localDatabase.upsertCachedResort(
+        any(),
+        any(),
+        ownerUserId: any(named: 'ownerUserId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => localDatabase.readCachedResorts(
+        ownerUserId: any(named: 'ownerUserId'),
+      ),
+    )
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
       () => localDatabase.listPendingRemoteSessionDeleteIds(
@@ -2298,7 +2309,11 @@ void main() {
       updatedAt: session.updatedAt,
     );
 
-    when(() => localDatabase.readCachedResorts()).thenAnswer(
+    when(
+      () => localDatabase.readCachedResorts(
+        ownerUserId: any(named: 'ownerUserId'),
+      ),
+    ).thenAnswer(
       (_) async => <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'resort-whistler',
@@ -2324,7 +2339,11 @@ void main() {
       localId: 21,
       state: LocalSessionState.synced,
     );
-    when(() => localDatabase.readCachedResorts()).thenAnswer(
+    when(
+      () => localDatabase.readCachedResorts(
+        ownerUserId: any(named: 'ownerUserId'),
+      ),
+    ).thenAnswer(
       (_) async => <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'resort-near',
@@ -2363,7 +2382,11 @@ void main() {
       localId: 31,
       state: LocalSessionState.synced,
     );
-    when(() => localDatabase.readCachedResorts()).thenAnswer(
+    when(
+      () => localDatabase.readCachedResorts(
+        ownerUserId: any(named: 'ownerUserId'),
+      ),
+    ).thenAnswer(
       (_) async => <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'resort-far',

@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
-import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+import pytest
 
 import app.core.dependencies as dependencies
 from app.services.exceptions import AuthenticationError

@@ -11,6 +11,7 @@ import 'package:goofyrider_mobile/features/session/domain/session_repository.dar
 import 'package:goofyrider_mobile/features/session/presentation/record_screen.dart';
 import 'package:goofyrider_mobile/features/session/presentation/recording_controller.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
+import 'package:latlong2/latlong.dart';
 
 class FakeLocationRepository implements LocationTrackingRepository {
   final StreamController<LocationSample> _positionController =
@@ -245,19 +246,26 @@ void main() {
       locationTrackingRepository: fakeLocationRepository,
       initialState: RecordingViewState.initial().copyWith(
         phase: RecordScreenPhase.recording,
-        permissionState: LocationPermissionState.granted,
-        liveStats: const SessionStats(
-          durationS: 180,
-          distanceM: 1200,
-          maxSpeedMps: 15,
-          avgSpeedMps: 8,
-          elevationGainM: 40,
-          elevationLossM: 320,
+        permission: const PermissionViewState(
+          permissionState: LocationPermissionState.granted,
         ),
-        currentAltitudeM: 1550,
-        currentSpeedMps: 10,
-        elapsed: const Duration(minutes: 3),
-        gpsSignal: const GpsSignalState(bars: 4, description: 'Excellent'),
+        tracking: const TrackingViewState(
+          liveStats: SessionStats(
+            durationS: 180,
+            distanceM: 1200,
+            maxSpeedMps: 15,
+            avgSpeedMps: 8,
+            elevationGainM: 40,
+            elevationLossM: 320,
+          ),
+          route: <LatLng>[],
+          currentSpeedMps: 10,
+          currentAltitudeM: 1550,
+          maxSpeedMps: 15,
+          elapsed: Duration(minutes: 3),
+          lowAccuracy: false,
+          gpsSignal: GpsSignalState(bars: 4, description: 'Excellent'),
+        ),
       ),
     );
 
@@ -294,19 +302,26 @@ void main() {
       locationTrackingRepository: fakeLocationRepository,
       initialState: RecordingViewState.initial().copyWith(
         phase: RecordScreenPhase.recording,
-        permissionState: LocationPermissionState.granted,
-        liveStats: const SessionStats(
-          durationS: 180,
-          distanceM: 1200,
-          maxSpeedMps: 15,
-          avgSpeedMps: 8,
-          elevationGainM: 40,
-          elevationLossM: 320,
+        permission: const PermissionViewState(
+          permissionState: LocationPermissionState.granted,
         ),
-        currentAltitudeM: 1550,
-        currentSpeedMps: 10,
-        elapsed: const Duration(minutes: 3),
-        gpsSignal: const GpsSignalState(bars: 4, description: 'Excellent'),
+        tracking: const TrackingViewState(
+          liveStats: SessionStats(
+            durationS: 180,
+            distanceM: 1200,
+            maxSpeedMps: 15,
+            avgSpeedMps: 8,
+            elevationGainM: 40,
+            elevationLossM: 320,
+          ),
+          route: <LatLng>[],
+          currentSpeedMps: 10,
+          currentAltitudeM: 1550,
+          maxSpeedMps: 15,
+          elapsed: Duration(minutes: 3),
+          lowAccuracy: false,
+          gpsSignal: GpsSignalState(bars: 4, description: 'Excellent'),
+        ),
       ),
     );
 

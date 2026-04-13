@@ -1,5 +1,5 @@
-﻿import uuid
 from collections.abc import Sequence
+import uuid
 
 from sqlalchemy import select
 
@@ -11,13 +11,17 @@ class SessionPointRepository(SqlAlchemyRepository):
     def add_batch(self, points: Sequence[SessionPoint]) -> None:
         self._db.add_all(points)
 
-    def existing_offsets(self, session_id: uuid.UUID, offsets: Sequence[int]) -> set[int]:
-        if not offsets:
+    def existing_elapsed_offsets_ms(
+        self,
+        session_id: uuid.UUID,
+        elapsed_offsets_ms: Sequence[int],
+    ) -> set[int]:
+        if not elapsed_offsets_ms:
             return set()
 
         stmt = select(SessionPoint.t_offset_ms).where(
             SessionPoint.session_id == session_id,
-            SessionPoint.t_offset_ms.in_(list(offsets)),
+            SessionPoint.t_offset_ms.in_(list(elapsed_offsets_ms)),
         )
         return set(self._db.scalars(stmt).all())
 

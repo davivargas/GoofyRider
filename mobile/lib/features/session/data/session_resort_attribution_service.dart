@@ -20,9 +20,12 @@ class ResolvedSessionResort {
 class SessionResortAttributionService {
   SessionResortAttributionService({
     required DriftLocalDatabase localDatabase,
-  }) : _localDatabase = localDatabase;
+    String? Function()? currentUserIdGetter,
+  })  : _localDatabase = localDatabase,
+        _currentUserIdGetter = currentUserIdGetter;
 
   final DriftLocalDatabase _localDatabase;
+  final String? Function()? _currentUserIdGetter;
 
   Future<ResolvedSessionResort> resolve(LocalRideSession session) async {
     final List<ResortSummary> resorts = await _readCachedResorts();
@@ -124,8 +127,16 @@ class SessionResortAttributionService {
 
   Future<List<ResortSummary>> _readCachedResorts() async {
     final List<Map<String, dynamic>> cached =
-        await _localDatabase.readCachedResorts();
+        await _localDatabase.readCachedResorts(ownerUserId: _currentUserIdOrNull);
     return cached.map(_mapCachedResort).toList(growable: false);
+  }
+
+  String? get _currentUserIdOrNull {
+    final String? currentUserId = _currentUserIdGetter?.call();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return null;
+    }
+    return currentUserId;
   }
 
   ResortSummary _mapCachedResort(Map<String, dynamic> payload) {

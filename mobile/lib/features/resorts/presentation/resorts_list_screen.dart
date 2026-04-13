@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -30,7 +30,8 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<ResortListResult> state = ref.watch(resortsControllerProvider);
+    final AsyncValue<ResortListResult> state =
+        ref.watch(resortsControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Resorts')),
@@ -42,7 +43,9 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
               controller: _searchController,
               onChanged: (String value) {
                 _debouncer.run(
-                  () => ref.read(resortsControllerProvider.notifier).search(value),
+                  () => ref
+                      .read(resortsControllerProvider.notifier)
+                      .search(value),
                 );
               },
               decoration: const InputDecoration(
@@ -56,7 +59,8 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
               loading: () => const AppLoadingView(label: 'Loading resorts...'),
               error: (Object error, StackTrace _) => AppErrorView(
                 message: error.toString(),
-                onRetry: () => ref.read(resortsControllerProvider.notifier).refresh(),
+                onRetry: () =>
+                    ref.read(resortsControllerProvider.notifier).refresh(),
               ),
               data: (ResortListResult result) {
                 if (result.items.isEmpty) {
@@ -69,14 +73,16 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
                 }
 
                 return RefreshIndicator(
-                  onRefresh: () => ref.read(resortsControllerProvider.notifier).refresh(),
+                  onRefresh: () =>
+                      ref.read(resortsControllerProvider.notifier).refresh(),
                   child: ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: result.items.length,
                     itemBuilder: (BuildContext context, int index) {
                       final ResortSummary resort = result.items[index];
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         child: ListTile(
                           title: Text(resort.name),
                           subtitle: Text(
@@ -85,17 +91,18 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
                           ),
                           trailing: IconButton(
                             icon: Icon(
-                              resort.isFavorite ? Icons.favorite : Icons.favorite_border,
-                              color: resort.isFavorite
-                                  ? Theme.of(context).colorScheme.secondary
-                                  : null,
+                              resort.isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: resort.isFavorite ? Colors.amber : null,
                             ),
                             onPressed: () => ref
                                 .read(resortsControllerProvider.notifier)
                                 .toggleFavorite(resort),
                           ),
                           onTap: () => context.go(
-                            RoutePaths.resortDetail.replaceAll(':resortId', resort.id),
+                            RoutePaths.resortDetail
+                                .replaceAll(':resortId', resort.id),
                           ),
                         ),
                       );

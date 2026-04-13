@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
@@ -117,10 +118,10 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const Card(
+          Card(
             child: ListTile(
-              title: Text('Map attribution'),
-              subtitle: Text('OpenStreetMap contributors'),
+              title: const Text('Map attribution'),
+              subtitle: Text(MapTileProviderConfig.openStreetMap.attribution),
             ),
           ),
           Card(

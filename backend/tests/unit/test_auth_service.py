@@ -3,9 +3,9 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-import app.services.auth_service as auth_service_module
 from app.core.security import hash_password
 from app.models.user import User
+import app.services.auth_service as auth_service_module
 from app.services.auth_service import AuthService
 from app.services.exceptions import AuthenticationError
 from app.services.exceptions import ConflictError
@@ -56,7 +56,7 @@ def test_register_rejects_duplicate_email() -> None:
     repository.users_by_email[existing_user.email] = existing_user
 
     service = AuthService(user_repository=repository)
-    with pytest.raises(ConflictError, match="Email is already registered."):
+    with pytest.raises(ConflictError, match=r"Email is already registered."):
         service.register(
             email="rider@example.com",
             password="strong-pass",
@@ -69,7 +69,7 @@ def test_register_rolls_back_when_commit_fails() -> None:
     repository.commit_error = IntegrityError("INSERT", {}, Exception("unique violation"))
     service = AuthService(user_repository=repository)
 
-    with pytest.raises(ConflictError, match="Email is already registered."):
+    with pytest.raises(ConflictError, match=r"Email is already registered."):
         service.register(
             email="new@example.com",
             password="strong-pass",
@@ -83,7 +83,7 @@ def test_login_rejects_invalid_credentials() -> None:
     repository = FakeUserRepository()
     service = AuthService(user_repository=repository)
 
-    with pytest.raises(AuthenticationError, match="Invalid email or password."):
+    with pytest.raises(AuthenticationError, match=r"Invalid email or password."):
         service.login(email="missing@example.com", password="bad-pass")
 
 
@@ -96,7 +96,7 @@ def test_refresh_rejects_invalid_token_subject(monkeypatch: pytest.MonkeyPatch) 
         lambda _token, expected_token_type=None: {"sub": "not-a-uuid"},
     )
 
-    with pytest.raises(AuthenticationError, match="Invalid token subject."):
+    with pytest.raises(AuthenticationError, match=r"Invalid token subject."):
         service.refresh("refresh-token")
 
 
@@ -111,5 +111,5 @@ def test_get_user_from_access_token_rejects_unknown_user(
         lambda _token, expected_token_type=None: {"sub": str(uuid4())},
     )
 
-    with pytest.raises(AuthenticationError, match="User not found."):
+    with pytest.raises(AuthenticationError, match=r"User not found."):
         service.get_user_from_access_token("access-token")

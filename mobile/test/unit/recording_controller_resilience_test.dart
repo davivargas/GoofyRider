@@ -670,7 +670,7 @@ void main() {
 
     await controller.resumeRecoveredSession();
     expect(controller.state.phase, RecordScreenPhase.recording);
-    expect(controller.state.route.length, 2);
+    expect(controller.state.tracking.route.length, 2);
 
     controller.dispose();
     await locationRepository.close();
@@ -709,7 +709,7 @@ void main() {
     }
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    expect(controller.state.route.length, SessionConstants.maxLiveRoutePoints);
+    expect(controller.state.tracking.route.length, SessionConstants.maxLiveRoutePoints);
     expect(repository.appendedPoints.length, sampleCount);
 
     controller.dispose();
@@ -733,7 +733,7 @@ void main() {
     expect(controller.state.phase, RecordScreenPhase.ready);
     expect(controller.state.session, isNull);
     expect(
-      controller.state.errorMessage,
+      controller.state.permission.errorMessage,
       contains('Allow all the time'),
     );
 
@@ -783,7 +783,7 @@ void main() {
 
     await controller.openLocationPermissionSettings();
     expect(
-        controller.state.errorMessage, contains('Could not open app settings'));
+        controller.state.permission.errorMessage, contains('Could not open app settings'));
 
     controller.dispose();
   });
@@ -817,9 +817,9 @@ void main() {
     expect(controller.state.phase, isNot(RecordScreenPhase.finishing));
     expect(controller.state.phase, RecordScreenPhase.ready);
     expect(controller.state.session, isNull);
-    expect(controller.state.route, isEmpty);
-    expect(controller.state.liveStats.distanceM, 0);
-    expect(controller.state.elapsed, Duration.zero);
+    expect(controller.state.tracking.route, isEmpty);
+    expect(controller.state.tracking.liveStats.distanceM, 0);
+    expect(controller.state.tracking.elapsed, Duration.zero);
 
     controller.dispose();
   });
@@ -858,7 +858,7 @@ void main() {
     expect(controller.state.phase, RecordScreenPhase.paused);
     expect(controller.state.session?.state, LocalSessionState.paused);
     expect(
-      controller.state.errorMessage,
+      controller.state.permission.errorMessage,
       contains('Allow all the time'),
     );
 
@@ -899,7 +899,7 @@ void main() {
     expect(controller.state.phase, RecordScreenPhase.ready);
     expect(controller.state.session, isNull);
     expect(
-      controller.state.errorMessage,
+      controller.state.permission.errorMessage,
       'Enable high-accuracy location before recording.',
     );
 
@@ -927,7 +927,7 @@ void main() {
     expect(repository.listPendingSyncSessionsCalls, 0);
     expect(repository.syncSessionCalls, 0);
     expect(
-      controller.state.lastSyncMessage,
+      controller.state.sync.lastSyncMessage,
       'Sync deferred until recording finishes.',
     );
 
@@ -958,7 +958,7 @@ void main() {
     expect(repository.syncSessionCalls, 3);
     expect(repository.syncedSessionIds, <int>[11, 12, 13]);
     expect(
-        controller.state.lastSyncMessage, 'Sync pass: 2/3 synced, 1 failed.');
+        controller.state.sync.lastSyncMessage, 'Sync pass: 2/3 synced, 1 failed.');
 
     controller.dispose();
     await locationRepository.close();
@@ -992,9 +992,9 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 120));
 
     expect(repository.appendedPoints, isEmpty);
-    expect(controller.state.route, isEmpty);
-    expect(controller.state.liveStats.distanceM, 0);
-    expect(controller.state.currentSpeedMps, 0);
+    expect(controller.state.tracking.route, isEmpty);
+    expect(controller.state.tracking.liveStats.distanceM, 0);
+    expect(controller.state.tracking.currentSpeedMps, 0);
 
     locationRepository.emit(
       LocationSample(
@@ -1026,11 +1026,11 @@ void main() {
     expect(controller.state.phase, RecordScreenPhase.recording);
     expect(controller.state.streamRestartCount, 0);
     expect(repository.appendedPoints, hasLength(2));
-    expect(controller.state.route.length, 2);
-    expect(controller.state.liveStats.distanceM,
+    expect(controller.state.tracking.route.length, 2);
+    expect(controller.state.tracking.liveStats.distanceM,
         closeTo(persistedStats.distanceM, 0.1));
     expect(persistedStats.distanceM, greaterThan(0));
-    expect(controller.state.lastPersistedPointAtUtc, isNotNull);
+    expect(controller.state.tracking.lastPersistedPointAtUtc, isNotNull);
 
     controller.dispose();
     await locationRepository.close();

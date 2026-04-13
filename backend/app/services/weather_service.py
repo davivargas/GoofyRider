@@ -1,21 +1,27 @@
-import uuid
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+import logging
 from typing import Protocol
-from typing import cast
+import uuid
 
 import httpx
+from sqlalchemy.exc import IntegrityError
 
-from app.models.resort import Resort
 from app.models.weather_cache import WeatherCache
+from app.repositories.protocols import ResortRepositoryProtocol
+from app.repositories.protocols import WeatherCacheRepositoryProtocol
+from app.schemas.weather_codes import _as_object_sequence
+from app.schemas.weather_codes import _to_optional_float
+from app.schemas.weather_codes import weather_code_to_text
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ServiceUnavailableError
 from app.services.exceptions import ValidationError
 
-CACHE_TTL_MINUTES = 60
+logger = logging.getLogger(__name__)
+
+WEATHER_CACHE_TTL_MINUTES = 60
 
 
 @dataclass(frozen=True)
@@ -31,32 +37,15 @@ class WeatherSnapshotData:
     weather_code_text: str | None
 
 
-class ResortRepositoryProtocol(Protocol):
-    def get_by_id(self, resort_id: uuid.UUID) -> Resort | None:
-        ...
-
-
-class WeatherCacheRepositoryProtocol(Protocol):
-    def get_by_resort_id(self, resort_id: uuid.UUID) -> WeatherCache | None:
-        ...
-
-    def add(self, cache: WeatherCache) -> None:
-        ...
-
-    def commit(self) -> None:
-        ...
-
-    def refresh(self, instance: object) -> None:
-        ...
-
-
 class WeatherProviderProtocol(Protocol):
-    def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData:
-        ...
+    def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData: ...
 
 
 class OpenMeteoWeatherProvider:
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
+
+    def __init__(self, client: httpx.Client | None = None) -> None:
+        self._client = client
 
     def fetch(self, latitude: float, longitude: float) -> WeatherSnapshotData:
         params: dict[str, str | int | float] = {
@@ -68,10 +57,15 @@ class OpenMeteoWeatherProvider:
             "forecast_days": 2,
         }
 
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(self.BASE_URL, params=params)
+        if self._client is not None:
+            response = self._client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             payload = response.json()
+        else:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(self.BASE_URL, params=params)
+                response.raise_for_status()
+                payload = response.json()
 
         current = payload.get("current", {})
         daily = payload.get("daily", {})
@@ -89,7 +83,9 @@ class OpenMeteoWeatherProvider:
 
         snowfall_daily = _as_object_sequence(daily.get("snowfall_sum"))
         snowfall_today = _to_optional_float(snowfall_daily[0]) if len(snowfall_daily) > 0 else None
-        snowfall_next = _to_optional_float(snowfall_daily[1]) if len(snowfall_daily) > 1 else snowfall_today
+        snowfall_next = (
+            _to_optional_float(snowfall_daily[1]) if len(snowfall_daily) > 1 else snowfall_today
+        )
 
         weather_codes = _as_object_sequence(daily.get("weather_code"))
         today_code_raw = weather_codes[0] if len(weather_codes) > 0 else None
@@ -129,7 +125,9 @@ class WeatherService:
 
         cached = self._weather_cache_repository.get_by_resort_id(resort_id)
         now = datetime.now(UTC)
-        if cached is not None and now - cached.fetched_at <= timedelta(minutes=CACHE_TTL_MINUTES):
+        if cached is not None and now - cached.fetched_at <= timedelta(
+            minutes=WEATHER_CACHE_TTL_MINUTES
+        ):
             return cached
 
         try:
@@ -139,76 +137,56 @@ class WeatherService:
             )
         except (httpx.HTTPError, ValueError) as exc:
             if cached is not None:
+                logger.warning(
+                    "Weather provider unavailable, using cache for resort: %s", resort_id
+                )
                 return cached
             raise ServiceUnavailableError("Weather provider unavailable.") from exc
 
         if cached is None:
-            cached = WeatherCache(
-                resort_id=resort_id,
-                observed_at=snapshot.observed_at,
-                temp_c=snapshot.temp_c,
-                wind_kph=snapshot.wind_kph,
-                snowfall_cm_24h=snapshot.snowfall_cm_24h,
-                conditions_text=snapshot.conditions_text,
-                today_high_c=snapshot.today_high_c,
-                today_low_c=snapshot.today_low_c,
-                snowfall_next_24h_cm=snapshot.snowfall_next_24h_cm,
-                weather_code_text=snapshot.weather_code_text,
-                fetched_at=now,
-            )
-            self._weather_cache_repository.add(cached)
+            cached = self._insert_or_recover_cache(resort_id, snapshot, now)
         else:
-            cached.observed_at = snapshot.observed_at
-            cached.temp_c = snapshot.temp_c
-            cached.wind_kph = snapshot.wind_kph
-            cached.snowfall_cm_24h = snapshot.snowfall_cm_24h
-            cached.conditions_text = snapshot.conditions_text
-            cached.today_high_c = snapshot.today_high_c
-            cached.today_low_c = snapshot.today_low_c
-            cached.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
-            cached.weather_code_text = snapshot.weather_code_text
-            cached.fetched_at = now
+            self._apply_snapshot(cached, snapshot, now)
+            self._weather_cache_repository.commit()
 
-        self._weather_cache_repository.commit()
         self._weather_cache_repository.refresh(cached)
+        logger.info("Weather fetched for resort: %s", resort_id)
         return cached
 
+    @staticmethod
+    def _apply_snapshot(
+        cache: WeatherCache,
+        snapshot: WeatherSnapshotData,
+        fetched_at: datetime,
+    ) -> None:
+        cache.observed_at = snapshot.observed_at
+        cache.temp_c = snapshot.temp_c
+        cache.wind_kph = snapshot.wind_kph
+        cache.snowfall_cm_24h = snapshot.snowfall_cm_24h
+        cache.conditions_text = snapshot.conditions_text
+        cache.today_high_c = snapshot.today_high_c
+        cache.today_low_c = snapshot.today_low_c
+        cache.snowfall_next_24h_cm = snapshot.snowfall_next_24h_cm
+        cache.weather_code_text = snapshot.weather_code_text
+        cache.fetched_at = fetched_at
 
-def _to_optional_float(value: object) -> float | None:
-    if value is None:
-        return None
-    if not isinstance(value, (int, float, str, bytes, bytearray)):
-        raise ValueError("Weather numeric fields must be numbers.")
-    return float(value)
-
-
-def weather_code_to_text(raw_code: object) -> str | None:
-    if raw_code is None:
-        return None
-
-    if not isinstance(raw_code, (int, float, str, bytes, bytearray)):
-        raise ValueError("Weather weather_code must be numeric.")
-
-    code = int(raw_code)
-    if code == 0:
-        return "Clear"
-    if code in {1, 2, 3}:
-        return "Partly cloudy"
-    if code in {45, 48}:
-        return "Fog"
-    if code in {51, 53, 55, 56, 57}:
-        return "Drizzle"
-    if code in {61, 63, 65, 66, 67, 80, 81, 82}:
-        return "Rain"
-    if code in {71, 73, 75, 77, 85, 86}:
-        return "Snow"
-    if code in {95, 96, 99}:
-        return "Thunderstorm"
-    return "Mixed"
-
-
-def _as_object_sequence(value: object) -> Sequence[object]:
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        sequence_value = cast(Sequence[object], value)
-        return tuple(sequence_value)
-    return ()
+    def _insert_or_recover_cache(
+        self,
+        resort_id: uuid.UUID,
+        snapshot: WeatherSnapshotData,
+        now: datetime,
+    ) -> WeatherCache:
+        cache = WeatherCache(resort_id=resort_id)
+        self._apply_snapshot(cache, snapshot, now)
+        try:
+            self._weather_cache_repository.add(cache)
+            self._weather_cache_repository.commit()
+        except IntegrityError as exc:
+            self._weather_cache_repository.rollback()
+            existing = self._weather_cache_repository.get_by_resort_id(resort_id)
+            if existing is None:
+                raise ServiceUnavailableError("Weather cache conflict: unable to resolve.") from exc
+            self._apply_snapshot(existing, snapshot, now)
+            self._weather_cache_repository.commit()
+            return existing
+        return cache

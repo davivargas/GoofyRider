@@ -1,4 +1,4 @@
-﻿from app.schemas.auth import LoginRequest
+from app.schemas.auth import LoginRequest
 from app.schemas.auth import RefreshTokenRequest
 from app.schemas.auth import RegisterRequest
 from app.schemas.auth import TokenPair
@@ -18,12 +18,12 @@ from app.schemas.weather import ResortWeatherResponse
 
 __all__ = [
     "LoginRequest",
-    "RideSessionPublic",
     "RefreshTokenRequest",
     "RegisterRequest",
     "ResortListResponse",
     "ResortPublic",
     "ResortWeatherResponse",
+    "RideSessionPublic",
     "SessionCompleteRequest",
     "SessionCreateRequest",
     "SessionListResponse",

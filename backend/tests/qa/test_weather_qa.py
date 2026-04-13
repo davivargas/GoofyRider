@@ -1,4 +1,4 @@
-﻿from datetime import UTC
+from datetime import UTC
 from datetime import datetime
 
 from fastapi.testclient import TestClient

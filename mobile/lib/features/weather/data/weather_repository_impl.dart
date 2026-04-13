@@ -1,11 +1,11 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/storage/drift_local_database.dart';
 import '../domain/weather_models.dart';
 import '../domain/weather_repository.dart';
 import 'weather_api.dart';
+import 'weather_cache_freshness.dart';
 
 class WeatherRepositoryImpl implements WeatherRepository {
   WeatherRepositoryImpl({
@@ -20,33 +20,35 @@ class WeatherRepositoryImpl implements WeatherRepository {
   @override
   Future<ResortWeather?> getResortWeather(String resortId) async {
     try {
-      final Map<String, dynamic> payload = await _api.getResortWeather(resortId);
+      final Map<String, dynamic> payload =
+          await _api.getResortWeather(resortId);
       await _localDatabase.upsertCachedWeather(resortId, payload);
       return ResortWeather.fromJson(payload, fromCache: false, stale: false);
     } on DioException {
-      final Map<String, dynamic>? cached = await _localDatabase.readCachedWeather(resortId);
+      final Map<String, dynamic>? cached =
+          await _localDatabase.readCachedWeather(resortId);
       if (cached == null) {
         return null;
       }
-      final DateTime fetchedAt = DateTime.parse(cached['cached_fetched_at'] as String).toUtc();
-      final bool stale = DateTime.now().toUtc().difference(fetchedAt) > AppConstants.weatherCacheTtl;
+      final bool stale = isCachedWeatherStale(cached);
       return ResortWeather.fromJson(cached, fromCache: true, stale: stale);
     }
   }
 
   @override
   Future<ResortWeather?> refreshResortWeatherIfStale(String resortId) async {
-    final Map<String, dynamic>? cached = await _localDatabase.readCachedWeather(resortId);
+    final Map<String, dynamic>? cached =
+        await _localDatabase.readCachedWeather(resortId);
     if (cached != null) {
-      final DateTime fetchedAt = DateTime.parse(cached['cached_fetched_at'] as String).toUtc();
-      final bool stale = DateTime.now().toUtc().difference(fetchedAt) > AppConstants.weatherCacheTtl;
+      final bool stale = isCachedWeatherStale(cached);
       if (!stale) {
         return ResortWeather.fromJson(cached, fromCache: true, stale: false);
       }
     }
 
     try {
-      final Map<String, dynamic> payload = await _api.getResortWeather(resortId);
+      final Map<String, dynamic> payload =
+          await _api.getResortWeather(resortId);
       await _localDatabase.upsertCachedWeather(resortId, payload);
       return ResortWeather.fromJson(payload, fromCache: false, stale: false);
     } on DioException catch (exception) {

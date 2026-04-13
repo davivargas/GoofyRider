@@ -21,8 +21,6 @@ class AppConstants {
     );
   }
 
-  static bool get isUsingImplicitEmulatorApiBaseUrl => false;
-
   static const Duration httpTimeout = Duration(seconds: 20);
   static const Duration weatherCacheTtl = Duration(minutes: 60);
   static const bool _forceDebugDiagnostics = bool.fromEnvironment(
@@ -46,7 +44,7 @@ class MapTileProviderConfig {
 
   static const MapTileProviderConfig openStreetMap = MapTileProviderConfig(
     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors',
+    attribution: 'OpenStreetMap contributors',
     subdomains: <String>[],
   );
 }

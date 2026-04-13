@@ -12,6 +12,8 @@ import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
 import 'package:goofyrider_mobile/features/resorts/presentation/resort_providers.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
+import 'package:goofyrider_mobile/features/weather/domain/weather_models.dart';
+import 'package:goofyrider_mobile/features/weather/presentation/weather_providers.dart';
 
 class _FakeAuthRepository implements AuthRepository {
   const _FakeAuthRepository();
@@ -50,8 +52,7 @@ class _FakeAuthRepository implements AuthRepository {
 }
 
 class _FakeAuthController extends AuthController {
-  _FakeAuthController()
-      : super(const _FakeAuthRepository()) {
+  _FakeAuthController() : super(const _FakeAuthRepository()) {
     state = const AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
@@ -90,10 +91,16 @@ LocalRideSession _buildSession(DateTime startedAt) {
   );
 }
 
-ResortSummary _buildResort() {
-  return const ResortSummary(
-    id: 'resort-1',
-    name: 'Whistler Blackcomb',
+ResortSummary _buildResort({
+  String id = 'resort-1',
+  String name = 'Whistler Blackcomb',
+  String? cachedWeatherText = 'Sunny',
+  double? cachedWeatherTempC = -2,
+  bool isFavorite = true,
+}) {
+  return ResortSummary(
+    id: id,
+    name: name,
     country: 'Canada',
     region: 'BC',
     city: 'Whistler',
@@ -101,10 +108,31 @@ ResortSummary _buildResort() {
     longitude: -122.9574,
     elevationBaseM: 653,
     elevationTopM: 2240,
-    isFavorite: true,
-    cachedWeatherText: 'Sunny',
-    cachedWeatherTempC: -2,
+    isFavorite: isFavorite,
+    cachedWeatherText: cachedWeatherText,
+    cachedWeatherTempC: cachedWeatherTempC,
     isStale: false,
+  );
+}
+
+ResortWeather _buildWeather({
+  required String resortId,
+  required String conditionsText,
+  required double tempC,
+}) {
+  return ResortWeather(
+    resortId: resortId,
+    observedAt: DateTime.utc(2026, 1, 1, 18),
+    tempC: tempC,
+    windKph: null,
+    snowfallCm24h: null,
+    conditionsText: conditionsText,
+    todayHighC: null,
+    todayLowC: null,
+    snowfallNext24hCm: null,
+    weatherCodeText: null,
+    fromCache: false,
+    stale: false,
   );
 }
 
@@ -119,10 +147,13 @@ void main() {
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
-          historyProvider
-              .overrideWith((_) async => <LocalRideSession>[_buildSession(startedAt)]),
+          historyProvider.overrideWith(
+              (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
               .overrideWith((_) async => <ResortSummary>[_buildResort()]),
+          resortWeatherProvider.overrideWith(
+            (Ref ref, String resortId) async => null,
+          ),
           unsyncedSessionCountProvider.overrideWith((_) async => 0),
         ],
         child: const MaterialApp(home: HomeScreen()),
@@ -151,10 +182,13 @@ void main() {
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
-          historyProvider
-              .overrideWith((_) async => <LocalRideSession>[_buildSession(startedAt)]),
+          historyProvider.overrideWith(
+              (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
               .overrideWith((_) async => <ResortSummary>[_buildResort()]),
+          resortWeatherProvider.overrideWith(
+            (Ref ref, String resortId) async => null,
+          ),
           unsyncedSessionCountProvider.overrideWith((_) async => 0),
         ],
         child: const MaterialApp(home: HomeScreen()),
@@ -165,5 +199,97 @@ void main() {
 
     expect(find.textContaining(startedAt.toDayLabel()), findsOneWidget);
     expect(find.textContaining(startedAt.toTimeLabel()), findsOneWidget);
+  });
+
+  testWidgets(
+      'home favorite cards update after favorites provider invalidation',
+      (WidgetTester tester) async {
+    final StateProvider<List<ResortSummary>> favoritesStateProvider =
+        StateProvider<List<ResortSummary>>(
+      (Ref ref) => <ResortSummary>[
+        _buildResort(id: 'resort-1', name: 'Whistler Blackcomb'),
+      ],
+    );
+
+    final ProviderContainer container = ProviderContainer(
+      overrides: <Override>[
+        authControllerProvider.overrideWith((_) => _FakeAuthController()),
+        distanceUnitPreferenceProvider
+            .overrideWith((_) => DistanceUnitPreferenceController()),
+        historyProvider.overrideWith((_) async => <LocalRideSession>[]),
+        favoriteResortsProvider
+            .overrideWith((Ref ref) async => ref.watch(favoritesStateProvider)),
+        resortWeatherProvider.overrideWith(
+          (Ref ref, String resortId) async => null,
+        ),
+        unsyncedSessionCountProvider.overrideWith((_) async => 0),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('Whistler Blackcomb'), findsOneWidget);
+
+    container.read(favoritesStateProvider.notifier).state = <ResortSummary>[
+      _buildResort(id: 'resort-2', name: 'Sun Peaks'),
+    ];
+    container.invalidate(favoriteResortsProvider);
+
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Whistler Blackcomb'), findsNothing);
+    expect(find.text('Sun Peaks'), findsOneWidget);
+  });
+
+  testWidgets(
+      'home favorite card resolves live weather when no cached weather exists',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authControllerProvider.overrideWith((_) => _FakeAuthController()),
+          distanceUnitPreferenceProvider
+              .overrideWith((_) => DistanceUnitPreferenceController()),
+          historyProvider.overrideWith((_) async => <LocalRideSession>[]),
+          favoriteResortsProvider.overrideWith(
+            (_) async => <ResortSummary>[
+              _buildResort(
+                id: 'resort-1',
+                cachedWeatherText: null,
+                cachedWeatherTempC: null,
+              ),
+            ],
+          ),
+          resortWeatherProvider.overrideWith(
+            (Ref ref, String resortId) async {
+              await Future<void>.delayed(const Duration(milliseconds: 20));
+              return _buildWeather(
+                resortId: resortId,
+                conditionsText: 'Powder',
+                tempC: -7,
+              );
+            },
+          ),
+          unsyncedSessionCountProvider.overrideWith((_) async => 0),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+
+    await tester.pump();
+    expect(find.text('Conditions unavailable • -- C'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 30));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Powder • -7.0 C'), findsOneWidget);
   });
 }

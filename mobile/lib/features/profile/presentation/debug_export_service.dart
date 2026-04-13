@@ -44,7 +44,7 @@ class DebugExportService {
     final List<Map<String, dynamic>> cachedRemote =
         await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
     final List<Map<String, dynamic>> cachedResorts =
-        await _localDatabase.readCachedResorts();
+        await _localDatabase.readCachedResorts(ownerUserId: ownerUserId);
     final List<Map<String, dynamic>> cachedWeatherMetadata =
         await _localDatabase.readCachedWeatherMetadata();
     final Map<String, Map<String, dynamic>> cachedResortById =
@@ -181,7 +181,7 @@ class DebugExportService {
       'id': point.id,
       'local_session_id': point.localSessionId,
       'recorded_at': point.recordedAt.toIso8601String(),
-      't_offset_ms': point.tOffsetMs,
+      't_offset_ms': point.elapsedOffsetMs,
       'latitude': point.latitude,
       'longitude': point.longitude,
       'accuracy_m': point.accuracyM,

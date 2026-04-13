@@ -1,24 +1,29 @@
+from functools import lru_cache
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_database_url
-from app.core.config import get_sqlalchemy_echo
+from app.core.config import get_settings
+from app.models.base import Base
+
+__all__ = ["Base", "get_engine", "get_session_local"]
 
 
-class Base(DeclarativeBase):
-    pass
+@lru_cache(maxsize=1)
+def get_engine() -> Engine:
+    return create_engine(
+        get_database_url(),
+        echo=get_settings().sqlalchemy_echo,
+    )
 
 
-DATABASE_URL = get_database_url()
-
-engine = create_engine(
-    DATABASE_URL,
-    echo=get_sqlalchemy_echo(),
-)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-)
+@lru_cache(maxsize=1)
+def get_session_local() -> sessionmaker[Session]:
+    return sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=get_engine(),
+    )

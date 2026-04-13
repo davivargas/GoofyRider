@@ -6,8 +6,7 @@ from uuid import uuid4
 import jwt
 import pytest
 
-from app.core.config import get_jwt_algorithm
-from app.core.config import get_jwt_secret_key
+from app.core.config import get_settings
 from app.core.security import TOKEN_TYPE_ACCESS
 from app.core.security import TOKEN_TYPE_REFRESH
 from app.core.security import TokenValidationError
@@ -47,7 +46,7 @@ def test_create_and_decode_access_token() -> None:
 def test_refresh_token_rejected_when_access_expected() -> None:
     token = create_refresh_token(str(uuid4()))
 
-    with pytest.raises(TokenValidationError, match="Invalid token type."):
+    with pytest.raises(TokenValidationError, match=r"Invalid token type."):
         decode_token(token, expected_token_type=TOKEN_TYPE_ACCESS)
 
 
@@ -59,9 +58,10 @@ def test_decode_token_rejects_expired_token() -> None:
         "iat": int((now - timedelta(minutes=10)).timestamp()),
         "exp": int((now - timedelta(minutes=5)).timestamp()),
     }
-    token = jwt.encode(payload, get_jwt_secret_key(), algorithm=get_jwt_algorithm())
+    settings = get_settings()
+    token = jwt.encode(payload, settings.require_jwt_secret_key(), algorithm=settings.jwt_algorithm)
 
-    with pytest.raises(TokenValidationError, match="Token has expired."):
+    with pytest.raises(TokenValidationError, match=r"Token has expired."):
         decode_token(token, expected_token_type=TOKEN_TYPE_ACCESS)
 
 
@@ -73,7 +73,8 @@ def test_decode_token_rejects_invalid_subject() -> None:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
-    token = jwt.encode(payload, get_jwt_secret_key(), algorithm=get_jwt_algorithm())
+    settings = get_settings()
+    token = jwt.encode(payload, settings.require_jwt_secret_key(), algorithm=settings.jwt_algorithm)
 
-    with pytest.raises(TokenValidationError, match="Invalid token subject."):
+    with pytest.raises(TokenValidationError, match=r"Invalid token subject."):
         decode_token(token, expected_token_type=TOKEN_TYPE_REFRESH)

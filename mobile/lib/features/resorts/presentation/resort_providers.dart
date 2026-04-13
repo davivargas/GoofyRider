@@ -1,4 +1,4 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../auth/presentation/auth_providers.dart';
@@ -12,28 +12,54 @@ final resortsApiProvider = Provider<ResortsApi>(
 );
 
 final resortRepositoryProvider = Provider<ResortRepository>(
-  (ref) => ResortRepositoryImpl(
-    api: ref.watch(resortsApiProvider),
-    localDatabase: ref.watch(driftLocalDatabaseProvider),
-  ),
+  (ref) {
+    ref.watch(authControllerProvider.select((state) => state.session?.user.id));
+    return ResortRepositoryImpl(
+      api: ref.watch(resortsApiProvider),
+      localDatabase: ref.watch(driftLocalDatabaseProvider),
+      currentUserIdGetter: () =>
+          ref.read(authControllerProvider).session?.user.id,
+    );
+  },
 );
 
 final resortsControllerProvider =
     StateNotifierProvider<ResortsController, AsyncValue<ResortListResult>>(
-  (ref) => ResortsController(ref.watch(resortRepositoryProvider))..search(''),
+  (Ref ref) => ResortsController(
+    ref: ref,
+    repository: ref.watch(resortRepositoryProvider),
+  )..search(''),
 );
 
-final resortDetailProvider = FutureProvider.family<ResortSummary, String>(
-  (ref, resortId) => ref.watch(resortRepositoryProvider).getResortDetail(resortId),
+final resortDetailControllerProvider = StateNotifierProvider.family<
+    ResortDetailController, AsyncValue<ResortSummary>, String>(
+  (Ref ref, String resortId) {
+    final ResortDetailController controller = ResortDetailController(
+      ref: ref,
+      repository: ref.watch(resortRepositoryProvider),
+      resortId: resortId,
+    );
+    controller.load();
+    return controller;
+  },
 );
+
+final resortDetailToggleInFlightProvider =
+    StateProvider.family<bool, String>((Ref ref, String resortId) => false);
 
 final favoriteResortsProvider = FutureProvider<List<ResortSummary>>(
   (ref) => ref.watch(resortRepositoryProvider).listFavoriteResorts(),
 );
 
 class ResortsController extends StateNotifier<AsyncValue<ResortListResult>> {
-  ResortsController(this._repository) : super(const AsyncValue.loading());
+  ResortsController({
+    required Ref ref,
+    required ResortRepository repository,
+  })  : _ref = ref,
+        _repository = repository,
+        super(const AsyncValue.loading());
 
+  final Ref _ref;
   final ResortRepository _repository;
 
   String _lastQuery = '';
@@ -53,33 +79,115 @@ class ResortsController extends StateNotifier<AsyncValue<ResortListResult>> {
     return search(_lastQuery, region: _lastRegion);
   }
 
+  void applyFavoriteUpdate(ResortSummary updated) {
+    final ResortListResult? current = state.value;
+    if (current == null) {
+      return;
+    }
+
+    bool hasMatch = false;
+    final List<ResortSummary> replaced =
+        current.items.map((ResortSummary item) {
+      if (item.id != updated.id) {
+        return item;
+      }
+
+      hasMatch = true;
+      return updated;
+    }).toList(growable: false);
+
+    if (!hasMatch) {
+      return;
+    }
+
+    state = AsyncValue.data(
+      ResortListResult(
+        items: replaced,
+        total: current.total,
+        usedCache: current.usedCache,
+        isStale: current.isStale,
+      ),
+    );
+  }
+
   Future<void> toggleFavorite(ResortSummary resort) async {
     final AsyncValue<ResortListResult> previous = state;
 
     try {
-      final ResortSummary updated = await _repository.toggleFavoriteResort(resort);
-      final ResortListResult? current = state.value;
-      if (current == null) {
-        await refresh();
-        return;
-      }
-
-      final List<ResortSummary> replaced = current.items
-          .map(
-            (ResortSummary item) => item.id == updated.id ? updated : item,
-          )
-          .toList(growable: false);
-
-      state = AsyncValue.data(
-        ResortListResult(
-          items: replaced,
-          total: current.total,
-          usedCache: current.usedCache,
-          isStale: current.isStale,
-        ),
-      );
+      final ResortSummary updated =
+          await _repository.toggleFavoriteResort(resort);
+      applyFavoriteUpdate(updated);
+      _ref.invalidate(favoriteResortsProvider);
+      _ref.invalidate(resortDetailControllerProvider(updated.id));
     } catch (_) {
       state = previous;
+    }
+  }
+}
+
+class ResortDetailController extends StateNotifier<AsyncValue<ResortSummary>> {
+  ResortDetailController({
+    required Ref ref,
+    required ResortRepository repository,
+    required String resortId,
+  })  : _ref = ref,
+        _repository = repository,
+        _resortId = resortId,
+        super(const AsyncValue.loading());
+
+  final Ref _ref;
+  final ResortRepository _repository;
+  final String _resortId;
+
+  bool _hasLoaded = false;
+  Future<void>? _loadFuture;
+
+  Future<void> load() {
+    if (_hasLoaded) {
+      return Future<void>.value();
+    }
+
+    final Future<void>? inFlight = _loadFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final Future<void> started = _load();
+    _loadFuture = started;
+    return started;
+  }
+
+  Future<void> _load() async {
+    state = const AsyncValue.loading();
+    final AsyncValue<ResortSummary> loaded = await AsyncValue.guard(
+      () => _repository.getResortDetail(_resortId),
+    );
+    state = loaded;
+    _hasLoaded = loaded.hasValue;
+    _loadFuture = null;
+  }
+
+  Future<void> toggleFavorite() async {
+    final ResortSummary? current = state.value;
+    if (current == null) {
+      return;
+    }
+
+    _ref.read(resortDetailToggleInFlightProvider(_resortId).notifier).state =
+        true;
+    try {
+      final ResortSummary updated =
+          await _repository.toggleFavoriteResort(current);
+      state = AsyncValue.data(updated);
+      _ref
+          .read(resortsControllerProvider.notifier)
+          .applyFavoriteUpdate(updated);
+      _ref.invalidate(favoriteResortsProvider);
+    } catch (_) {
+      state = AsyncValue.data(current);
+    } finally {
+      _ref.read(resortDetailToggleInFlightProvider(_resortId).notifier).state =
+          false;
     }
   }
 }
