@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/constants/app_constants.dart';
+import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
@@ -77,6 +79,8 @@ void main() {
               .overrideWith((_) => SpeedUnitPreferenceController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
             ({
               required String ownerUserId,
@@ -111,6 +115,8 @@ void main() {
               .overrideWith((_) => SpeedUnitPreferenceController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
             ({
               required String ownerUserId,
@@ -154,6 +160,8 @@ void main() {
               .overrideWith((_) => SpeedUnitPreferenceController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
             ({
               required String ownerUserId,

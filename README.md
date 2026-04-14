@@ -158,6 +158,37 @@ Notes:
 - `10.0.2.2` is Android-emulator loopback only.
 - If you run on a physical device and use `10.0.2.2`, requests will fail with network errors.
 
+#### Map tile provider
+
+Production map tiles come from Mapbox. Debug builds fall back to
+OpenStreetMap direct tiles if no Mapbox defines are passed — that fallback
+is intended for local dev and tests only and must not be shipped (OSM's
+tile usage policy forbids app distribution against their servers).
+
+Copy `mapbox.json.example` to `mapbox.json` (gitignored) and replace the
+placeholder token with your own from
+<https://account.mapbox.com/access-tokens/>:
+
+```bash
+cp mapbox.json.example mapbox.json
+# edit mapbox.json and set MAPBOX_ACCESS_TOKEN
+```
+
+Then:
+
+- Debug build with Mapbox (recommended for real testing):
+  - `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1 --dart-define-from-file=mapbox.json`
+- Debug build without Mapbox (OSM dev fallback):
+  - `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1`
+- Release build:
+  - Both `MAPBOX_STYLE_ID` and `MAPBOX_ACCESS_TOKEN` are **required**. Bootstrap will throw if either is missing. Pass them via `--dart-define-from-file=mapbox.json` locally, or inject from your CI secret store into the Gradle build.
+
+`MAPBOX_STYLE_ID` must include the owner prefix, e.g. `mapbox/outdoors-v12`
+or `<your-username>/<your-style-id>` — Mapbox's style tile API rejects
+bare style ids. Mapbox public tokens (`pk.*`) are not truly secret; lock
+them down in the Mapbox dashboard with your Android package name and SHA-1
+fingerprint rather than relying on source-level secrecy.
+
 ## Testing
 
 ### Backend

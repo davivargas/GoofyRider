@@ -7,12 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/widgets/map_attribution.dart';
 import '../domain/location_tracking_repository.dart';
 import '../domain/session_models.dart';
 import 'recording_controller.dart';
@@ -72,6 +74,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final RecordingViewState state = ref.watch(recordingControllerProvider);
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
     final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final activeMapTileProviderConfig =
+        ref.watch(activeMapTileProviderConfigProvider);
     final ThemeData theme = Theme.of(context);
     final bool showDebugDiagnostics =
         kDebugMode && AppConstants.isDebugDiagnostics;
@@ -124,10 +128,9 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                   ),
                   children: <Widget>[
                     TileLayer(
-                      urlTemplate:
-                          MapTileProviderConfig.openStreetMap.urlTemplate,
-                      subdomains:
-                          MapTileProviderConfig.openStreetMap.subdomains,
+                      urlTemplate: activeMapTileProviderConfig.urlTemplate,
+                      subdomains: activeMapTileProviderConfig.subdomains,
+                      retinaMode: activeMapTileProviderConfig.retinaMode,
                       userAgentPackageName: 'com.goofyrider.mobile',
                       errorTileCallback: (_, __, ___) {
                         if (mounted && !_mapTileError) {
@@ -158,6 +161,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                           ),
                         ],
                       ),
+                    MapAttribution(config: activeMapTileProviderConfig),
                   ],
                 ),
                 Positioned(

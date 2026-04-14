@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/errors/failures.dart';
+import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_detail_screen.dart';
@@ -346,6 +348,8 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(
             FakeSessionRepository(_buildSegmentedDetail()),
           ),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(
           home: SessionDetailScreen(localSessionId: 1),
@@ -381,6 +385,8 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(
             FakeSessionRepository(_buildLegacyDetail()),
           ),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(
           home: SessionDetailScreen(localSessionId: 1),
@@ -406,6 +412,8 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           sessionRepositoryProvider.overrideWithValue(repository),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(
           home: SessionDetailScreen(localSessionId: 1),
@@ -439,6 +447,8 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           sessionRepositoryProvider.overrideWithValue(repository),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: MaterialApp(
           initialRoute: '/detail',
@@ -481,6 +491,8 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           sessionRepositoryProvider.overrideWithValue(repository),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: MaterialApp(
           initialRoute: '/detail',
@@ -522,6 +534,8 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           sessionRepositoryProvider.overrideWithValue(repository),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(
           home: SessionDetailScreen(localSessionId: 1),

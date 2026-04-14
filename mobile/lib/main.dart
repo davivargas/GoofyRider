@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router/app_router.dart';
 import 'app/theme/app_theme.dart';
+import 'core/constants/app_constants.dart';
 import 'core/logging/app_logger.dart';
 import 'core/providers.dart';
 import 'core/storage/drift_local_database.dart';
@@ -21,32 +22,40 @@ Future<void> runAppWith({
   WidgetsFlutterBinding.ensureInitialized();
   try {
     final DriftLocalDatabase database = await loader();
+    final activeMapTileProviderConfig = AppConstants.activeMapTileProviderConfig;
     runApp(
       ProviderScope(
         overrides: <Override>[
           driftLocalDatabaseProvider.overrideWithValue(database),
+          activeMapTileProviderConfigProvider.overrideWithValue(activeMapTileProviderConfig),
         ],
         child: const GoofyRiderApp(),
       ),
     );
   } on Object catch (error, stackTrace) {
     const AppLogger().error(
-      'Failed to open local storage during bootstrap',
+      'Failed to initialize app dependencies during bootstrap',
       error: error,
       stackTrace: stackTrace,
     );
     runApp(
       BootstrapErrorApp(
         onRetry: () => runAppWith(loader: loader),
+        errorDetails: error.toString(),
       ),
     );
   }
 }
 
 class BootstrapErrorApp extends StatelessWidget {
-  const BootstrapErrorApp({super.key, required this.onRetry});
+  const BootstrapErrorApp({
+    super.key,
+    required this.onRetry,
+    required this.errorDetails,
+  });
 
   final VoidCallback onRetry;
+  final String errorDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +68,7 @@ class BootstrapErrorApp extends StatelessWidget {
       home: Scaffold(
         body: AppErrorView(
           message:
-              'Local storage could not be opened. Retry after fixing device storage permissions or disk availability.',
+              'App bootstrap failed.\n\n$errorDetails\n\nRetry after fixing the issue above.',
           onRetry: onRetry,
         ),
       ),

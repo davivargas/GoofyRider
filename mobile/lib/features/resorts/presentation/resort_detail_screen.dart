@@ -6,8 +6,10 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../app/router/route_paths.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
+import '../../../core/widgets/map_attribution.dart';
 import '../../weather/domain/weather_models.dart';
 import '../../weather/presentation/weather_providers.dart';
 import '../domain/resort_models.dart';
@@ -27,6 +29,8 @@ class ResortDetailScreen extends ConsumerWidget {
         ref.watch(resortDetailControllerProvider(resortId));
     final bool isFavoriteToggleInFlight =
         ref.watch(resortDetailToggleInFlightProvider(resortId));
+    final MapTileProviderConfig activeMapTileProviderConfig =
+        ref.watch(activeMapTileProviderConfigProvider);
 
     return resortValue.when(
       loading: () =>
@@ -80,10 +84,9 @@ class ResortDetailScreen extends ConsumerWidget {
                     ),
                     children: <Widget>[
                       TileLayer(
-                        urlTemplate:
-                            MapTileProviderConfig.openStreetMap.urlTemplate,
-                        subdomains:
-                            MapTileProviderConfig.openStreetMap.subdomains,
+                        urlTemplate: activeMapTileProviderConfig.urlTemplate,
+                        subdomains: activeMapTileProviderConfig.subdomains,
+                        retinaMode: activeMapTileProviderConfig.retinaMode,
                         userAgentPackageName: 'com.goofyrider.mobile',
                       ),
                       MarkerLayer(
@@ -97,6 +100,7 @@ class ResortDetailScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      MapAttribution(config: activeMapTileProviderConfig),
                     ],
                   ),
                 ),

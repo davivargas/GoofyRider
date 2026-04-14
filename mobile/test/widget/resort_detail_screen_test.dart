@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:goofyrider_mobile/core/constants/app_constants.dart';
+import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_repository.dart';
 import 'package:goofyrider_mobile/features/resorts/presentation/resort_detail_screen.dart';
@@ -83,6 +85,8 @@ void main() {
         resortWeatherProvider.overrideWith(
           (Ref ref, String resortId) async => null,
         ),
+        activeMapTileProviderConfigProvider
+            .overrideWithValue(MapTileProviderConfig.devFallback),
       ],
       child: MaterialApp(
         home: MediaQuery(

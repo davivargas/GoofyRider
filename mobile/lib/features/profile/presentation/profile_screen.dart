@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
@@ -47,6 +46,8 @@ class ProfileScreen extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
     final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final activeMapTileProviderConfig =
+        ref.watch(activeMapTileProviderConfigProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -121,7 +122,7 @@ class ProfileScreen extends ConsumerWidget {
           Card(
             child: ListTile(
               title: const Text('Map attribution'),
-              subtitle: Text(MapTileProviderConfig.openStreetMap.attribution),
+              subtitle: Text(activeMapTileProviderConfig.attribution),
             ),
           ),
           Card(

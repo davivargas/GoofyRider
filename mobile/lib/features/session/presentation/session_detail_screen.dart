@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../app/router/route_paths.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
@@ -16,6 +17,7 @@ import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
+import '../../../core/widgets/map_attribution.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import 'session_providers.dart';
@@ -34,6 +36,8 @@ class SessionDetailScreen extends ConsumerWidget {
         ref.watch(sessionDetailProvider(localSessionId));
     final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
     final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final MapTileProviderConfig activeMapTileProviderConfig =
+        ref.watch(activeMapTileProviderConfigProvider);
     final bool showDebugDiagnostics =
         kDebugMode && AppConstants.isDebugDiagnostics;
     final String appBarTitle = detail.maybeWhen(
@@ -140,7 +144,7 @@ class SessionDetailScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _summaryCards(data, speedUnit, distanceUnit),
               const SizedBox(height: 12),
-              _mapReplay(data),
+              _mapReplay(data, activeMapTileProviderConfig),
               const SizedBox(height: 12),
               _timelineCard(data, distanceUnit),
               const SizedBox(height: 12),
@@ -277,7 +281,10 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _mapReplay(SessionDetail detail) {
+  Widget _mapReplay(
+    SessionDetail detail,
+    MapTileProviderConfig activeMapTileProviderConfig,
+  ) {
     final List<LocalSessionPoint> routePoints = detail.acceptedPoints.isNotEmpty
         ? detail.acceptedPoints
         : detail.points;
@@ -333,8 +340,9 @@ class SessionDetailScreen extends ConsumerWidget {
           options: MapOptions(initialCenter: route.first, initialZoom: 12),
           children: <Widget>[
             TileLayer(
-              urlTemplate: MapTileProviderConfig.openStreetMap.urlTemplate,
-              subdomains: MapTileProviderConfig.openStreetMap.subdomains,
+              urlTemplate: activeMapTileProviderConfig.urlTemplate,
+              subdomains: activeMapTileProviderConfig.subdomains,
+              retinaMode: activeMapTileProviderConfig.retinaMode,
               userAgentPackageName: 'com.goofyrider.mobile',
             ),
             PolylineLayer(
@@ -350,6 +358,7 @@ class SessionDetailScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            MapAttribution(config: activeMapTileProviderConfig),
           ],
         ),
       ),

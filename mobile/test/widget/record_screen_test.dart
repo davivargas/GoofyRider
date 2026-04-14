@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/constants/app_constants.dart';
+import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/utils/distance_unit.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
@@ -218,6 +220,8 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(fakeRepository),
           locationTrackingRepositoryProvider
               .overrideWithValue(FakeLocationRepository()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(home: RecordScreen()),
       ),
@@ -279,6 +283,8 @@ void main() {
           distanceUnitPreferenceProvider.overrideWith(
             (_) => _FakeDistanceUnitPreferenceController(DistanceUnit.meters),
           ),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(home: RecordScreen()),
       ),
@@ -335,6 +341,8 @@ void main() {
           distanceUnitPreferenceProvider.overrideWith(
             (_) => _FakeDistanceUnitPreferenceController(DistanceUnit.feet),
           ),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: const MaterialApp(home: RecordScreen()),
       ),

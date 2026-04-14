@@ -9,6 +9,14 @@ class AppConstants {
     'API_BASE_URL',
     defaultValue: '',
   );
+  static const String _configuredMapboxStyleId = String.fromEnvironment(
+    'MAPBOX_STYLE_ID',
+    defaultValue: '',
+  );
+  static const String _configuredMapboxAccessToken = String.fromEnvironment(
+    'MAPBOX_ACCESS_TOKEN',
+    defaultValue: '',
+  );
 
   static String get apiBaseUrl {
     final String configuredApiBaseUrl = _configuredApiBaseUrl.trim();
@@ -18,6 +26,54 @@ class AppConstants {
     throw StateError(
       'Missing API_BASE_URL. Pass --dart-define=API_BASE_URL=<url>. '
       'Android emulator example: --dart-define=API_BASE_URL=$androidEmulatorApiBaseUrl',
+    );
+  }
+
+  static MapTileProviderConfig get activeMapTileProviderConfig {
+    return resolveMapTileProviderConfig(
+      styleId: _configuredMapboxStyleId.trim(),
+      accessToken: _configuredMapboxAccessToken.trim(),
+      isReleaseBuild: kReleaseMode,
+    );
+  }
+
+  @visibleForTesting
+  static MapTileProviderConfig resolveMapTileProviderConfig({
+    required String styleId,
+    required String accessToken,
+    required bool isReleaseBuild,
+  }) {
+    final bool styleIdPresent = styleId.isNotEmpty;
+    final bool accessTokenPresent = accessToken.isNotEmpty;
+
+    if (styleIdPresent && accessTokenPresent) {
+      return MapTileProviderConfig.mapbox(
+        styleId: styleId,
+        accessToken: accessToken,
+      );
+    }
+
+    if (!styleIdPresent && !accessTokenPresent) {
+      if (isReleaseBuild) {
+        throw StateError(
+          'Missing MAPBOX_STYLE_ID and MAPBOX_ACCESS_TOKEN for release build. '
+          'Pass --dart-define=MAPBOX_STYLE_ID=<username/styleId> and '
+          '--dart-define=MAPBOX_ACCESS_TOKEN=<token>. '
+          'Example styleId: mapbox/outdoors-v12',
+        );
+      }
+      return MapTileProviderConfig.devFallback;
+    }
+
+    final List<String> missingVariables = <String>[
+      if (!styleIdPresent) 'MAPBOX_STYLE_ID',
+      if (!accessTokenPresent) 'MAPBOX_ACCESS_TOKEN',
+    ];
+    throw StateError(
+      'Missing ${missingVariables.join(' and ')}. '
+      'Pass both Mapbox defines together, or omit both to use the dev fallback. '
+      'Example: --dart-define=MAPBOX_STYLE_ID=mapbox/outdoors-v12 '
+      '--dart-define=MAPBOX_ACCESS_TOKEN=<token>',
     );
   }
 
@@ -31,20 +87,47 @@ class AppConstants {
   static bool get isDebugDiagnostics => kDebugMode || _forceDebugDiagnostics;
 }
 
+enum MapTileProviderKind {
+  mapbox,
+  devFallback,
+}
+
 class MapTileProviderConfig {
   const MapTileProviderConfig({
+    required this.kind,
     required this.urlTemplate,
-    required this.attribution,
-    this.subdomains = const <String>['a', 'b', 'c'],
+    required this.attributionLines,
+    this.subdomains = const <String>[],
+    this.retinaMode = false,
   });
 
-  final String urlTemplate;
-  final String attribution;
-  final List<String> subdomains;
+  factory MapTileProviderConfig.mapbox({
+    required String styleId,
+    required String accessToken,
+  }) {
+    return MapTileProviderConfig(
+      kind: MapTileProviderKind.mapbox,
+      urlTemplate:
+          'https://api.mapbox.com/styles/v1/$styleId/tiles/256/{z}/{x}/{y}{r}?access_token=$accessToken',
+      attributionLines: const <String>[
+        '© Mapbox',
+        '© OpenStreetMap contributors',
+      ],
+      retinaMode: true,
+    );
+  }
 
-  static const MapTileProviderConfig openStreetMap = MapTileProviderConfig(
+  final MapTileProviderKind kind;
+  final String urlTemplate;
+  final List<String> attributionLines;
+  final List<String> subdomains;
+  final bool retinaMode;
+
+  String get attribution => attributionLines.join(' ');
+
+  static const MapTileProviderConfig devFallback = MapTileProviderConfig(
+    kind: MapTileProviderKind.devFallback,
     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: 'OpenStreetMap contributors',
-    subdomains: <String>[],
+    attributionLines: <String>['© OpenStreetMap contributors'],
   );
 }
