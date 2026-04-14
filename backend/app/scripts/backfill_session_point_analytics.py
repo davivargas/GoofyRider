@@ -43,7 +43,7 @@ _BACKFILL_SQL = text(
         sp.derived_speed_mps,
         sp.distance_delta_m,
         sp.motion_state,
-        sp.accepted_for_analytics
+        COALESCE(sp.accepted_for_analytics, true)
     FROM session_points AS sp
     LEFT JOIN session_point_analytics AS spa
         ON spa.session_point_id = sp.id

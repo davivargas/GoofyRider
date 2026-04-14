@@ -92,7 +92,7 @@ def upgrade() -> None:
             derived_speed_mps,
             distance_delta_m,
             motion_state,
-            accepted_for_analytics
+            COALESCE(accepted_for_analytics, true)
         FROM session_points
         ON CONFLICT (session_point_id) DO NOTHING
         """
