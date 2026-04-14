@@ -38,30 +38,22 @@ enum LocationPermissionState {
   serviceDisabled,
 }
 
+/// Location-stream configuration the native bridge understands. The stream
+/// stays on `acquiring` until the quality classifier confirms a usable fix,
+/// then transitions once to `active` for the rest of the session. Motion state
+/// drives UI, classifier bands, and stats bucketing separately.
 enum TrackingMode {
-  initializingFix,
-  activeDescent,
-  liftUphill,
-  walkingSlow,
-  stoppedIdle,
-  lowConfidenceRecovery,
+  acquiring,
+  active,
 }
 
 extension TrackingModeWire on TrackingMode {
   String get wireValue {
     switch (this) {
-      case TrackingMode.initializingFix:
-        return 'initializing_fix';
-      case TrackingMode.activeDescent:
-        return 'active_descent';
-      case TrackingMode.liftUphill:
-        return 'lift_uphill';
-      case TrackingMode.walkingSlow:
-        return 'walking_slow';
-      case TrackingMode.stoppedIdle:
-        return 'stopped_idle';
-      case TrackingMode.lowConfidenceRecovery:
-        return 'low_confidence_recovery';
+      case TrackingMode.acquiring:
+        return 'acquiring';
+      case TrackingMode.active:
+        return 'active';
     }
   }
 }

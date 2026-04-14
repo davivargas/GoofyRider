@@ -11,7 +11,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
     DateTime Function()? nowUtc,
   }) : _nowUtc = nowUtc ?? _defaultNowUtc;
 
-  TrackingMode _trackingMode = TrackingMode.initializingFix;
+  TrackingMode _trackingMode = TrackingMode.acquiring;
   StreamController<LocationSample>? _controller;
   StreamSubscription<Position>? _positionSubscription;
   final DateTime Function() _nowUtc;
@@ -174,22 +174,16 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   LocationSettings _locationSettingsForMode(TrackingMode mode) {
     final profile = TrackingModeProfiles.forMode(mode);
     return _androidSettings(
-      accuracy: _mapAccuracy(mode, profile.priority),
+      accuracy: _mapAccuracy(profile.priority),
       distanceFilter: profile.minDistanceM.round(),
       intervalMs: profile.intervalMs,
     );
   }
 
-  LocationAccuracy _mapAccuracy(
-    TrackingMode mode,
-    TrackingModePriority priority,
-  ) {
-    if (mode == TrackingMode.activeDescent) {
-      return LocationAccuracy.bestForNavigation;
-    }
+  LocationAccuracy _mapAccuracy(TrackingModePriority priority) {
     switch (priority) {
       case TrackingModePriority.highAccuracy:
-        return LocationAccuracy.best;
+        return LocationAccuracy.bestForNavigation;
       case TrackingModePriority.balancedPower:
         return LocationAccuracy.high;
     }

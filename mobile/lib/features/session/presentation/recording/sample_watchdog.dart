@@ -7,23 +7,18 @@ import '../recording_view_state.dart';
 const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 30);
 const Duration _sampleWatchdogInitialSampleRestartGrace =
     Duration(seconds: 12);
-const int _recoveryModeStaleEventsBeforeRestart = 3;
 
 /// Monitors the location stream for stale-sample conditions and triggers
-/// recovery actions (mode downgrade, stream restart) when GPS updates stop
-/// arriving.
+/// stream restarts when GPS updates stop arriving.
 ///
 /// Does **not** extend `StateNotifier` — the coordinator owns the state.
 class SampleWatchdog {
   SampleWatchdog({
-    required LocationTrackingRepository locationTrackingRepository,
     required RecordingViewState Function() readState,
     required void Function(RecordingViewState) writeState,
-  })  : _locationTrackingRepository = locationTrackingRepository,
-        _readState = readState,
+  })  : _readState = readState,
         _writeState = writeState;
 
-  final LocationTrackingRepository _locationTrackingRepository;
   final RecordingViewState Function() _readState;
   final void Function(RecordingViewState) _writeState;
 
@@ -166,50 +161,6 @@ class SampleWatchdog {
 
     consecutiveWatchdogStaleEvents += 1;
 
-    // --- Attempt recovery mode ---
-    final shouldAttemptRecoveryMode =
-        activeTrackingMode != TrackingMode.lowConfidenceRecovery &&
-            consecutiveWatchdogStaleEvents == 1;
-
-    if (shouldAttemptRecoveryMode) {
-      try {
-        await _locationTrackingRepository
-            .setTrackingMode(TrackingMode.lowConfidenceRecovery);
-        if (!isActiveRecordingEpoch(recordingEpoch,
-            sessionId: session.localId)) {
-          return const WatchdogAction.none();
-        }
-
-        _writeState(
-          _readState().copyWith(
-            permission: _readState().permission.copyWith(
-              errorMessage:
-                  'Location updates stalled for ${staleFor.inSeconds}s. Recovering GPS...',
-            ),
-            tracking: _readState().tracking.copyWith(
-              gpsSignal: const GpsSignalState(
-                bars: 0,
-                description: 'Searching',
-              ),
-            ),
-          ),
-        );
-
-        final recoveryThreshold = TrackingModeProfiles.forMode(
-          TrackingMode.lowConfidenceRecovery,
-        ).sampleWatchdogThreshold;
-
-        return WatchdogAction.switchedToRecoveryMode(
-          staleFor: staleFor,
-          staleThreshold: staleThreshold,
-          hasReceivedSample: hasReceivedSample,
-          recoveryThreshold: recoveryThreshold,
-        );
-      } catch (_) {
-        // Fall through to stream restart below.
-      }
-    }
-
     // --- Wait for initial sample grace ---
     final shouldKeepWaitingForInitialSample = !hasReceivedSample &&
         staleFor < staleThreshold + _sampleWatchdogInitialSampleRestartGrace;
@@ -229,19 +180,6 @@ class SampleWatchdog {
         ),
       );
       return WatchdogAction.waitingForInitialSample(
-        staleFor: staleFor,
-        staleThreshold: staleThreshold,
-        activeTrackingMode: activeTrackingMode,
-      );
-    }
-
-    // --- Delay restart after recovery mode ---
-    final shouldDelayRestartAfterRecovery =
-        activeTrackingMode == TrackingMode.lowConfidenceRecovery &&
-            consecutiveWatchdogStaleEvents <
-                _recoveryModeStaleEventsBeforeRestart;
-    if (shouldDelayRestartAfterRecovery) {
-      return WatchdogAction.recoveryWait(
         staleFor: staleFor,
         staleThreshold: staleThreshold,
         activeTrackingMode: activeTrackingMode,
@@ -303,9 +241,7 @@ class SampleWatchdog {
 enum WatchdogActionKind {
   none,
   reschedule,
-  switchedToRecoveryMode,
   waitingForInitialSample,
-  recoveryWait,
   restartCooldown,
   restart,
 }
@@ -321,35 +257,11 @@ class WatchdogAction {
   })  : kind = WatchdogActionKind.reschedule,
         data = null;
 
-  WatchdogAction.switchedToRecoveryMode({
-    required Duration staleFor,
-    required Duration staleThreshold,
-    required bool hasReceivedSample,
-    required Duration recoveryThreshold,
-  })  : kind = WatchdogActionKind.switchedToRecoveryMode,
-        data = <String, dynamic>{
-          'stale_for': staleFor,
-          'stale_threshold': staleThreshold,
-          'has_received_sample': hasReceivedSample,
-          'recovery_threshold': recoveryThreshold,
-        };
-
   WatchdogAction.waitingForInitialSample({
     required Duration staleFor,
     required Duration staleThreshold,
     required TrackingMode activeTrackingMode,
   })  : kind = WatchdogActionKind.waitingForInitialSample,
-        data = <String, dynamic>{
-          'stale_for': staleFor,
-          'stale_threshold': staleThreshold,
-          'active_tracking_mode': activeTrackingMode,
-        };
-
-  WatchdogAction.recoveryWait({
-    required Duration staleFor,
-    required Duration staleThreshold,
-    required TrackingMode activeTrackingMode,
-  })  : kind = WatchdogActionKind.recoveryWait,
         data = <String, dynamic>{
           'stale_for': staleFor,
           'stale_threshold': staleThreshold,

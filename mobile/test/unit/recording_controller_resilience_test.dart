@@ -43,6 +43,11 @@ class ControlledLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
+    return permissionState;
+  }
+
+  @override
   Future<bool> isServiceEnabled() async {
     return true;
   }
@@ -122,6 +127,11 @@ class HangingCancelLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
   Future<bool> isServiceEnabled() async {
     return true;
   }
@@ -194,7 +204,7 @@ class FakeSessionRepository implements SessionRepository {
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
     final activeDescentIntervalS =
-        (TrackingModeProfiles.activeDescent.intervalMs / 1000).round();
+        (TrackingModeProfiles.active.intervalMs / 1000).round();
     return SessionStats(
       durationS: _recoveryAcceptedPoints.length * activeDescentIntervalS,
       distanceM: 1200,
@@ -610,34 +620,19 @@ LocalSessionPoint _buildAcceptedPoint({
 void main() {
   test('tracking mode profiles expose tuned watchdog thresholds', () {
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.initializingFix)
+      TrackingModeProfiles.forMode(TrackingMode.acquiring)
           .sampleWatchdogThreshold,
-      const Duration(seconds: 5),
+      const Duration(seconds: 8),
     );
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+      TrackingModeProfiles.forMode(TrackingMode.active)
           .sampleWatchdogThreshold,
-      const Duration(seconds: 9),
+      const Duration(seconds: 4),
     );
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
-          .sampleWatchdogThreshold,
-      const Duration(seconds: 10),
-    );
-    expect(
-      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .sampleWatchdogThreshold,
-      const Duration(seconds: 25),
-    );
-    expect(
-      TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
-          .sampleWatchdogThreshold,
-      const Duration(seconds: 11),
-    );
-    expect(
-      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
+      TrackingModeProfiles.forMode(TrackingMode.acquiring)
               .sampleWatchdogThreshold >
-          TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+          TrackingModeProfiles.forMode(TrackingMode.active)
               .sampleWatchdogThreshold,
       isTrue,
     );
@@ -695,7 +690,7 @@ void main() {
         LocationSample(
           timestamp: start.add(
             Duration(
-              milliseconds: i * TrackingModeProfiles.activeDescent.intervalMs,
+              milliseconds: i * TrackingModeProfiles.active.intervalMs,
             ),
           ),
           latitude: 49.0 + (i / 100000),
@@ -1060,13 +1055,6 @@ void main() {
     expect(
       repository.recordedDiagnostics.any(
         (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_no_initial_sample',
-      ),
-      isTrue,
-    );
-    expect(
-      repository.recordedDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
             event.eventType == 'sample_watchdog_waiting_initial_sample',
       ),
       isTrue,
@@ -1074,7 +1062,8 @@ void main() {
     expect(
       repository.recordedDiagnostics.any(
         (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_restart',
+            event.eventType == 'sample_watchdog_restart' ||
+            event.eventType == 'sample_watchdog_no_initial_sample',
       ),
       isFalse,
     );
@@ -1094,78 +1083,6 @@ void main() {
 
     expect(controller.state.streamRestartCount, 0);
     expect(locationRepository.watchPositionCalls, 1);
-  });
-
-  test('watchdog enters recovery before restarting a stalled live stream',
-      () async {
-    final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
-    final controller = RecordingController(
-      sessionRepository: repository,
-      locationTrackingRepository: locationRepository,
-    );
-    addTearDown(() async {
-      controller.dispose();
-      await locationRepository.close();
-    });
-
-    await controller.bootstrap();
-    await controller.startRecording();
-
-    locationRepository.emit(
-      LocationSample(
-        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
-        latitude: 49.0,
-        longitude: -123.0,
-        accuracyM: 5,
-        altitudeM: 100,
-        speedMps: 4,
-        headingDeg: 90,
-      ),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-
-    final diagnosticBaseline = repository.recordedDiagnostics.length;
-    await Future<void>.delayed(const Duration(seconds: 22));
-
-    final watchdogDiagnostics =
-        repository.recordedDiagnostics
-            .skip(diagnosticBaseline)
-            .where(
-              (TrackingDiagnosticEvent event) =>
-                  event.eventType.startsWith('sample_watchdog_'),
-            )
-            .toList(growable: false);
-
-    expect(controller.state.phase, RecordScreenPhase.recording);
-    expect(controller.state.streamRestartCount, 0);
-    expect(locationRepository.watchPositionCalls, 1);
-    expect(
-      locationRepository.requestedTrackingModes,
-      contains(TrackingMode.lowConfidenceRecovery),
-    );
-    expect(
-      watchdogDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_recovery_mode',
-      ),
-      isTrue,
-    );
-    expect(
-      watchdogDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_recovery_wait',
-      ),
-      isTrue,
-    );
-    expect(
-      watchdogDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_restart',
-      ),
-      isFalse,
-    );
   });
 
   test(

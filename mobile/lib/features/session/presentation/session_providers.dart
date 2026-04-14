@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../../auth/presentation/auth_providers.dart';
 import '../data/geolocator_tracking_repository.dart';
+import '../data/gps_warmup_permission_preference.dart';
+import '../data/gps_warmup_service.dart';
 import '../data/native_android_tracking_repository.dart';
 import '../data/session_api.dart';
 import '../data/session_repository_impl.dart';
@@ -27,6 +30,29 @@ final locationTrackingRepositoryProvider = Provider<LocationTrackingRepository>(
   },
 );
 
+final gpsWarmupPermissionPreferenceProvider =
+    Provider<GpsWarmupPermissionPreference>(
+  (ref) => GpsWarmupPermissionPreference(),
+);
+
+final gpsWarmupServiceProvider = Provider<GpsWarmupService>(
+  (ref) {
+    final service = GpsWarmupService(
+      locationTrackingRepository:
+          ref.watch(locationTrackingRepositoryProvider),
+      logger: ref.watch(loggerProvider),
+    );
+    ref.onDispose(() {
+      unawaited(service.dispose());
+    });
+    return service;
+  },
+);
+
+final gpsWarmupSampleStreamProvider = StreamProvider<LocationSample>((ref) {
+  return ref.watch(gpsWarmupServiceProvider).samples;
+});
+
 final sessionRepositoryProvider = Provider<SessionRepository>(
   (ref) {
     return SessionRepositoryImpl(
@@ -44,6 +70,7 @@ final recordingControllerProvider =
     final controller = RecordingController(
       sessionRepository: ref.watch(sessionRepositoryProvider),
       locationTrackingRepository: ref.watch(locationTrackingRepositoryProvider),
+      gpsWarmupService: ref.watch(gpsWarmupServiceProvider),
     );
     controller.initialize();
     return controller;

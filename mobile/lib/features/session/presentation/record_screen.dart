@@ -41,6 +41,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   int _lastRoutePointCount = 0;
   String? _lastShownErrorMessage;
   Timer? _gpsSignalRefreshTicker;
+  LatLng? _lastWarmupCenter;
 
   @override
   void initState() {
@@ -87,24 +88,34 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final route = state.tracking.route;
     _maybeFollowRider(state, route);
 
-    final center =
-        route.isNotEmpty ? route.last : const LatLng(50.1, -119.4);
+    final warmupSample = ref.watch(gpsWarmupSampleStreamProvider).maybeWhen(
+          data: (LocationSample sample) => sample,
+          orElse: () => null,
+        );
+    final warmupLatLng = (route.isEmpty && warmupSample != null)
+        ? LatLng(warmupSample.latitude, warmupSample.longitude)
+        : null;
+    _maybeFollowWarmup(warmupLatLng);
+
+    final center = route.isNotEmpty
+        ? route.last
+        : (warmupLatLng ?? const LatLng(50.1, -119.4));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Record'),
-        actions: <Widget>[
-          if (showDebugDiagnostics && state.sync.lastSyncMessage != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Center(
-                child: Text(
-                  state.sync.lastSyncMessage!,
-                  style: theme.textTheme.labelSmall,
-                ),
-              ),
-            ),
-        ],
+        // actions: <Widget>[
+        //   if (showDebugDiagnostics && state.sync.lastSyncMessage != null)
+        //     Padding(
+        //       padding: const EdgeInsets.symmetric(horizontal: 12),
+        //       child: Center(
+        //         child: Text(
+        //           state.sync.lastSyncMessage!,
+        //           style: theme.textTheme.labelSmall,
+        //         ),
+        //       ),
+        //     ),
+        // ],
       ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -168,36 +179,51 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                               ),
                             ],
                           ),
+                        if (warmupLatLng != null)
+                          MarkerLayer(
+                            markers: <Marker>[
+                              Marker(
+                                point: warmupLatLng,
+                                width: 24,
+                                height: 24,
+                                child: Icon(
+                                  Icons.my_location,
+                                  size: 22,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
                         MapAttribution(config: activeMapTileProviderConfig),
                       ],
                     ),
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      right: 88,
-                      child: _statusBanner(state),
-                    ),
+                    // Positioned(
+                    //   top: 12,
+                    //   left: 12,
+                    //   right: 88,
+                    //   child: _statusBanner(state),
+                    // ),
                     Positioned(
                       top: 12,
                       right: 12,
                       child: _gpsSignalBadge(state),
                     ),
-                    if (!_isMapFollowing && route.isNotEmpty)
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: FloatingActionButton.small(
-                          heroTag: 'recenter-record-map',
-                          onPressed: () => _recenterOnRider(route),
-                          child: const Icon(Icons.my_location),
-                        ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: FloatingActionButton.small(
+                        heroTag: 'recenter-record-map',
+                        onPressed: () => _recenterOnRider(route, warmupLatLng: warmupLatLng),
+                        child: const Icon(Icons.my_location),
                       ),
+                    ),
                   ],
                 ),
               ),
               Expanded(
                 child: _statsPanel(state, speedUnit, distanceUnit),
               ),
+              if (state.autoPaused) _autoPauseBanner(),
               _controlBar(state),
             ],
           );
@@ -454,6 +480,26 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     return targetMapHeight.clamp(minimumMapHeight, maxMapHeight).toDouble();
   }
 
+  Widget _autoPauseBanner() {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF1E3A5F),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: const Row(
+        children: <Widget>[
+          Icon(Icons.pause_circle_outline, color: Colors.white70, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Paused while stopped. Tap resume when you start moving again.',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _controlBar(RecordingViewState state) {
     final controller =
         ref.read(recordingControllerProvider.notifier);
@@ -546,12 +592,35 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     });
   }
 
-  void _recenterOnRider(List<LatLng> route) {
-    if (route.isEmpty) {
+  void _maybeFollowWarmup(LatLng? warmupLatLng) {
+    if (warmupLatLng == null) {
+      _lastWarmupCenter = null;
+      return;
+    }
+    if (!_isMapFollowing) {
+      return;
+    }
+    if (_lastWarmupCenter == warmupLatLng) {
+      return;
+    }
+    _lastWarmupCenter = warmupLatLng;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isMapFollowing) {
+        return;
+      }
+      try {
+        _mapController.move(warmupLatLng, _mapZoom);
+      } catch (_) {}
+    });
+  }
+
+  void _recenterOnRider(List<LatLng> route, {LatLng? warmupLatLng}) {
+    final target = route.isNotEmpty ? route.last : warmupLatLng;
+    if (target == null) {
       return;
     }
     try {
-      _mapController.move(route.last, _mapZoom);
+      _mapController.move(target, _mapZoom);
       setState(() {
         _isMapFollowing = true;
       });

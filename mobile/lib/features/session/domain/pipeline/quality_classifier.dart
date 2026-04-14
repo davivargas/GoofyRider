@@ -8,26 +8,16 @@ import 'pipeline_types.dart';
 class QualityClassifier {
   DateTime? _lastObservedTimestampUtc;
   int? _lastObservedElapsedRealtimeNs;
-  int _stableFixSamples = 0;
-
-  /// The number of stable initial fix samples observed so far.
-  /// Used by the coordinator to pass to the motion-state detector.
-  int get stableFixSamples => _stableFixSamples;
 
   void reset() {
     _lastObservedTimestampUtc = null;
     _lastObservedElapsedRealtimeNs = null;
-    _stableFixSamples = 0;
   }
 
   void seedFromPersistedPoints({required List<LocalSessionPoint> points}) {
     for (final point in points) {
       _lastObservedTimestampUtc = point.recordedAt.toUtc();
       _lastObservedElapsedRealtimeNs = point.elapsedRealtimeNs;
-      if (point.acceptedForAnalytics &&
-          _stableFixSamples < SessionConstants.initialFixStableSamples) {
-        _stableFixSamples += 1;
-      }
     }
   }
 
@@ -58,15 +48,6 @@ class QualityClassifier {
     _lastObservedElapsedRealtimeNs = sample.elapsedRealtimeNs;
 
     return decision;
-  }
-
-  /// Increment stable-fix counter when a sample is accepted with full
-  /// confidence. Called by the coordinator after classification.
-  void recordAccepted(TrackingQualityClass qualityClass) {
-    if (_stableFixSamples < SessionConstants.initialFixStableSamples &&
-        qualityClass == TrackingQualityClass.accept) {
-      _stableFixSamples += 1;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -147,16 +128,6 @@ class QualityClassifier {
       return QualityDecision(
         qualityClass: TrackingQualityClass.reject,
         reason: TrackingQualityReason.poorHorizontalAccuracy,
-        score: score,
-      );
-    }
-
-    if (_stableFixSamples < SessionConstants.initialFixStableSamples &&
-        (horizontalAccuracyM == null ||
-            horizontalAccuracyM > acceptHorizontalAccuracyM)) {
-      return QualityDecision(
-        qualityClass: TrackingQualityClass.reject,
-        reason: TrackingQualityReason.unstableInitialFix,
         score: score,
       );
     }

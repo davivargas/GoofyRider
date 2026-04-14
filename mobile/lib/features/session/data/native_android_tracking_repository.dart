@@ -69,6 +69,11 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() {
+    return _permissionsDelegate.ensureForegroundPermission();
+  }
+
+  @override
   Future<bool> isServiceEnabled() {
     return _permissionsDelegate.isServiceEnabled();
   }
@@ -200,6 +205,13 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   List<Map<String, dynamic>> _extractRawSamples(dynamic event) {
     if (event is Map) {
       final rawEvent = _normalizeMap(event);
+      if (rawEvent.containsKey('diagnostic')) {
+        debugPrint(
+          'NativeAndroidTrackingRepository: native diagnostic '
+          '${rawEvent['diagnostic']}',
+        );
+        return const <Map<String, dynamic>>[];
+      }
       if (rawEvent.containsKey('samples')) {
         final dynamic samples = rawEvent['samples'];
         if (samples is! List) {

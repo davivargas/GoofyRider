@@ -255,6 +255,15 @@ class SessionDetailScreen extends ConsumerWidget {
           'Ride avg',
           speedUnit.formatFromMetersPerSecond(rideAvgSpeedMps),
         ),
+        // Debug-only hint: recovered idle time reclassified as descent by
+        // the Layer-2 post-finish pass (§4.3 of the GPS overhaul plan).
+        // Uncomment to surface during tracking-pipeline investigations.
+        // if (detail.reclassifiedIdleDurationS > 0)
+        //   _summaryCard(
+        //     'Recovered',
+        //     '${formatSecondsAsDuration(detail.reclassifiedIdleDurationS)} '
+        //         'of descent from on-slope stops',
+        //   ),
       ],
     );
   }

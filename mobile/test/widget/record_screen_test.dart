@@ -30,6 +30,11 @@ class FakeLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
   Future<LocationSample?> getCurrentLocationSample() async {
     return LocationSample(
       timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),

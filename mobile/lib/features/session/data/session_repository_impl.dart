@@ -354,6 +354,7 @@ class SessionRepositoryImpl implements SessionRepository {
       trackingDiagnostics: diagnostics,
       stats: stats,
       timeline: analysis.segments,
+      reclassifiedIdleDurationS: analysis.reclassifiedIdleDurationS,
     );
   }
 

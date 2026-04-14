@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
@@ -37,10 +38,10 @@ class AndroidFusedLocationBridge(
         LocationServices.getFusedLocationProviderClient(context)
     private var eventSink: EventChannel.EventSink? = null
     private var callback: LocationCallback? = null
-    private var currentMode: TrackingMode = TrackingMode.INITIALIZING_FIX
-    private var currentConfig: TrackingConfig = TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
+    private var currentMode: TrackingMode = TrackingMode.ACQUIRING
+    private var currentConfig: TrackingConfig = TrackingConfig.defaultsFor(TrackingMode.ACQUIRING)
     private var watchdogThresholdNanos: Long =
-        TrackingConfig.defaultsFor(TrackingMode.INITIALIZING_FIX)
+        TrackingConfig.defaultsFor(TrackingMode.ACQUIRING)
             .watchdogThresholdMs * 1_000_000L
     private var maxAcceptedSampleAgeNanos: Long =
         computeMaxAcceptedSampleAgeNanos(
@@ -53,6 +54,8 @@ class AndroidFusedLocationBridge(
     private var activeRequestId: Long = 0L
     private var activeRequestStartedRealtimeNanos: Long? = null
     private var didLogFirstFixForActiveRequest: Boolean = false
+    private val nativeWatchdogHandler = Handler(Looper.getMainLooper())
+    private var nativeWatchdogRunnable: Runnable? = null
 
     init {
         EventChannel(messenger, EVENT_CHANNEL_NAME).setStreamHandler(this)
@@ -295,18 +298,28 @@ class AndroidFusedLocationBridge(
     }
 
     private fun reconfigureLocationUpdates(reason: String) {
-        val currentCallback = callback ?: return
+        val existingCallback = callback ?: return
         Log.d(
             TAG,
             "reconfigureLocationUpdates reason=$reason mode=${currentMode.name} requestId=$activeRequestId",
         )
+        // Install the new subscription before tearing down the old one, so
+        // there is no zero-callback window during the swap. `beginLocationRequest`
+        // issues a fresh `requestLocationUpdates`, then we remove the previous
+        // callback on the same looper thread.
+        val replacementCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                pushLocations(locationResult)
+            }
+        }
+        callback = replacementCallback
         try {
-            fusedLocationClient.removeLocationUpdates(currentCallback)
             beginLocationRequest(
                 locationRequest = currentConfig.toLocationRequest(),
-                callback = currentCallback,
+                callback = replacementCallback,
                 reason = reason,
             )
+            fusedLocationClient.removeLocationUpdates(existingCallback)
         } catch (securityException: SecurityException) {
             eventSink?.error("security_exception", securityException.message, null)
         }
@@ -330,6 +343,7 @@ class AndroidFusedLocationBridge(
             callback,
             Looper.getMainLooper(),
         )
+        armNativeWatchdog()
     }
 
     private fun stopLocationUpdates(reason: String) {
@@ -344,6 +358,47 @@ class AndroidFusedLocationBridge(
         }
         activeRequestStartedRealtimeNanos = null
         didLogFirstFixForActiveRequest = false
+        cancelNativeWatchdog()
+    }
+
+    private fun nativeWatchdogThresholdMs(): Long {
+        return maxOf(currentConfig.intervalMs * 2L, 4_000L)
+    }
+
+    private fun armNativeWatchdog() {
+        cancelNativeWatchdog()
+        val thresholdMs = nativeWatchdogThresholdMs()
+        val runnable = Runnable { onNativeWatchdogExpired(thresholdMs) }
+        nativeWatchdogRunnable = runnable
+        nativeWatchdogHandler.postDelayed(runnable, thresholdMs)
+    }
+
+    private fun cancelNativeWatchdog() {
+        val runnable = nativeWatchdogRunnable ?: return
+        nativeWatchdogHandler.removeCallbacks(runnable)
+        nativeWatchdogRunnable = null
+    }
+
+    private fun onNativeWatchdogExpired(thresholdMs: Long) {
+        nativeWatchdogRunnable = null
+        if (callback == null || eventSink == null) {
+            return
+        }
+        Log.w(
+            TAG,
+            "nativeWatchdogStall thresholdMs=$thresholdMs mode=${currentMode.name} requestId=$activeRequestId",
+        )
+        eventSink?.success(
+            mapOf(
+                "diagnostic" to mapOf(
+                    "kind" to "native_stall_restart",
+                    "thresholdMs" to thresholdMs,
+                    "mode" to currentMode.name.lowercase(),
+                    "requestId" to activeRequestId,
+                ),
+            ),
+        )
+        reconfigureLocationUpdates(reason = "native_watchdog_stall")
     }
 
     private fun ensureForegroundServiceRunning(reason: String) {
@@ -403,6 +458,7 @@ class AndroidFusedLocationBridge(
 
         if (samples.isNotEmpty()) {
             eventSink?.success(mapOf("samples" to samples))
+            armNativeWatchdog()
         }
     }
 
@@ -508,12 +564,8 @@ class AndroidFusedLocationBridge(
     }
 
     private enum class TrackingMode(private val wire: String) {
-        INITIALIZING_FIX("initializing_fix"),
-        ACTIVE_DESCENT("active_descent"),
-        LIFT_UPHILL("lift_uphill"),
-        STOPPED_IDLE("stopped_idle"),
-        WALKING_SLOW("walking_slow"),
-        LOW_CONFIDENCE_RECOVERY("low_confidence_recovery");
+        ACQUIRING("acquiring"),
+        ACTIVE("active");
 
         companion object {
             fun fromWire(value: String?): TrackingMode? {
@@ -543,64 +595,24 @@ class AndroidFusedLocationBridge(
         companion object {
             fun defaultsFor(mode: TrackingMode): TrackingConfig {
                 return when (mode) {
-                    TrackingMode.INITIALIZING_FIX -> TrackingConfig(
+                    TrackingMode.ACQUIRING -> TrackingConfig(
                         priority = Priority.PRIORITY_HIGH_ACCURACY,
                         intervalMs = 1_000,
                         minIntervalMs = 500,
                         maxDelayMs = 0,
                         minDistanceM = 0f,
-                        waitForAccurate = true,
-                        watchdogThresholdMs = 5_000,
-                    )
-
-                    TrackingMode.ACTIVE_DESCENT -> TrackingConfig(
-                        priority = Priority.PRIORITY_HIGH_ACCURACY,
-                        intervalMs = 900,
-                        minIntervalMs = 250,
-                        maxDelayMs = 900,
-                        minDistanceM = 5f,
-                        waitForAccurate = false,
-                        watchdogThresholdMs = 4_000,
-                    )
-
-                    TrackingMode.LIFT_UPHILL -> TrackingConfig(
-                        priority = Priority.PRIORITY_HIGH_ACCURACY,
-                        intervalMs = 2_500,
-                        minIntervalMs = 1_500,
-                        maxDelayMs = 2_500,
-                        minDistanceM = 10f,
-                        waitForAccurate = false,
-                        watchdogThresholdMs = 7_000,
-                    )
-
-                    TrackingMode.WALKING_SLOW -> TrackingConfig(
-                        priority = Priority.PRIORITY_HIGH_ACCURACY,
-                        intervalMs = 3_000,
-                        minIntervalMs = 1_500,
-                        maxDelayMs = 3_000,
-                        minDistanceM = 8f,
                         waitForAccurate = false,
                         watchdogThresholdMs = 8_000,
                     )
 
-                    TrackingMode.STOPPED_IDLE -> TrackingConfig(
-                        priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                        intervalMs = 15_000,
-                        minIntervalMs = 10_000,
-                        maxDelayMs = 15_000,
-                        minDistanceM = 25f,
-                        waitForAccurate = false,
-                        watchdogThresholdMs = 25_000,
-                    )
-
-                    TrackingMode.LOW_CONFIDENCE_RECOVERY -> TrackingConfig(
+                    TrackingMode.ACTIVE -> TrackingConfig(
                         priority = Priority.PRIORITY_HIGH_ACCURACY,
                         intervalMs = 1_000,
                         minIntervalMs = 500,
                         maxDelayMs = 0,
                         minDistanceM = 0f,
-                        waitForAccurate = true,
-                        watchdogThresholdMs = 5_000,
+                        waitForAccurate = false,
+                        watchdogThresholdMs = 4_000,
                     )
                 }
             }

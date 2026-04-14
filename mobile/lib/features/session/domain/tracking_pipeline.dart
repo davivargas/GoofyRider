@@ -32,7 +32,6 @@ enum TrackingQualityReason {
   nonMonotonicTimestamp,
   duplicateMonotonicTime,
   poorHorizontalAccuracy,
-  unstableInitialFix,
   implausibleJump,
   implausibleSpeedSpike,
 }
@@ -50,8 +49,6 @@ extension TrackingQualityReasonWire on TrackingQualityReason {
         return 'duplicate_monotonic_time';
       case TrackingQualityReason.poorHorizontalAccuracy:
         return 'poor_horizontal_accuracy';
-      case TrackingQualityReason.unstableInitialFix:
-        return 'unstable_initial_fix';
       case TrackingQualityReason.implausibleJump:
         return 'implausible_jump';
       case TrackingQualityReason.implausibleSpeedSpike:
@@ -93,7 +90,6 @@ class TrackingProcessResult {
     required this.currentAltitudeM,
     required this.lowAccuracy,
     required this.motionState,
-    required this.trackingMode,
     required this.acceptedForReplay,
     required this.routeLatitude,
     required this.routeLongitude,
@@ -105,7 +101,6 @@ class TrackingProcessResult {
   final double? currentAltitudeM;
   final bool lowAccuracy;
   final MotionState motionState;
-  final TrackingMode trackingMode;
   final bool acceptedForReplay;
   final double? routeLatitude;
   final double? routeLongitude;
@@ -233,7 +228,6 @@ class TrackingPipelineEngine {
       verticalDeltaM: vertical.deltaM,
       headingStability: headingStability,
       deltaSeconds: deltaSeconds,
-      stableFixSamples: _stableFixSamplesFromClassifier,
     );
 
     // Stage 6 (continued): Accumulate activity totals
@@ -243,6 +237,9 @@ class TrackingPipelineEngine {
       distanceDeltaM: distanceDeltaM,
       activityType: _motionStateDetector.activityTypeForMotionState(
         _motionStateDetector.motionState,
+        sampleTimeUtc: sample.timestamp.toUtc(),
+        latitude: sample.latitude,
+        longitude: sample.longitude,
       ),
     );
 
@@ -270,7 +267,6 @@ class TrackingPipelineEngine {
         latitude: filteredLatitude,
         longitude: filteredLongitude,
       );
-      _qualityClassifier.recordAccepted(quality.qualityClass);
     }
 
     // Commit filtered altitude (accepted samples update the filter baseline)
@@ -334,32 +330,10 @@ class TrackingPipelineEngine {
       lowAccuracy:
           quality.qualityClass == TrackingQualityClass.acceptLowConfidence,
       motionState: _motionStateDetector.motionState,
-      trackingMode: _toTrackingMode(_motionStateDetector.motionState),
       acceptedForReplay: acceptedForReplay,
       routeLatitude: acceptedForReplay ? filteredLatitude : null,
       routeLongitude: acceptedForReplay ? filteredLongitude : null,
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
-  int get _stableFixSamplesFromClassifier =>
-      _qualityClassifier.stableFixSamples;
-
-  TrackingMode _toTrackingMode(MotionState motionState) {
-    switch (motionState) {
-      case MotionState.initializingFix:
-        return TrackingMode.initializingFix;
-      case MotionState.activeDescent:
-        return TrackingMode.activeDescent;
-      case MotionState.liftUphill:
-        return TrackingMode.liftUphill;
-      case MotionState.stoppedIdle:
-        return TrackingMode.stoppedIdle;
-      case MotionState.lowConfidenceRecovery:
-        return TrackingMode.lowConfidenceRecovery;
-    }
-  }
 }

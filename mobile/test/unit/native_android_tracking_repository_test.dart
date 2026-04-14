@@ -41,13 +41,10 @@ void main() {
       controlChannel: controlChannel,
     );
 
-    await repository.setTrackingMode(TrackingMode.initializingFix);
-    await repository.setTrackingMode(TrackingMode.activeDescent);
-    await repository.setTrackingMode(TrackingMode.liftUphill);
-    await repository.setTrackingMode(TrackingMode.stoppedIdle);
-    await repository.setTrackingMode(TrackingMode.lowConfidenceRecovery);
+    await repository.setTrackingMode(TrackingMode.acquiring);
+    await repository.setTrackingMode(TrackingMode.active);
 
-    expect(methodCalls, hasLength(5));
+    expect(methodCalls, hasLength(2));
     expect(
       methodCalls.map((MethodCall call) => call.method),
       everyElement('setTrackingMode'),
@@ -63,63 +60,35 @@ void main() {
         payload['mode'] as String: payload,
     };
 
-    final activeDescentPayload =
-        Map<String, dynamic>.from(byMode['active_descent'] as Map);
-    final activeDescentConfig =
-        Map<String, dynamic>.from(activeDescentPayload['config'] as Map);
-    expect(activeDescentConfig['priority'], 'high_accuracy');
-    expect(activeDescentConfig['intervalMs'], 900);
-    expect(activeDescentConfig['minIntervalMs'], 250);
-    expect(activeDescentConfig['maxDelayMs'], 900);
-    expect(activeDescentConfig['minDistanceM'], 5.0);
-    expect(activeDescentConfig['waitForAccurate'], isFalse);
+    final acquiringPayload =
+        Map<String, dynamic>.from(byMode['acquiring'] as Map);
+    final acquiringConfig =
+        Map<String, dynamic>.from(acquiringPayload['config'] as Map);
+    expect(acquiringConfig['priority'], 'high_accuracy');
+    expect(acquiringConfig['intervalMs'], 1000);
+    expect(acquiringConfig['minIntervalMs'], 500);
+    expect(acquiringConfig['maxDelayMs'], 0);
+    expect(acquiringConfig['minDistanceM'], 0.0);
+    expect(acquiringConfig['waitForAccurate'], isFalse);
     expect(
-      activeDescentPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+      acquiringPayload['staleSampleThresholdSeconds'],
+      TrackingModeProfiles.forMode(TrackingMode.acquiring)
           .staleSampleThresholdSeconds,
     );
 
-    final liftPayload =
-        Map<String, dynamic>.from(byMode['lift_uphill'] as Map);
-    final liftConfig =
-        Map<String, dynamic>.from(liftPayload['config'] as Map);
-    expect(liftConfig['priority'], 'high_accuracy');
-    expect(liftConfig['intervalMs'], 2500);
-    expect(liftConfig['minIntervalMs'], 1500);
-    expect(liftConfig['maxDelayMs'], 2500);
-    expect(liftConfig['minDistanceM'], 10.0);
+    final activePayload =
+        Map<String, dynamic>.from(byMode['active'] as Map);
+    final activeConfig =
+        Map<String, dynamic>.from(activePayload['config'] as Map);
+    expect(activeConfig['priority'], 'high_accuracy');
+    expect(activeConfig['intervalMs'], 1000);
+    expect(activeConfig['minIntervalMs'], 500);
+    expect(activeConfig['maxDelayMs'], 0);
+    expect(activeConfig['minDistanceM'], 0.0);
+    expect(activeConfig['waitForAccurate'], isFalse);
     expect(
-      liftPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
-          .staleSampleThresholdSeconds,
-    );
-
-    final stoppedPayload =
-        Map<String, dynamic>.from(byMode['stopped_idle'] as Map);
-    final stoppedConfig =
-        Map<String, dynamic>.from(stoppedPayload['config'] as Map);
-    expect(stoppedConfig['intervalMs'], 15000);
-    expect(stoppedConfig['minIntervalMs'], 10000);
-    expect(stoppedConfig['maxDelayMs'], 15000);
-    expect(stoppedConfig['waitForAccurate'], isFalse);
-    expect(
-      stoppedPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .staleSampleThresholdSeconds,
-    );
-
-    final recoveryPayload =
-        Map<String, dynamic>.from(byMode['low_confidence_recovery'] as Map);
-    final recoveryConfig =
-        Map<String, dynamic>.from(recoveryPayload['config'] as Map);
-    expect(recoveryConfig['priority'], 'high_accuracy');
-    expect(recoveryConfig['intervalMs'], 1000);
-    expect(recoveryConfig['minIntervalMs'], 500);
-    expect(recoveryConfig['maxDelayMs'], 0);
-    expect(recoveryConfig['waitForAccurate'], isTrue);
-    expect(
-      recoveryPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
+      activePayload['staleSampleThresholdSeconds'],
+      TrackingModeProfiles.forMode(TrackingMode.active)
           .staleSampleThresholdSeconds,
     );
   });
@@ -148,7 +117,7 @@ void main() {
       permissionsDelegate: permissionsDelegate,
     );
 
-    await repository.setTrackingMode(TrackingMode.activeDescent);
+    await repository.setTrackingMode(TrackingMode.active);
 
     expect(methodCalls.map((MethodCall call) => call.method), <String>[
       'setTrackingMode',
@@ -156,7 +125,7 @@ void main() {
     expect(permissionsDelegate.setTrackingModeCallCount, 1);
     expect(
       permissionsDelegate.lastTrackingMode,
-      TrackingMode.activeDescent,
+      TrackingMode.active,
     );
   });
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -97,12 +99,37 @@ class _GoofyRiderAppState extends ConsumerState<GoofyRiderApp>
     await ref
         .read(recordingControllerProvider.notifier)
         .onAuthenticatedSessionAvailable();
+    await _ensureGpsWarmupPermissionOnce();
+    await ref.read(gpsWarmupServiceProvider).onAppForeground();
+  }
+
+  Future<void> _ensureGpsWarmupPermissionOnce() async {
+    final prefs = ref.read(gpsWarmupPermissionPreferenceProvider);
+    if (await prefs.hasBeenRequested()) {
+      return;
+    }
+    // The warmup flow only needs foreground (whileInUse) permission. The
+    // recording flow will later escalate to background if/when the user
+    // actually starts a session.
+    await ref
+        .read(locationTrackingRepositoryProvider)
+        .ensureForegroundPermission();
+    await prefs.markRequested();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      ref.read(recordingControllerProvider.notifier).onAppResumed();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        ref.read(recordingControllerProvider.notifier).onAppResumed();
+        unawaited(ref.read(gpsWarmupServiceProvider).onAppForeground());
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        ref.read(gpsWarmupServiceProvider).onAppBackground();
+        break;
     }
   }
 
