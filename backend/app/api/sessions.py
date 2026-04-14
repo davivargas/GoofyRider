@@ -110,7 +110,7 @@ def list_session_points(
     )
     return SessionPointsListResponse(
         session_id=session_id,
-        items=[SessionPointPublic.model_validate(point) for point in points],
+        items=[SessionPointPublic.from_session_point(point) for point in points],
     )
 
 

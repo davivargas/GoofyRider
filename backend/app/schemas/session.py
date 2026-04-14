@@ -1,5 +1,6 @@
 from datetime import UTC
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -13,6 +14,9 @@ from app.schemas.base import PaginatedResponse
 from app.schemas.session_vocabulary import normalize_motion_state
 from app.schemas.session_vocabulary import normalize_provider
 from app.schemas.session_vocabulary import normalize_quality_class
+
+if TYPE_CHECKING:
+    from app.models.session_point import SessionPoint
 
 
 class SessionCreateRequest(BaseModel):
@@ -157,6 +161,73 @@ class SessionPointPublic(ORMBaseModel):
     motion_state: str | None
     accepted_for_analytics: bool
     created_at: datetime
+
+    @classmethod
+    def from_session_point(cls, point: "SessionPoint") -> "SessionPointPublic":
+        analytics = point.analytics
+        return cls(
+            id=point.id,
+            t_offset_ms=point.t_offset_ms,
+            recorded_at=point.recorded_at,
+            latitude=point.latitude,
+            longitude=point.longitude,
+            accuracy_m=point.accuracy_m,
+            elapsed_realtime_ns=point.elapsed_realtime_ns,
+            altitude_m=point.altitude_m,
+            vertical_accuracy_m=point.vertical_accuracy_m,
+            speed_mps=point.speed_mps,
+            speed_accuracy_mps=point.speed_accuracy_mps,
+            heading_deg=point.heading_deg,
+            bearing_accuracy_deg=point.bearing_accuracy_deg,
+            provider=point.provider,
+            is_mocked=point.is_mocked,
+            quality_class=(
+                analytics.quality_class if analytics is not None else point.quality_class
+            ),
+            quality_score=(
+                analytics.quality_score if analytics is not None else point.quality_score
+            ),
+            quality_reason=(
+                analytics.quality_reason if analytics is not None else point.quality_reason
+            ),
+            filtered_latitude=(
+                analytics.filtered_latitude
+                if analytics is not None
+                else point.filtered_latitude
+            ),
+            filtered_longitude=(
+                analytics.filtered_longitude
+                if analytics is not None
+                else point.filtered_longitude
+            ),
+            filtered_altitude_m=(
+                analytics.filtered_altitude_m
+                if analytics is not None
+                else point.filtered_altitude_m
+            ),
+            fused_speed_mps=(
+                analytics.fused_speed_mps if analytics is not None else point.fused_speed_mps
+            ),
+            derived_speed_mps=(
+                analytics.derived_speed_mps
+                if analytics is not None
+                else point.derived_speed_mps
+            ),
+            distance_delta_m=(
+                analytics.distance_delta_m
+                if analytics is not None
+                else point.distance_delta_m
+            ),
+            motion_state=(
+                analytics.motion_state if analytics is not None else point.motion_state
+            ),
+            accepted_for_analytics=(
+                analytics.accepted_for_analytics
+                if analytics is not None
+                else point.accepted_for_analytics
+            ),
+            created_at=point.created_at,
+        )
 
 
 class SessionPointsListResponse(BaseModel):

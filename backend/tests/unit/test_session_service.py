@@ -317,6 +317,10 @@ def test_upload_points_batch_populates_legacy_defaults_when_fields_omitted() -> 
     stored_point = point_repo.batches[0][0]
     assert stored_point.recorded_at == datetime(2026, 1, 1, 0, 0, 1, 500000, tzinfo=UTC)
     assert stored_point.accepted_for_analytics is True
+    assert stored_point.analytics is not None
+    assert stored_point.analytics.accepted_for_analytics is True
+    assert stored_point.analytics.quality_class is None
+    assert stored_point.analytics.motion_state is None
 
 
 def test_upload_points_batch_preserves_enriched_point_fields() -> None:
@@ -385,6 +389,20 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
     assert stored_point.distance_delta_m == 4.7
     assert stored_point.motion_state == "active_descent"
     assert stored_point.accepted_for_analytics is True
+
+    analytics = stored_point.analytics
+    assert analytics is not None
+    assert analytics.quality_class == "accept"
+    assert analytics.quality_score == 0.91
+    assert analytics.quality_reason == "stable_fix"
+    assert analytics.filtered_latitude == 50.9501
+    assert analytics.filtered_longitude == -118.1601
+    assert analytics.filtered_altitude_m == 1449.8
+    assert analytics.fused_speed_mps == 6.1
+    assert analytics.derived_speed_mps == 6.2
+    assert analytics.distance_delta_m == 4.7
+    assert analytics.motion_state == "active_descent"
+    assert analytics.accepted_for_analytics is True
 
 
 def test_upload_points_batch_preserves_richer_point_fields() -> None:

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 import uuid
 
 from sqlalchemy import BigInteger
@@ -16,8 +19,12 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.session_point_analytics import SessionPointAnalytics
 
 PROVIDER_ENUM_VALUES = ("gps", "fused", "network", "passive", "unknown")
 MOTION_STATE_ENUM_VALUES = (
@@ -180,4 +187,13 @@ class SessionPoint(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    analytics: Mapped[SessionPointAnalytics | None] = relationship(
+        "SessionPointAnalytics",
+        back_populates="session_point",
+        uselist=False,
+        lazy="joined",
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
