@@ -52,13 +52,13 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<LocalRideSession> startLocalSession({String? resortId}) async {
-    final String ownerUserId = _requireCurrentUserId();
-    final int localId = await _localDatabase.insertLocalSession(
+    final ownerUserId = _requireCurrentUserId();
+    final localId = await _localDatabase.insertLocalSession(
       startedAt: DateTime.now().toUtc(),
       ownerUserId: ownerUserId,
       resortId: resortId,
     );
-    final LocalRideSession? created =
+    final created =
         await _localDatabase.getSessionById(localId, ownerUserId: ownerUserId);
     if (created == null) {
       throw StateError('Local session was not created.');
@@ -68,7 +68,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<LocalRideSession> pauseLocalSession(int localSessionId) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
+    final session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.paused);
     await _localDatabase.updateSessionState(
         localSessionId, LocalSessionState.paused);
@@ -77,7 +77,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<LocalRideSession> resumeLocalSession(int localSessionId) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
+    final session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.recording);
     await _localDatabase.updateSessionState(
         localSessionId, LocalSessionState.recording);
@@ -87,7 +87,7 @@ class SessionRepositoryImpl implements SessionRepository {
   @override
   Future<void> appendLocationPoint(
       int localSessionId, NewSessionPoint point) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
+    final session = await _requireSession(localSessionId);
     if (session.state != LocalSessionState.recording) {
       return;
     }
@@ -100,21 +100,21 @@ class SessionRepositoryImpl implements SessionRepository {
     int localSessionId, {
     int? activeDurationS,
   }) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
+    final session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.syncPending);
 
-    final List<LocalSessionPoint> points =
+    final points =
         await _localDatabase.listPoints(localSessionId);
-    final int effectiveDurationS =
+    final effectiveDurationS =
         activeDurationS ?? _computeActiveDurationSeconds(points);
-    final SessionStats stats = _computeStatsFromTrackedPoints(
+    final stats = _computeStatsFromTrackedPoints(
       points: points,
       activeDurationS: effectiveDurationS,
     );
-    final String? resolvedResortId = session.resortId ??
+    final resolvedResortId = session.resortId ??
         await _resortAttributionService.inferResortIdFromPoints(points);
 
-    final DateTime endedAt = DateTime.now().toUtc();
+    final endedAt = DateTime.now().toUtc();
 
     await _localDatabase.completeLocalSession(
       localId: localSessionId,
@@ -128,7 +128,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<LocalRideSession?> recoverInProgressSession() async {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return null;
     }
@@ -137,9 +137,9 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
-    final List<LocalSessionPoint> points =
+    final points =
         await _localDatabase.listPoints(localSessionId);
-    final int activeDurationS = _computeActiveDurationSeconds(points);
+    final activeDurationS = _computeActiveDurationSeconds(points);
     return _computeStatsFromTrackedPoints(
       points: points,
       activeDurationS: activeDurationS,
@@ -148,14 +148,14 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<LocalRideSession> syncSession(int localSessionId) async {
-    final LocalRideSession original = await _requireSession(localSessionId);
+    final original = await _requireSession(localSessionId);
     LocalRideSession? syncingSnapshot;
 
     try {
       await _prepareSyncAttempt(localSessionId);
 
-      final LocalRideSession syncing = await _requireSession(localSessionId);
-      final String remoteId =
+      final syncing = await _requireSession(localSessionId);
+      final remoteId =
           await _ensureRemoteSessionId(localSessionId, syncing);
       await _syncPointsForSession(
         localSessionId: localSessionId,
@@ -170,9 +170,9 @@ class SessionRepositoryImpl implements SessionRepository {
           localSessionId, LocalSessionState.synced);
       return _requireSession(localSessionId);
     } on DioException catch (exception) {
-      final String message = mapDioException(exception).message;
+      final message = mapDioException(exception).message;
       await _localDatabase.markSyncFailed(localSessionId, error: message);
-      final LocalRideSession? failed =
+      final failed =
           await _tryGetScopedSession(localSessionId);
       if (failed != null) {
         return failed;
@@ -183,7 +183,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<LocalRideSession> retryFailedSync(int localSessionId) async {
-    final LocalRideSession session = await _requireSession(localSessionId);
+    final session = await _requireSession(localSessionId);
     if (session.state != LocalSessionState.syncFailed) {
       return session;
     }
@@ -192,17 +192,17 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return const <LocalRideSession>[];
     }
     unawaited(_ensurePendingDeleteReconciliation(ownerUserId));
-    final Set<String> pendingRemoteDeleteIds =
+    final pendingRemoteDeleteIds =
         await _pendingRemoteDeleteIds(ownerUserId);
 
-    List<LocalRideSession> local =
+    var local =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> cachedRemote = (await _localDatabase
+    final cachedRemote = (await _localDatabase
             .readCachedRemoteSessions(ownerUserId: ownerUserId))
         .where((Map<String, dynamic> raw) =>
             _isVisibleRemoteSessionSummary(raw, pendingRemoteDeleteIds))
@@ -227,11 +227,11 @@ class SessionRepositoryImpl implements SessionRepository {
     }
 
     await refreshRemoteSessionHistoryCache();
-    final Set<String> refreshedPendingRemoteDeleteIds =
+    final refreshedPendingRemoteDeleteIds =
         await _pendingRemoteDeleteIds(ownerUserId);
-    final List<LocalRideSession> refreshedLocal =
+    final refreshedLocal =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> refreshedRemote = (await _localDatabase
+    final refreshedRemote = (await _localDatabase
             .readCachedRemoteSessions(ownerUserId: ownerUserId))
         .where((Map<String, dynamic> raw) => _isVisibleRemoteSessionSummary(
               raw,
@@ -247,16 +247,16 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<void> refreshRemoteSessionHistoryCache() async {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return;
     }
     await _ensurePendingDeleteReconciliation(ownerUserId);
-    final Set<String> pendingRemoteDeleteIds =
+    final pendingRemoteDeleteIds =
         await _pendingRemoteDeleteIds(ownerUserId);
 
     try {
-      final List<Map<String, dynamic>> remote = await _api.listRemoteSessions();
+      final remote = await _api.listRemoteSessions();
       await _localDatabase.replaceCachedRemoteSessions(
         ownerUserId: ownerUserId,
         sessions: remote
@@ -282,17 +282,17 @@ class SessionRepositoryImpl implements SessionRepository {
     required List<Map<String, dynamic>> remote,
     required String ownerUserId,
   }) {
-    final Set<String> localRemoteIds = local
+    final localRemoteIds = local
         .where((LocalRideSession session) => session.remoteId != null)
         .map((LocalRideSession session) => session.remoteId!)
         .toSet();
 
-    final List<LocalRideSession> remoteOnly = remote
+    final remoteOnly = remote
         .where((Map<String, dynamic> item) {
           if (!_isHistoryVisibleRemoteSession(item)) {
             return false;
           }
-          final String id = item['id'] as String;
+          final id = item['id'] as String;
           return !localRemoteIds.contains(id);
         })
         .map(
@@ -301,7 +301,7 @@ class SessionRepositoryImpl implements SessionRepository {
         )
         .toList(growable: false);
 
-    final List<LocalRideSession> merged = <LocalRideSession>[
+    final merged = <LocalRideSession>[
       ...local,
       ...remoteOnly
     ];
@@ -312,7 +312,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<List<LocalRideSession>> listPendingSyncSessions() async {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return const <LocalRideSession>[];
     }
@@ -321,27 +321,27 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
-    LocalRideSession session = await _requireSession(localSessionId);
-    List<LocalSessionPoint> points = await _localDatabase.listPoints(
+    var session = await _requireSession(localSessionId);
+    var points = await _localDatabase.listPoints(
       localSessionId,
     );
     if (points.isEmpty && _canRestoreRemotePoints(session)) {
       points = await _restoreRemotePoints(session);
       session = await _requireSession(localSessionId);
     }
-    final List<LocalSessionPoint> accepted = points
+    final accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
-    final List<TrackingDiagnosticEvent> diagnostics =
+    final diagnostics =
         await _localDatabase.listTrackingDiagnostics(localSessionId);
-    final int effectiveDurationS = session.activeDurationS > 0
+    final effectiveDurationS = session.activeDurationS > 0
         ? session.activeDurationS
         : _computeActiveDurationSeconds(points);
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final analysis = analyzeSessionTimeline(
       points: points,
       localSessionId: localSessionId,
     );
-    final SessionStats stats = _buildSessionStats(
+    final stats = _buildSessionStats(
       points: points,
       durationS: effectiveDurationS,
       analysis: analysis,
@@ -385,17 +385,17 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<String> resolveSessionResortLabel(LocalRideSession session) async {
-    final ResolvedSessionResort resolved =
+    final resolved =
         await _resortAttributionService.resolve(session);
     return resolved.label;
   }
 
   @override
   Future<DeleteSessionResult> deleteSession(LocalRideSession session) async {
-    final String ownerUserId = _requireCurrentUserId();
-    final String? remoteId = session.remoteId;
-    final bool hasRemoteId = remoteId != null && remoteId.isNotEmpty;
-    DeleteSessionDisposition disposition = DeleteSessionDisposition.localOnly;
+    final ownerUserId = _requireCurrentUserId();
+    final remoteId = session.remoteId;
+    final hasRemoteId = remoteId != null && remoteId.isNotEmpty;
+    var disposition = DeleteSessionDisposition.localOnly;
 
     if (hasRemoteId) {
       await _localDatabase.enqueuePendingRemoteSessionDelete(
@@ -418,7 +418,7 @@ class SessionRepositoryImpl implements SessionRepository {
           );
           disposition = DeleteSessionDisposition.deletedRemotely;
         } else {
-          final AppFailure failure = mapDioException(exception);
+          final failure = mapDioException(exception);
           if (failure is NetworkFailure) {
             await _localDatabase.recordPendingRemoteSessionDeleteAttempt(
               ownerUserId: ownerUserId,
@@ -439,7 +439,7 @@ class SessionRepositoryImpl implements SessionRepository {
       }
     }
 
-    final bool shouldDeleteLocally = !hasRemoteId ||
+    final shouldDeleteLocally = !hasRemoteId ||
         disposition == DeleteSessionDisposition.deletedRemotely ||
         disposition == DeleteSessionDisposition.queuedRemoteDelete;
 
@@ -473,7 +473,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<int> unsyncedCount() {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null || ownerUserId.isEmpty) {
       return Future<int>.value(0);
     }
@@ -488,12 +488,12 @@ class SessionRepositoryImpl implements SessionRepository {
     int localSessionId,
     LocalRideSession session,
   ) async {
-    String? remoteId = session.remoteId;
+    var remoteId = session.remoteId;
     if (remoteId != null && remoteId.isNotEmpty) {
       return remoteId;
     }
 
-    final Map<String, dynamic> draft = await _api.createRemoteDraft(
+    final draft = await _api.createRemoteDraft(
       resortId: _sanitizeNullableUuidLikeIdForSync(session.resortId),
       startedAt: session.startedAt,
     );
@@ -510,12 +510,12 @@ class SessionRepositoryImpl implements SessionRepository {
     required int localSessionId,
     required String remoteSessionId,
   }) async {
-    final List<LocalSessionPoint> acceptedPoints =
+    final acceptedPoints =
         await _localDatabase.listPoints(localSessionId, onlyAccepted: true);
-    final List<LocalSessionPoint> dedupedUploadable = _dedupeByElapsedOffset(
+    final dedupedUploadable = _dedupeByElapsedOffset(
       acceptedPoints,
     );
-    final _PointSanitizationResult sanitizedResult = _sanitizePointsForSync(
+    final sanitizedResult = _sanitizePointsForSync(
       dedupedUploadable,
     );
     await _recordPointSanitizationDiagnostics(
@@ -523,19 +523,19 @@ class SessionRepositoryImpl implements SessionRepository {
       result: sanitizedResult,
     );
 
-    int isolationFallbackBatches = 0;
-    final List<_DroppedSyncPoint> droppedDuringIsolation =
+    var isolationFallbackBatches = 0;
+    final droppedDuringIsolation =
         <_DroppedSyncPoint>[];
-    for (int index = 0;
+    for (var index = 0;
         index < sanitizedResult.uploadablePoints.length;
         index += SessionConstants.uploadBatchSize) {
       final int end = min(
         index + SessionConstants.uploadBatchSize,
         sanitizedResult.uploadablePoints.length,
       );
-      final List<_SanitizedSyncPoint> batch =
+      final batch =
           sanitizedResult.uploadablePoints.sublist(index, end);
-      final _PointUploadResult uploadResult =
+      final uploadResult =
           await _uploadPointBatchWithFallback(
         localSessionId: localSessionId,
         remoteSessionId: remoteSessionId,
@@ -549,7 +549,7 @@ class SessionRepositoryImpl implements SessionRepository {
     }
 
     if (isolationFallbackBatches > 0 || droppedDuringIsolation.isNotEmpty) {
-      final Map<String, int> dropReasonCounts =
+      final dropReasonCounts =
           _collectDropReasonCounts(droppedDuringIsolation);
       await _recordSyncDiagnosticBestEffort(
         localSessionId,
@@ -605,7 +605,7 @@ class SessionRepositoryImpl implements SessionRepository {
         },
       );
 
-      final _PointUploadResult isolationResult = await _uploadBatchByIsolation(
+      final isolationResult = await _uploadBatchByIsolation(
         remoteSessionId: remoteSessionId,
         points: batch,
       );
@@ -665,12 +665,12 @@ class SessionRepositoryImpl implements SessionRepository {
         );
       }
 
-      final int midpoint = points.length ~/ 2;
-      final _PointUploadResult left = await _uploadBatchByIsolation(
+      final midpoint = points.length ~/ 2;
+      final left = await _uploadBatchByIsolation(
         remoteSessionId: remoteSessionId,
         points: points.sublist(0, midpoint),
       );
-      final _PointUploadResult right = await _uploadBatchByIsolation(
+      final right = await _uploadBatchByIsolation(
         remoteSessionId: remoteSessionId,
         points: points.sublist(midpoint),
       );
@@ -687,26 +687,26 @@ class SessionRepositoryImpl implements SessionRepository {
   _PointSanitizationResult _sanitizePointsForSync(
     List<LocalSessionPoint> points,
   ) {
-    final List<_SanitizedSyncPoint> uploadable = <_SanitizedSyncPoint>[];
-    final List<_DroppedSyncPoint> droppedPoints = <_DroppedSyncPoint>[];
-    final Map<String, int> sanitizedFieldCounts = <String, int>{};
-    int sanitizedPointCount = 0;
+    final uploadable = <_SanitizedSyncPoint>[];
+    final droppedPoints = <_DroppedSyncPoint>[];
+    final sanitizedFieldCounts = <String, int>{};
+    var sanitizedPointCount = 0;
 
-    for (final LocalSessionPoint point in points) {
-      final _SinglePointSanitizationResult pointResult =
+    for (final point in points) {
+      final pointResult =
           _sanitizeSinglePointForSync(point);
       if (pointResult.dropped != null) {
         droppedPoints.add(pointResult.dropped!);
         continue;
       }
-      final _SanitizedSyncPoint sanitized = pointResult.sanitized!;
+      final sanitized = pointResult.sanitized!;
       uploadable.add(sanitized);
 
       if (sanitized.sanitizedFields.isEmpty) {
         continue;
       }
       sanitizedPointCount += 1;
-      for (final String field in sanitized.sanitizedFields) {
+      for (final field in sanitized.sanitizedFields) {
         sanitizedFieldCounts[field] = (sanitizedFieldCounts[field] ?? 0) + 1;
       }
     }
@@ -742,8 +742,8 @@ class SessionRepositoryImpl implements SessionRepository {
       );
     }
 
-    final List<String> sanitizedFields = <String>[];
-    final Map<String, dynamic> payload = <String, dynamic>{
+    final sanitizedFields = <String>[];
+    final payload = <String, dynamic>{
       't_offset_ms': _sanitizeNonNegativeIntForSync(
         point.elapsedOffsetMs,
         fieldName: 't_offset_ms',
@@ -877,8 +877,8 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Map<String, int> _collectDropReasonCounts(List<_DroppedSyncPoint> dropped) {
-    final Map<String, int> reasonCounts = <String, int>{};
-    for (final _DroppedSyncPoint point in dropped) {
+    final reasonCounts = <String, int>{};
+    for (final point in dropped) {
       reasonCounts[point.reason] = (reasonCounts[point.reason] ?? 0) + 1;
     }
     return reasonCounts;
@@ -888,8 +888,8 @@ class SessionRepositoryImpl implements SessionRepository {
     required int localSessionId,
     required String remoteSessionId,
   }) async {
-    final LocalRideSession syncing = await _requireSession(localSessionId);
-    final _SanitizedCompletionPayload payload =
+    final syncing = await _requireSession(localSessionId);
+    final payload =
         _sanitizeCompletionPayloadForSync(syncing);
     if (payload.sanitizedFields.isNotEmpty) {
       await _recordSyncDiagnosticBestEffort(
@@ -917,23 +917,23 @@ class SessionRepositoryImpl implements SessionRepository {
   _SanitizedCompletionPayload _sanitizeCompletionPayloadForSync(
     LocalRideSession session,
   ) {
-    final List<String> sanitizedFields = <String>[];
-    final int durationS = _sanitizeNonNegativeIntForSync(
+    final sanitizedFields = <String>[];
+    final durationS = _sanitizeNonNegativeIntForSync(
       session.activeDurationS,
       fieldName: 'duration_s',
       sanitizedFields: sanitizedFields,
     );
-    final double distanceM = _sanitizeNonNegativeDoubleForSync(
+    final distanceM = _sanitizeNonNegativeDoubleForSync(
       session.distanceM,
       fieldName: 'distance_m',
       sanitizedFields: sanitizedFields,
     );
-    final double avgSpeedMps = _sanitizeNonNegativeDoubleForSync(
+    final avgSpeedMps = _sanitizeNonNegativeDoubleForSync(
       session.avgSpeedMps,
       fieldName: 'avg_speed_mps',
       sanitizedFields: sanitizedFields,
     );
-    final double rawMaxSpeedMps = _sanitizeNonNegativeDoubleForSync(
+    final rawMaxSpeedMps = _sanitizeNonNegativeDoubleForSync(
       session.maxSpeedMps,
       fieldName: 'max_speed_mps',
       sanitizedFields: sanitizedFields,
@@ -1022,7 +1022,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required String fieldName,
     required List<String> sanitizedFields,
   }) {
-    final double? finiteValue = _sanitizeNullableFiniteDoubleForSync(
+    final finiteValue = _sanitizeNullableFiniteDoubleForSync(
       value,
       fieldName: fieldName,
       sanitizedFields: sanitizedFields,
@@ -1044,7 +1044,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required String fieldName,
     required List<String> sanitizedFields,
   }) {
-    final double? finiteValue = _sanitizeNullableFiniteDoubleForSync(
+    final finiteValue = _sanitizeNullableFiniteDoubleForSync(
       value,
       fieldName: fieldName,
       sanitizedFields: sanitizedFields,
@@ -1063,7 +1063,7 @@ class SessionRepositoryImpl implements SessionRepository {
     if (value == null) {
       return null;
     }
-    final String trimmed = value.trim();
+    final trimmed = value.trim();
     if (trimmed.isEmpty) {
       return null;
     }
@@ -1078,7 +1078,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required String fieldName,
     required List<String> sanitizedFields,
   }) {
-    final double? finiteHeading = _sanitizeNullableFiniteDoubleForSync(
+    final finiteHeading = _sanitizeNullableFiniteDoubleForSync(
       headingDeg,
       fieldName: fieldName,
       sanitizedFields: sanitizedFields,
@@ -1087,7 +1087,7 @@ class SessionRepositoryImpl implements SessionRepository {
       return null;
     }
 
-    double normalized = finiteHeading % 360;
+    var normalized = finiteHeading % 360;
     if (normalized < 0) {
       normalized += 360;
     }
@@ -1102,8 +1102,8 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   bool _isLikelyValidationFailure(DioException exception) {
-    final int? statusCode = exception.response?.statusCode;
-    final String combined = <String>[
+    final statusCode = exception.response?.statusCode;
+    final combined = <String>[
       mapDioException(exception).message,
       exception.response?.data?.toString() ?? '',
     ].join(' ').toLowerCase();
@@ -1142,7 +1142,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<LocalRideSession> _requireSession(int localSessionId) async {
-    final LocalRideSession? session =
+    final session =
         await _tryGetScopedSession(localSessionId);
     if (session == null) {
       throw StateError('Session not found: $localSessionId');
@@ -1151,7 +1151,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<LocalRideSession?> _tryGetScopedSession(int localSessionId) {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null) {
       return Future<LocalRideSession?>.value(null);
     }
@@ -1188,7 +1188,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   String? get _currentUserIdOrNull {
-    final String? currentUserId = _currentUserIdGetter();
+    final currentUserId = _currentUserIdGetter();
     if (currentUserId == null || currentUserId.isEmpty) {
       return null;
     }
@@ -1196,7 +1196,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   String _requireCurrentUserId() {
-    final String? currentUserId = _currentUserIdOrNull;
+    final currentUserId = _currentUserIdOrNull;
     if (currentUserId == null) {
       throw StateError('Authenticated user is required for session access.');
     }
@@ -1204,17 +1204,17 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   int _computeActiveDurationSeconds(List<LocalSessionPoint> points) {
-    final List<LocalSessionPoint> accepted = points
+    final accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     if (accepted.length < 2) {
       return 0;
     }
 
-    final int maxDeltaMilliseconds = SessionConstants.maxDeltaSeconds * 1000;
-    int totalMilliseconds = 0;
-    for (int index = 1; index < accepted.length; index++) {
-      final int deltaMilliseconds = accepted[index]
+    final maxDeltaMilliseconds = SessionConstants.maxDeltaSeconds * 1000;
+    var totalMilliseconds = 0;
+    for (var index = 1; index < accepted.length; index++) {
+      final deltaMilliseconds = accepted[index]
           .recordedAt
           .difference(accepted[index - 1].recordedAt)
           .inMilliseconds;
@@ -1230,11 +1230,11 @@ class SessionRepositoryImpl implements SessionRepository {
     required String ownerUserId,
     required List<Map<String, dynamic>> remote,
   }) async {
-    for (final Map<String, dynamic> raw in remote) {
+    for (final raw in remote) {
       if (!_isHistoryVisibleRemoteSession(raw)) {
         continue;
       }
-      final String? remoteId = raw['id'] as String?;
+      final remoteId = raw['id'] as String?;
       if (remoteId == null || remoteId.isEmpty) {
         continue;
       }
@@ -1266,7 +1266,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required List<LocalRideSession> local,
     required List<Map<String, dynamic>> remote,
   }) {
-    final Set<String> localRemoteIds = local
+    final localRemoteIds = local
         .map((LocalRideSession session) => session.remoteId)
         .whereType<String>()
         .toSet();
@@ -1274,7 +1274,7 @@ class SessionRepositoryImpl implements SessionRepository {
       if (!_isHistoryVisibleRemoteSession(item)) {
         return false;
       }
-      final String? remoteId = item['id'] as String?;
+      final remoteId = item['id'] as String?;
       return remoteId != null &&
           remoteId.isNotEmpty &&
           !localRemoteIds.contains(remoteId);
@@ -1282,7 +1282,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   bool _isHistoryVisibleRemoteSession(Map<String, dynamic> raw) {
-    final String? status = (raw['status'] as String?)?.toUpperCase();
+    final status = (raw['status'] as String?)?.toUpperCase();
     if (status == null || status.isEmpty) {
       return true;
     }
@@ -1306,7 +1306,7 @@ class SessionRepositoryImpl implements SessionRepository {
   Future<void> _runPendingDeleteReconciliationLoop() async {
     try {
       while (true) {
-        final String? ownerUserId = _queuedReconciliationOwnerUserId;
+        final ownerUserId = _queuedReconciliationOwnerUserId;
         _queuedReconciliationOwnerUserId = null;
         if (ownerUserId == null || ownerUserId.isEmpty) {
           return;
@@ -1322,14 +1322,14 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<void> _reconcilePendingRemoteDeletes(String ownerUserId) async {
-    final List<PendingRemoteSessionDeleteEntry> pendingRemoteDeletes =
+    final pendingRemoteDeletes =
         await _localDatabase.listRetryablePendingRemoteDeletes(
       ownerUserId: ownerUserId,
     );
 
-    for (final PendingRemoteSessionDeleteEntry pendingDelete
+    for (final pendingDelete
         in pendingRemoteDeletes) {
-      final String remoteId = pendingDelete.remoteId;
+      final remoteId = pendingDelete.remoteId;
       try {
         await _api.deleteRemoteSession(remoteId);
         await _localDatabase.clearPendingRemoteSessionDelete(
@@ -1345,7 +1345,7 @@ class SessionRepositoryImpl implements SessionRepository {
           continue;
         }
 
-        final AppFailure failure = mapDioException(exception);
+        final failure = mapDioException(exception);
         if (failure is NetworkFailure) {
           await _localDatabase.recordPendingRemoteSessionDeleteAttempt(
             ownerUserId: ownerUserId,
@@ -1370,7 +1370,7 @@ class SessionRepositoryImpl implements SessionRepository {
   DateTime _nextRemoteDeleteAttemptAt({
     required int failedAttemptCount,
   }) {
-    final int scheduleIndex = (failedAttemptCount - 1)
+    final scheduleIndex = (failedAttemptCount - 1)
         .clamp(0, _remoteDeleteRetrySchedule.length - 1);
     return DateTime.now()
         .toUtc()
@@ -1381,7 +1381,7 @@ class SessionRepositoryImpl implements SessionRepository {
     Map<String, dynamic> raw,
     Set<String> pendingRemoteDeleteIds,
   ) {
-    final String? remoteId = raw['id'] as String?;
+    final remoteId = raw['id'] as String?;
     if (remoteId != null &&
         remoteId.isNotEmpty &&
         pendingRemoteDeleteIds.contains(remoteId)) {
@@ -1399,8 +1399,8 @@ class SessionRepositoryImpl implements SessionRepository {
     if (resortSummary == null) {
       return;
     }
-    final String? resortId = resortSummary['id'] as String?;
-    final String? name = resortSummary['name'] as String?;
+    final resortId = resortSummary['id'] as String?;
+    final name = resortSummary['name'] as String?;
     if (resortId == null || resortId.isEmpty || name == null || name.isEmpty) {
       return;
     }
@@ -1424,16 +1424,16 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   bool _canRestoreRemotePoints(LocalRideSession session) {
-    final String? remoteId = session.remoteId;
+    final remoteId = session.remoteId;
     return remoteId != null && remoteId.isNotEmpty;
   }
 
   Future<List<LocalSessionPoint>> _restoreRemotePoints(
     LocalRideSession session,
   ) async {
-    final String remoteId = session.remoteId!;
+    final remoteId = session.remoteId!;
     try {
-      final List<Map<String, dynamic>> remotePoints =
+      final remotePoints =
           await _api.getRemoteSessionPoints(remoteId);
       await _localDatabase.replaceSessionPoints(
         localSessionId: session.localId,
@@ -1452,7 +1452,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required DateTime sessionStartedAt,
     required List<Map<String, dynamic>> remotePoints,
   }) {
-    final List<Map<String, dynamic>> sorted =
+    final sorted =
         List<Map<String, dynamic>>.from(remotePoints)
           ..sort(
             (Map<String, dynamic> a, Map<String, dynamic> b) =>
@@ -1461,14 +1461,14 @@ class SessionRepositoryImpl implements SessionRepository {
           );
 
     return sorted.map((Map<String, dynamic> raw) {
-      final int elapsedOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
-      final DateTime recordedAt = _parseRemoteDateTime(raw['recorded_at']) ??
+      final elapsedOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
+      final recordedAt = _parseRemoteDateTime(raw['recorded_at']) ??
           sessionStartedAt.toUtc().add(Duration(milliseconds: elapsedOffsetMs));
-      final String? qualityClass =
+      final qualityClass =
           canonicalizeQualityClassForSync(raw['quality_class'] as String?);
-      final String? motionState =
+      final motionState =
           canonicalizeMotionStateForSync(raw['motion_state'] as String?);
-      final bool? acceptedForAnalytics =
+      final acceptedForAnalytics =
           _remoteNullableBool(raw['accepted_for_analytics']);
       return NewSessionPoint(
         recordedAt: recordedAt,
@@ -1522,10 +1522,10 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   List<LocalSessionPoint> _dedupeByElapsedOffset(List<LocalSessionPoint> points) {
-    final Set<int> seenElapsedOffsets = <int>{};
-    final List<LocalSessionPoint> uniquePoints = <LocalSessionPoint>[];
+    final seenElapsedOffsets = <int>{};
+    final uniquePoints = <LocalSessionPoint>[];
 
-    for (final LocalSessionPoint point in points) {
+    for (final point in points) {
       if (seenElapsedOffsets.contains(point.elapsedOffsetMs)) {
         continue;
       }
@@ -1539,7 +1539,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required List<LocalSessionPoint> points,
     required int activeDurationS,
   }) {
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final analysis = analyzeSessionTimeline(
       points: points,
     );
     return _buildSessionStats(
@@ -1554,7 +1554,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required int durationS,
     required SessionTimelineAnalysis analysis,
   }) {
-    final List<LocalSessionPoint> accepted = points
+    final accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     if (accepted.isEmpty) {
@@ -1568,11 +1568,11 @@ class SessionRepositoryImpl implements SessionRepository {
       );
     }
 
-    final double robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
+    final robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
     final (int? gain, int? loss) = _computeElevation(accepted);
-    final double avgSpeedMps =
-        durationS == 0 ? 0 : analysis.distanceM / durationS;
-    final double maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
+    final avgSpeedMps =
+        durationS == 0 ? 0.0 : analysis.distanceM / durationS;
+    final maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
 
     return SessionStats(
       durationS: durationS,
@@ -1601,14 +1601,14 @@ class SessionRepositoryImpl implements SessionRepository {
     List<LocalSessionPoint> points, {
     required bool highConfidenceOnly,
   }) {
-    final List<LocalSessionPoint> sorted = List<LocalSessionPoint>.from(points)
+    final sorted = List<LocalSessionPoint>.from(points)
       ..sort((LocalSessionPoint a, LocalSessionPoint b) =>
           a.recordedAt.compareTo(b.recordedAt));
 
     double maxSpeed = 0;
-    final List<_TimedSpeed> window = <_TimedSpeed>[];
-    for (final LocalSessionPoint point in sorted) {
-      final double? speed =
+    final window = <_TimedSpeed>[];
+    for (final point in sorted) {
+      final speed =
           point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps;
       if (speed == null) {
         continue;
@@ -1630,10 +1630,10 @@ class SessionRepositoryImpl implements SessionRepository {
             SessionConstants.maxSpeedWindowSeconds,
       );
 
-      final Iterable<_TimedSpeed> candidatesWindow = highConfidenceOnly
+      final candidatesWindow = highConfidenceOnly
           ? window.where((_TimedSpeed item) => item.highConfidence)
           : window;
-      final List<double> candidates = candidatesWindow
+      final candidates = candidatesWindow
           .map((_TimedSpeed item) => item.speed)
           .toList(growable: false);
       if (candidates.length < SessionConstants.maxSpeedPersistenceSamples) {
@@ -1641,8 +1641,8 @@ class SessionRepositoryImpl implements SessionRepository {
       }
 
       candidates.sort();
-      final int middle = candidates.length ~/ 2;
-      final double median = candidates.length.isOdd
+      final middle = candidates.length ~/ 2;
+      final median = candidates.length.isOdd
           ? candidates[middle]
           : (candidates[middle - 1] + candidates[middle]) / 2;
       maxSpeed = max(maxSpeed, median);
@@ -1652,10 +1652,10 @@ class SessionRepositoryImpl implements SessionRepository {
 
   (int?, int?) _computeElevation(List<LocalSessionPoint> points) {
     double? previousAltitude;
-    int gain = 0;
-    int loss = 0;
-    for (final LocalSessionPoint point in points) {
-      final double? altitude = point.filteredAltitudeM ?? point.altitudeM;
+    var gain = 0;
+    var loss = 0;
+    for (final point in points) {
+      final altitude = point.filteredAltitudeM ?? point.altitudeM;
       if (altitude == null) {
         continue;
       }
@@ -1677,7 +1677,7 @@ class SessionRepositoryImpl implements SessionRepository {
                 SessionConstants.verticalAccuracyWeakThresholdMeters) *
             SessionConstants.verticalHysteresisAccuracyFactor,
       );
-      final double delta = altitude - previousAltitude;
+      final delta = altitude - previousAltitude;
       if (delta.abs() < threshold) {
         continue;
       }
@@ -1696,8 +1696,8 @@ class SessionRepositoryImpl implements SessionRepository {
     Map<String, dynamic> raw, {
     required String ownerUserId,
   }) {
-    final String id = raw['id'] as String;
-    final DateTime startedAt =
+    final id = raw['id'] as String;
+    final startedAt =
         _parseRemoteDateTime(raw['started_at']) ?? DateTime.now().toUtc();
 
     return LocalRideSession(
@@ -1723,7 +1723,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   String? _remoteSessionResortId(Map<String, dynamic> raw) {
-    final Map<String, dynamic>? resortSummary =
+    final resortSummary =
         raw['resort'] as Map<String, dynamic>?;
     return resortSummary?['id'] as String? ?? raw['resort_id'] as String?;
   }
@@ -1753,7 +1753,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   double _remoteDouble(Object? value) {
-    final double? parsed = _remoteNullableDouble(value);
+    final parsed = _remoteNullableDouble(value);
     if (parsed == null) {
       throw StateError('Expected remote numeric value, got $value');
     }
@@ -1784,11 +1784,11 @@ class SessionRepositoryImpl implements SessionRepository {
     if (value is bool) {
       return value;
     }
-    final int? integerValue = _remoteNullableInt(value);
+    final integerValue = _remoteNullableInt(value);
     if (integerValue != null) {
       return integerValue == 1;
     }
-    final String normalized = value.toString().trim().toLowerCase();
+    final normalized = value.toString().trim().toLowerCase();
     if (normalized == 'true') {
       return true;
     }

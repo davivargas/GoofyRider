@@ -17,7 +17,7 @@ class WeatherCacheDao {
     String resortId,
     Map<String, dynamic> payload,
   ) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customStatement(
       '''
       INSERT INTO cached_weather (resort_id, payload_json, fetched_at)
@@ -40,7 +40,7 @@ class WeatherCacheDao {
   // ---------------------------------------------------------------------------
 
   Future<Map<String, dynamic>?> readCachedWeather(String resortId) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       'SELECT * FROM cached_weather WHERE resort_id = ?',
       variables: <Variable>[Variable<String>(resortId)],
     ).get();
@@ -49,15 +49,15 @@ class WeatherCacheDao {
       return null;
     }
 
-    final QueryRow row = rows.first;
-    final Map<String, dynamic> payload =
+    final row = rows.first;
+    final payload =
         jsonDecode(row.data['payload_json'] as String) as Map<String, dynamic>;
     payload['cached_fetched_at'] = row.data['fetched_at'];
     return payload;
   }
 
   Future<List<Map<String, dynamic>>> readCachedWeatherMetadata() async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT resort_id, payload_json, fetched_at
       FROM cached_weather
@@ -66,8 +66,8 @@ class WeatherCacheDao {
     ).get();
 
     return rows.map((QueryRow row) {
-      final String payloadJson = row.data['payload_json'] as String;
-      final Map<String, dynamic> payload =
+      final payloadJson = row.data['payload_json'] as String;
+      final payload =
           jsonDecode(payloadJson) as Map<String, dynamic>;
       return <String, dynamic>{
         'resort_id': row.data['resort_id'],

@@ -23,14 +23,14 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
-    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final AsyncValue<List<ResortSummary>> favorites =
+    final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final favorites =
         ref.watch(favoriteResortsProvider);
-    final AsyncValue<List<LocalRideSession>> history =
+    final history =
         ref.watch(historyProvider);
-    final AsyncValue<int> unsyncedCount =
+    final unsyncedCount =
         ref.watch(unsyncedSessionCountProvider);
-    final bool showDebugDiagnostics =
+    final showDebugDiagnostics =
         kDebugMode && AppConstants.isDebugDiagnostics;
 
     return Scaffold(
@@ -119,7 +119,7 @@ class HomeScreen extends ConsumerWidget {
                   );
                 }
 
-                final List<LocalRideSession> latest = sessions.take(3).toList();
+                final latest = sessions.take(3).toList();
                 return Column(
                   children: latest.map((LocalRideSession session) {
                     return Card(
@@ -181,7 +181,7 @@ class HomeScreen extends ConsumerWidget {
                     itemCount: resorts.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 10),
                     itemBuilder: (BuildContext context, int index) {
-                      final ResortSummary resort = resorts[index];
+                      final resort = resorts[index];
                       return _FavoriteResortCard(resort: resort);
                     },
                   ),
@@ -202,11 +202,11 @@ class _FavoriteResortCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<ResortWeather?> weather =
+    final weather =
         ref.watch(resortWeatherProvider(resort.id));
 
-    final String conditions = _resolveConditionsText(weather, resort);
-    final String temp = _resolveTemperatureText(weather, resort);
+    final conditions = _resolveConditionsText(weather, resort);
+    final temp = _resolveTemperatureText(weather, resort);
 
     return GestureDetector(
       onTap: () => context.go(
@@ -254,12 +254,12 @@ String _resolveConditionsText(
   AsyncValue<ResortWeather?> weather,
   ResortSummary resort,
 ) {
-  final String? liveText = weather.valueOrNull?.conditionsText;
+  final liveText = weather.valueOrNull?.conditionsText;
   if (liveText != null && liveText.trim().isNotEmpty) {
     return liveText;
   }
 
-  final String? cachedText = resort.cachedWeatherText;
+  final cachedText = resort.cachedWeatherText;
   if (cachedText != null && cachedText.trim().isNotEmpty) {
     return cachedText;
   }
@@ -271,12 +271,12 @@ String _resolveTemperatureText(
   AsyncValue<ResortWeather?> weather,
   ResortSummary resort,
 ) {
-  final double? liveTemp = weather.valueOrNull?.tempC;
+  final liveTemp = weather.valueOrNull?.tempC;
   if (liveTemp != null) {
     return liveTemp.toStringAsFixed(1);
   }
 
-  final double? cachedTemp = resort.cachedWeatherTempC;
+  final cachedTemp = resort.cachedWeatherTempC;
   if (cachedTemp != null) {
     return cachedTemp.toStringAsFixed(1);
   }

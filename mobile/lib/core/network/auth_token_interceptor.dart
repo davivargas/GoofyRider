@@ -44,7 +44,7 @@ class AuthTokenInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final String? token = await _accessTokenGetter();
+    final token = await _accessTokenGetter();
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
@@ -56,10 +56,10 @@ class AuthTokenInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    final RequestOptions original = err.requestOptions;
-    final int? statusCode = err.response?.statusCode;
-    final bool isRefreshPath = original.path.endsWith('/auth/refresh');
-    final bool preserveAuthOnFailure =
+    final original = err.requestOptions;
+    final statusCode = err.response?.statusCode;
+    final isRefreshPath = original.path.endsWith('/auth/refresh');
+    final preserveAuthOnFailure =
         original.extra[preserveAuthOnFailureExtraKey] == true;
 
     if (statusCode != 401 || isRefreshPath) {
@@ -72,14 +72,14 @@ class AuthTokenInterceptor extends Interceptor {
       return;
     }
 
-    final bool alreadyRetried = original.extra['retry_after_refresh'] == true;
+    final alreadyRetried = original.extra['retry_after_refresh'] == true;
     if (alreadyRetried) {
       await _resetAuthIfNeeded(preserveAuthOnFailure);
       handler.next(err);
       return;
     }
 
-    final String? refreshToken = await _refreshTokenGetter();
+    final refreshToken = await _refreshTokenGetter();
     if (refreshToken == null || refreshToken.isEmpty) {
       await _resetAuthIfNeeded(preserveAuthOnFailure);
       handler.next(err);
@@ -88,7 +88,7 @@ class AuthTokenInterceptor extends Interceptor {
 
     try {
       _refreshInFlight ??= _refreshCallback(refreshToken);
-      final String? newAccessToken = await _refreshInFlight;
+      final newAccessToken = await _refreshInFlight;
       _refreshInFlight = null;
 
       if (newAccessToken == null || newAccessToken.isEmpty) {
@@ -97,7 +97,7 @@ class AuthTokenInterceptor extends Interceptor {
         return;
       }
 
-      final RequestOptions cloned = original.copyWith(
+      final cloned = original.copyWith(
         headers: <String, dynamic>{
           ...original.headers,
           'Authorization': 'Bearer $newAccessToken',
@@ -108,7 +108,7 @@ class AuthTokenInterceptor extends Interceptor {
         },
       );
 
-      final Response<dynamic> response = await _dio.fetch(cloned);
+      final response = await _dio.fetch(cloned);
       handler.resolve(response);
     } catch (_) {
       _refreshInFlight = null;

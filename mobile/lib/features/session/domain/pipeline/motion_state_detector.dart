@@ -29,8 +29,8 @@ class MotionStateDetector {
   }
 
   void seedFromPersistedPoints({required List<LocalSessionPoint> points}) {
-    for (final LocalSessionPoint point in points) {
-      final MotionState? pointMotionState = point.motionState == null
+    for (final point in points) {
+      final pointMotionState = point.motionState == null
           ? null
           : parseMotionState(point.motionState!);
       if (pointMotionState != null && isStableMotionState(pointMotionState)) {
@@ -39,7 +39,7 @@ class MotionStateDetector {
     }
 
     if (points.isNotEmpty) {
-      final LocalSessionPoint last = points.last;
+      final last = points.last;
       if (last.motionState != null) {
         _motionState = parseMotionState(last.motionState!);
       }
@@ -52,7 +52,7 @@ class MotionStateDetector {
     required LocationSample sample,
     required QualityDecision quality,
   }) {
-    final DateTime sampleTime = sample.timestamp.toUtc();
+    final sampleTime = sample.timestamp.toUtc();
     while (_headingWindow.isNotEmpty &&
         sampleTime.difference(_headingWindow.first.time).inSeconds >
             SessionConstants.liftPersistenceSeconds) {
@@ -61,7 +61,7 @@ class MotionStateDetector {
 
     if (quality.qualityClass != TrackingQualityClass.reject &&
         _isHeadingReliable(sample)) {
-      final double headingRad =
+      final headingRad =
           (_normalizeHeading(sample.headingDeg!) * math.pi) / 180;
       _headingWindow.add(
         HeadingWindowSample(
@@ -81,7 +81,7 @@ class MotionStateDetector {
 
     double sumSin = 0;
     double sumCos = 0;
-    for (final HeadingWindowSample sample in _headingWindow) {
+    for (final sample in _headingWindow) {
       sumSin += math.sin(sample.headingRad);
       sumCos += math.cos(sample.headingRad);
     }
@@ -99,7 +99,7 @@ class MotionStateDetector {
     required double deltaSeconds,
     required int stableFixSamples,
   }) {
-    final MotionState candidate = candidateMotionState(
+    final candidate = candidateMotionState(
       quality: quality,
       speedMps: speedMps,
       verticalDeltaM: verticalDeltaM,
@@ -118,7 +118,7 @@ class MotionStateDetector {
     }
     _pendingMotionSeconds += math.max(0, deltaSeconds);
 
-    final int requiredSeconds = _requiredPersistenceSeconds(candidate);
+    final requiredSeconds = _requiredPersistenceSeconds(candidate);
     if (_pendingMotionSeconds >= requiredSeconds) {
       _motionState = candidate;
       if (isStableMotionState(candidate)) {
@@ -149,7 +149,7 @@ class MotionStateDetector {
       return MotionState.stoppedIdle;
     }
 
-    final bool inLiftSpeedBand =
+    final inLiftSpeedBand =
         speedMps >= SessionConstants.liftMinSpeedThresholdMetersPerSecond &&
             speedMps <= SessionConstants.liftMaxSpeedThresholdMetersPerSecond;
     if (inLiftSpeedBand &&
@@ -237,11 +237,11 @@ class MotionStateDetector {
   }
 
   bool _isHeadingReliable(LocationSample sample) {
-    final double? heading = sample.headingDeg;
+    final heading = sample.headingDeg;
     if (heading == null || !heading.isFinite) {
       return false;
     }
-    final double? bearingAccuracyDeg = sample.bearingAccuracyDeg;
+    final bearingAccuracyDeg = sample.bearingAccuracyDeg;
     if (bearingAccuracyDeg != null &&
         bearingAccuracyDeg >
             SessionConstants.headingAccuracyStrongThresholdDeg) {
@@ -251,7 +251,7 @@ class MotionStateDetector {
   }
 
   double _normalizeHeading(double headingDeg) {
-    final double normalized = headingDeg % 360;
+    final normalized = headingDeg % 360;
     if (normalized < 0) {
       return normalized + 360;
     }

@@ -27,23 +27,23 @@ class ResortRepositoryImpl implements ResortRepository {
     String? region,
   }) async {
     try {
-      final Map<String, dynamic> payload = await _api.listResorts(
+      final payload = await _api.listResorts(
         query: query,
         region: region,
       );
 
-      final Set<String> favoriteIds = await _favoriteIdsBestEffort();
+      final favoriteIds = await _favoriteIdsBestEffort();
 
-      final List<dynamic> items = payload['items'] as List<dynamic>;
-      final List<ResortSummary> resorts = items.map((dynamic raw) {
-        final Map<String, dynamic> resortJson = raw as Map<String, dynamic>;
+      final items = payload['items'] as List<dynamic>;
+      final resorts = items.map((dynamic raw) {
+        final resortJson = raw as Map<String, dynamic>;
         return ResortSummary.fromJson(
           resortJson,
           isFavorite: favoriteIds.contains(resortJson['id']),
         );
       }).toList(growable: false);
 
-      for (final ResortSummary resort in resorts) {
+      for (final resort in resorts) {
         await _cacheResortPayload(resort.id, resort.toJson());
       }
 
@@ -54,16 +54,16 @@ class ResortRepositoryImpl implements ResortRepository {
         isStale: false,
       );
     } on DioException {
-      final List<Map<String, dynamic>> cached =
+      final cached =
           await _localDatabase.readCachedResorts(
         ownerUserId: _currentUserIdOrNull,
       );
-      final List<ResortSummary> resorts = cached
+      final resorts = cached
           .map((Map<String, dynamic> raw) => _fromCached(raw, isStale: true))
           .where((ResortSummary resort) {
-        final bool queryMatch = query.trim().isEmpty ||
+        final queryMatch = query.trim().isEmpty ||
             resort.name.toLowerCase().contains(query.trim().toLowerCase());
-        final bool regionMatch = region == null ||
+        final regionMatch = region == null ||
             region.trim().isEmpty ||
             resort.region.toLowerCase() == region.trim().toLowerCase();
         return queryMatch && regionMatch;
@@ -81,15 +81,15 @@ class ResortRepositoryImpl implements ResortRepository {
   @override
   Future<ResortSummary> getResortDetail(String resortId) async {
     try {
-      final Map<String, dynamic> payload = await _api.getResortDetail(resortId);
-      final bool isFavorite = await _isFavoriteBestEffort(resortId);
+      final payload = await _api.getResortDetail(resortId);
+      final isFavorite = await _isFavoriteBestEffort(resortId);
 
-      final ResortSummary resort =
+      final resort =
           ResortSummary.fromJson(payload, isFavorite: isFavorite);
       await _cacheResortPayload(resort.id, resort.toJson());
       return (await _withCachedWeather(<ResortSummary>[resort])).first;
     } on DioException catch (exception) {
-      final Map<String, dynamic>? cached =
+      final cached =
           await _localDatabase.readCachedResort(
         resortId,
         ownerUserId: _currentUserIdOrNull,
@@ -109,7 +109,7 @@ class ResortRepositoryImpl implements ResortRepository {
       } else {
         await _api.addFavorite(resort.id);
       }
-      final ResortSummary updated =
+      final updated =
           resort.copyWith(isFavorite: !resort.isFavorite);
       await _cacheResortPayload(updated.id, updated.toJson());
       return updated;
@@ -120,29 +120,29 @@ class ResortRepositoryImpl implements ResortRepository {
 
   @override
   Future<List<ResortSummary>> listFavoriteResorts() async {
-    final String? ownerUserId = _currentUserIdOrNull;
+    final ownerUserId = _currentUserIdOrNull;
     if (ownerUserId == null) {
       return const <ResortSummary>[];
     }
 
     try {
-      final List<Map<String, dynamic>> payload =
+      final payload =
           await _api.listFavoriteResorts();
-      final List<ResortSummary> resorts = payload
+      final resorts = payload
           .map((Map<String, dynamic> json) =>
               ResortSummary.fromJson(json, isFavorite: true))
           .toList(growable: false);
-      final Set<String> favoriteIds =
+      final favoriteIds =
           resorts.map((ResortSummary resort) => resort.id).toSet();
 
-      for (final ResortSummary resort in resorts) {
+      for (final resort in resorts) {
         await _cacheResortPayload(resort.id, resort.toJson());
       }
       await _syncCachedFavorites(favoriteIds, ownerUserId: ownerUserId);
 
       return await _withCachedWeather(resorts);
     } on DioException {
-      final List<Map<String, dynamic>> cached =
+      final cached =
           await _localDatabase.readCachedResorts(
         ownerUserId: ownerUserId,
       );
@@ -157,23 +157,23 @@ class ResortRepositoryImpl implements ResortRepository {
     Set<String> favoriteIds, {
     required String ownerUserId,
   }) async {
-    final List<Map<String, dynamic>> cached =
+    final cached =
         await _localDatabase.readCachedResorts(
       ownerUserId: ownerUserId,
     );
-    for (final Map<String, dynamic> raw in cached) {
-      final String? id = raw['id'] as String?;
+    for (final raw in cached) {
+      final id = raw['id'] as String?;
       if (id == null || id.isEmpty) {
         continue;
       }
 
-      final bool shouldBeFavorite = favoriteIds.contains(id);
-      final bool isFavorite = raw['is_favorite'] as bool? ?? false;
+      final shouldBeFavorite = favoriteIds.contains(id);
+      final isFavorite = raw['is_favorite'] as bool? ?? false;
       if (isFavorite == shouldBeFavorite) {
         continue;
       }
 
-      final Map<String, dynamic> updated = Map<String, dynamic>.from(raw)
+      final updated = Map<String, dynamic>.from(raw)
         ..remove('cached_fetched_at')
         ..['is_favorite'] = shouldBeFavorite;
       await _localDatabase.upsertCachedResort(
@@ -189,7 +189,7 @@ class ResortRepositoryImpl implements ResortRepository {
       return <String>{};
     }
     try {
-      final List<ResortSummary> favorites = await listFavoriteResorts();
+      final favorites = await listFavoriteResorts();
       return favorites.map((ResortSummary resort) => resort.id).toSet();
     } catch (_) {
       return <String>{};
@@ -201,7 +201,7 @@ class ResortRepositoryImpl implements ResortRepository {
       return false;
     }
     try {
-      final List<ResortSummary> favorites = await listFavoriteResorts();
+      final favorites = await listFavoriteResorts();
       return favorites.any((ResortSummary resort) => resort.id == resortId);
     } catch (_) {
       return false;
@@ -210,19 +210,19 @@ class ResortRepositoryImpl implements ResortRepository {
 
   Future<List<ResortSummary>> _withCachedWeather(
       List<ResortSummary> resorts) async {
-    final DateTime now = DateTime.now().toUtc();
-    final List<ResortSummary> enriched = <ResortSummary>[];
+    final now = DateTime.now().toUtc();
+    final enriched = <ResortSummary>[];
 
-    for (final ResortSummary resort in resorts) {
-      final Map<String, dynamic>? weatherRaw =
+    for (final resort in resorts) {
+      final weatherRaw =
           await _localDatabase.readCachedWeather(resort.id);
       if (weatherRaw == null) {
         enriched.add(resort);
         continue;
       }
 
-      final bool stale = isCachedWeatherStale(weatherRaw, now: now);
-      final ResortWeather weather = ResortWeather.fromJson(
+      final stale = isCachedWeatherStale(weatherRaw, now: now);
+      final weather = ResortWeather.fromJson(
         weatherRaw,
         fromCache: true,
         stale: stale,
@@ -274,7 +274,7 @@ class ResortRepositoryImpl implements ResortRepository {
   }
 
   String? get _currentUserIdOrNull {
-    final String? currentUserId = _currentUserIdGetter();
+    final currentUserId = _currentUserIdGetter();
     if (currentUserId == null || currentUserId.isEmpty) {
       return null;
     }

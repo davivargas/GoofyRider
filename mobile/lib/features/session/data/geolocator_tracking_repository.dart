@@ -20,23 +20,23 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationPermissionState> checkPermissions() async {
-    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return LocationPermissionState.serviceDisabled;
     }
 
-    final LocationPermission permission = await Geolocator.checkPermission();
+    final permission = await Geolocator.checkPermission();
     return _toPermissionState(permission);
   }
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
-    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return LocationPermissionState.serviceDisabled;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.whileInUse) {
       permission = await Geolocator.requestPermission();
@@ -65,11 +65,11 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
 
   @override
   Future<String?> checkRecordingReadiness() async {
-    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return 'Location services are turned off. Turn on GPS to record your session.';
     }
-    final LocationPermission permission = await Geolocator.checkPermission();
+    final permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.whileInUse) {
       return 'Location is set to "Allow only while using the app". Choose "Allow all the time" so recording works in the background.';
     }
@@ -82,13 +82,13 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationSample?> getCurrentLocationSample() async {
-    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return null;
     }
 
-    final LocationPermission permission = await Geolocator.checkPermission();
-    final LocationPermissionState permissionState =
+    final permission = await Geolocator.checkPermission();
+    final permissionState =
         _toPermissionState(permission);
     if (permissionState != LocationPermissionState.granted &&
         permissionState != LocationPermissionState.grantedForegroundOnly) {
@@ -96,7 +96,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
     }
 
     try {
-      final Position position = await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.best,
           timeLimit: Duration(seconds: 8),
@@ -134,7 +134,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   }
 
   Future<void> _startOrRestartPositionStream() async {
-    final DateTime streamStartedAtUtc = _nowUtc();
+    final streamStartedAtUtc = _nowUtc();
     await _positionSubscription?.cancel();
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: _locationSettingsForMode(_trackingMode),
@@ -163,16 +163,16 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
     required Position position,
     required DateTime streamStartedAtUtc,
   }) {
-    final DateTime sampleTimeUtc = position.timestamp.toUtc();
+    final sampleTimeUtc = position.timestamp.toUtc();
     if (!sampleTimeUtc.isBefore(streamStartedAtUtc)) {
       return false;
     }
-    final Duration age = streamStartedAtUtc.difference(sampleTimeUtc);
+    final age = streamStartedAtUtc.difference(sampleTimeUtc);
     return age.inSeconds >= SessionConstants.staleSampleThresholdSeconds;
   }
 
   LocationSettings _locationSettingsForMode(TrackingMode mode) {
-    final TrackingModeProfile profile = TrackingModeProfiles.forMode(mode);
+    final profile = TrackingModeProfiles.forMode(mode);
     return _androidSettings(
       accuracy: _mapAccuracy(mode, profile.priority),
       distanceFilter: profile.minDistanceM.round(),

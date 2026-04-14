@@ -4,6 +4,7 @@ linter:
   rules:
     always_declare_return_types: true
     avoid_print: true
+    omit_local_variable_types: true
     prefer_final_locals: true
     prefer_const_constructors: true
     sort_constructors_first: true

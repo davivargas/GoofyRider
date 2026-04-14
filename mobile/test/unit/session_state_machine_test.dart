@@ -3,12 +3,12 @@ import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_state_machine.dart';
 
 void main() {
-  const SessionStateMachine machine = SessionStateMachine();
+  const machine = SessionStateMachine();
 
   test('allows recording -> paused -> recording', () {
-    final LocalSessionState paused =
+    final paused =
         machine.transition(LocalSessionState.recording, LocalSessionState.paused);
-    final LocalSessionState resumed =
+    final resumed =
         machine.transition(paused, LocalSessionState.recording);
 
     expect(paused, LocalSessionState.paused);
@@ -16,7 +16,7 @@ void main() {
   });
 
   test('allows syncFailed -> syncing', () {
-    final LocalSessionState syncing =
+    final syncing =
         machine.transition(LocalSessionState.syncFailed, LocalSessionState.syncing);
     expect(syncing, LocalSessionState.syncing);
   });

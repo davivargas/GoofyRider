@@ -22,7 +22,7 @@ class SessionDao {
     required String ownerUserId,
     String? resortId,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     return _db.customInsert(
       '''
       INSERT INTO local_ride_sessions (
@@ -51,9 +51,9 @@ class SessionDao {
     String? remoteId,
     String? lastSyncError,
   }) async {
-    final LocalSessionState canonicalState =
+    final canonicalState =
         _canonicalPersistedState(newState);
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''
       UPDATE local_ride_sessions
@@ -76,7 +76,7 @@ class SessionDao {
   /// Moves a session into `syncing` and bumps the attempt counter in one write
   /// so retry bookkeeping cannot drift between separate updates.
   Future<void> beginSyncAttempt(int localId) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''
       UPDATE local_ride_sessions
@@ -98,7 +98,7 @@ class SessionDao {
     int localId, {
     String? error,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''
       UPDATE local_ride_sessions
@@ -121,7 +121,7 @@ class SessionDao {
     int localId, {
     required String error,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''
       UPDATE local_ride_sessions
@@ -145,7 +145,7 @@ class SessionDao {
     required SessionStats stats,
     String? resortId,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''
       UPDATE local_ride_sessions
@@ -182,7 +182,7 @@ class SessionDao {
     required String ownerUserId,
     required String resortId,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''
       UPDATE local_ride_sessions
@@ -208,7 +208,7 @@ class SessionDao {
     int localId, {
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_ride_sessions
@@ -228,7 +228,7 @@ class SessionDao {
   }
 
   Future<LocalRideSession?> getSessionByLocalId(int localId) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_ride_sessions
@@ -250,7 +250,7 @@ class SessionDao {
     required String ownerUserId,
     required String remoteId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_ride_sessions
@@ -274,7 +274,7 @@ class SessionDao {
   Future<LocalRideSession?> getInProgressSession({
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_ride_sessions
@@ -297,7 +297,7 @@ class SessionDao {
   Future<List<LocalRideSession>> listSessions({
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_ride_sessions
@@ -315,7 +315,7 @@ class SessionDao {
   Future<List<LocalRideSession>> listPendingSyncSessions({
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_ride_sessions
@@ -334,7 +334,7 @@ class SessionDao {
   Future<int> unsyncedCount({
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT COUNT(*) AS count_value
       FROM local_ride_sessions
@@ -363,9 +363,9 @@ class SessionDao {
     bool clearDeletedRemoteSessionTombstone = true,
     bool? clearPendingRemoteSessionDelete,
   }) async {
-    final bool shouldClearPendingRemoteDelete =
+    final shouldClearPendingRemoteDelete =
         clearPendingRemoteSessionDelete ?? clearDeletedRemoteSessionTombstone;
-    int deletedSessions = 0;
+    var deletedSessions = 0;
     await _db.transaction(() async {
       await _db.customStatement(
         '''
@@ -395,7 +395,7 @@ class SessionDao {
         ],
       );
 
-      final String? trimmedRemoteId = remoteId?.trim();
+      final trimmedRemoteId = remoteId?.trim();
       if (trimmedRemoteId != null && trimmedRemoteId.isNotEmpty) {
         await _db.customStatement(
           '''

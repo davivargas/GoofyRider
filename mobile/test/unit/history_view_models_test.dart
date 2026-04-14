@@ -33,7 +33,7 @@ void main() {
   });
 
   test('buildSessionHistorySections groups sessions by season', () {
-    final List<SessionHistorySeasonSection> sections = buildSessionHistorySections(
+    final sections = buildSessionHistorySections(
       <SessionHistoryEntryViewModel>[
         SessionHistoryEntryViewModel(
           session: _buildSession(DateTime(2025, 9, 1)),

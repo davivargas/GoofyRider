@@ -11,7 +11,7 @@ class AuthApi {
     required String email,
     required String password,
   }) async {
-    final Response<dynamic> response = await _dio.post<dynamic>(
+    final response = await _dio.post<dynamic>(
       '/auth/login',
       data: <String, dynamic>{
         'email': email,
@@ -26,7 +26,7 @@ class AuthApi {
     required String password,
     required String displayName,
   }) async {
-    final Response<dynamic> response = await _dio.post<dynamic>(
+    final response = await _dio.post<dynamic>(
       '/auth/register',
       data: <String, dynamic>{
         'email': email,
@@ -38,7 +38,7 @@ class AuthApi {
   }
 
   Future<TokenPairResponse> refresh({required String refreshToken}) async {
-    final Response<dynamic> response = await _dio.post<dynamic>(
+    final response = await _dio.post<dynamic>(
       '/auth/refresh',
       data: <String, dynamic>{'refresh_token': refreshToken},
       options: Options(
@@ -51,7 +51,7 @@ class AuthApi {
   }
 
   Future<UserProfileResponse> me({required String accessToken}) async {
-    final Response<dynamic> response = await _dio.get<dynamic>(
+    final response = await _dio.get<dynamic>(
       '/auth/me',
       options: Options(
         headers: <String, String>{

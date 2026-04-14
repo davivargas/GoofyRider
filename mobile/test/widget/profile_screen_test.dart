@@ -57,7 +57,7 @@ class _FakeAuthController extends AuthController {
 void main() {
   testWidgets('export debug info shows success snackbar when export completes',
       (WidgetTester tester) async {
-    const AuthState authState = AuthState(
+    const authState = AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',
@@ -138,7 +138,7 @@ void main() {
 
   testWidgets('export debug info shows failure snackbar on export error',
       (WidgetTester tester) async {
-    const AuthState authState = AuthState(
+    const authState = AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',

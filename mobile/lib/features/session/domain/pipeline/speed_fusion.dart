@@ -39,7 +39,7 @@ class SpeedFusion {
     required SessionStats stats,
   }) {
     _maxSpeedMps = stats.maxSpeedMps;
-    for (final LocalSessionPoint point in points) {
+    for (final point in points) {
       if (!point.acceptedForAnalytics) {
         continue;
       }
@@ -68,14 +68,14 @@ class SpeedFusion {
       return 0;
     }
 
-    final Duration deltaDuration =
+    final deltaDuration =
         sample.timestamp.toUtc().difference(_lastAcceptedTimestampUtc!);
     if (deltaDuration.inMilliseconds <= 0) {
       return 0;
     }
 
-    final double deltaSeconds = deltaDuration.inMilliseconds / 1000;
-    final double distanceM = haversineDistanceMeters(
+    final deltaSeconds = deltaDuration.inMilliseconds / 1000;
+    final distanceM = haversineDistanceMeters(
       lastFilteredLatitude,
       lastFilteredLongitude,
       filteredLatitude,
@@ -92,10 +92,10 @@ class SpeedFusion {
     required double derivedSpeedMps,
     required MotionState motionState,
   }) {
-    final double derivedSpeed = derivedSpeedMps
+    final derivedSpeed = derivedSpeedMps
         .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
         .toDouble();
-    final double? platformSpeedRaw = sample.speedMps;
+    final platformSpeedRaw = sample.speedMps;
     if (platformSpeedRaw == null) {
       return FusedSpeedResult(
         speedMps: derivedSpeed,
@@ -112,10 +112,10 @@ class SpeedFusion {
       );
     }
 
-    final double platformSpeed = platformSpeedRaw
+    final platformSpeed = platformSpeedRaw
         .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
         .toDouble();
-    final PlatformSpeedTrust trust = _assessPlatformSpeedTrust(
+    final trust = _assessPlatformSpeedTrust(
       sample: sample,
       geometrySpeedMps: derivedSpeed,
       motionState: motionState,
@@ -130,7 +130,7 @@ class SpeedFusion {
       );
     }
 
-    final double fusedSpeed = switch (trust) {
+    final fusedSpeed = switch (trust) {
       PlatformSpeedTrust.strong => platformSpeed,
       PlatformSpeedTrust.moderate => _blendSpeeds(
           platformSpeed: platformSpeed,
@@ -172,7 +172,7 @@ class SpeedFusion {
     required QualityDecision quality,
     required bool speedTrustedForMax,
   }) {
-    final bool highConfidence =
+    final highConfidence =
         quality.qualityClass == TrackingQualityClass.accept &&
             quality.score >= 0.65 &&
             speedTrustedForMax;
@@ -193,12 +193,12 @@ class SpeedFusion {
       return;
     }
 
-    final List<double> speeds = _speedWindow
+    final speeds = _speedWindow
         .map((sample) => sample.speedMps)
         .toList(growable: false)
       ..sort();
-    final int middle = speeds.length ~/ 2;
-    final double median = speeds.length.isOdd
+    final middle = speeds.length ~/ 2;
+    final median = speeds.length.isOdd
         ? speeds[middle]
         : (speeds[middle - 1] + speeds[middle]) / 2;
     if (median > _maxSpeedMps) {
@@ -213,10 +213,10 @@ class SpeedFusion {
     required bool acceptedForAnalytics,
     required MotionState motionState,
   }) {
-    final double clampedRawSpeed = rawSpeedMps
+    final clampedRawSpeed = rawSpeedMps
         .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
         .toDouble();
-    final double? previousSmoothed = _smoothedLiveSpeedMps;
+    final previousSmoothed = _smoothedLiveSpeedMps;
 
     if (!acceptedForAnalytics) {
       if (_lastLiveSpeedTimestampUtc == null ||
@@ -232,27 +232,27 @@ class SpeedFusion {
       return clampedRawSpeed;
     }
 
-    final DateTime? previousTime = _lastLiveSpeedTimestampUtc;
+    final previousTime = _lastLiveSpeedTimestampUtc;
     if (previousTime == null) {
       _smoothedLiveSpeedMps = clampedRawSpeed;
       _lastLiveSpeedTimestampUtc = sampleTimeUtc;
       return clampedRawSpeed;
     }
 
-    final int deltaMs = sampleTimeUtc.difference(previousTime).inMilliseconds;
+    final deltaMs = sampleTimeUtc.difference(previousTime).inMilliseconds;
     if (deltaMs <= 0) {
       return previousSmoothed;
     }
 
     _lastLiveSpeedTimestampUtc = sampleTimeUtc;
-    final double deltaSeconds = deltaMs / 1000;
-    final bool decelerating = clampedRawSpeed < previousSmoothed;
-    final double tauSeconds = _liveSpeedTauSeconds(
+    final deltaSeconds = deltaMs / 1000;
+    final decelerating = clampedRawSpeed < previousSmoothed;
+    final tauSeconds = _liveSpeedTauSeconds(
       motionState: motionState,
       decelerating: decelerating,
     );
-    final double alpha = 1 - math.exp(-deltaSeconds / tauSeconds);
-    final double smoothed =
+    final alpha = 1 - math.exp(-deltaSeconds / tauSeconds);
+    final smoothed =
         previousSmoothed + (alpha * (clampedRawSpeed - previousSmoothed));
     _smoothedLiveSpeedMps = smoothed
         .clamp(0, SessionConstants.speedHardCapMetersPerSecond)
@@ -274,11 +274,11 @@ class SpeedFusion {
 
   /// Compute delta seconds from the last accepted timestamp.
   double deltaSecondsFromLastAccepted(LocationSample sample) {
-    final DateTime? previousTimestamp = _lastAcceptedTimestampUtc;
+    final previousTimestamp = _lastAcceptedTimestampUtc;
     if (previousTimestamp == null) {
       return 0;
     }
-    final int milliseconds =
+    final milliseconds =
         sample.timestamp.toUtc().difference(previousTimestamp).inMilliseconds;
     if (milliseconds <= 0) {
       return 0;
@@ -295,7 +295,7 @@ class SpeedFusion {
     required double geometrySpeedMps,
     required MotionState motionState,
   }) {
-    final double? platformSpeed = sample.speedMps;
+    final platformSpeed = sample.speedMps;
     if (platformSpeed == null ||
         !platformSpeed.isFinite ||
         platformSpeed < 0 ||
@@ -303,31 +303,31 @@ class SpeedFusion {
       return PlatformSpeedTrust.untrusted;
     }
 
-    final double horizontalAccuracyM = sample.accuracyM ??
+    final horizontalAccuracyM = sample.accuracyM ??
         SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
-    final bool horizontalStrong = horizontalAccuracyM <=
+    final horizontalStrong = horizontalAccuracyM <=
         _horizontalAcceptThresholdForSample(sample, motionState);
-    final bool horizontalUsable = horizontalAccuracyM <=
+    final horizontalUsable = horizontalAccuracyM <=
         SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
     if (!horizontalUsable) {
       return PlatformSpeedTrust.untrusted;
     }
 
-    final double? speedAccuracyMps = sample.speedAccuracyMps;
-    final bool speedStrong = speedAccuracyMps != null &&
+    final speedAccuracyMps = sample.speedAccuracyMps;
+    final speedStrong = speedAccuracyMps != null &&
         speedAccuracyMps <= SessionConstants.platformSpeedStrongAccuracyMps;
-    final bool speedUsable = speedAccuracyMps == null ||
+    final speedUsable = speedAccuracyMps == null ||
         speedAccuracyMps <= SessionConstants.platformSpeedUsableAccuracyMps;
     if (!speedUsable) {
       return PlatformSpeedTrust.untrusted;
     }
 
-    final bool geometryReliable = _isGeometrySpeedReliableForCoherence(
+    final geometryReliable = _isGeometrySpeedReliableForCoherence(
       sample: sample,
       geometrySpeedMps: geometrySpeedMps,
       motionState: motionState,
     );
-    final double mismatchMps = (platformSpeed - geometrySpeedMps).abs();
+    final mismatchMps = (platformSpeed - geometrySpeedMps).abs();
     final double moderateMismatchToleranceMps = math.max(
       SessionConstants.platformSpeedModerateMismatchFloorMps,
       platformSpeed * SessionConstants.platformSpeedModerateMismatchRatio,
@@ -363,13 +363,13 @@ class SpeedFusion {
       return false;
     }
 
-    final double deltaSeconds = deltaSecondsFromLastAccepted(sample);
+    final deltaSeconds = deltaSecondsFromLastAccepted(sample);
     if (deltaSeconds < SessionConstants.geometryCoherenceMinDeltaSeconds ||
         deltaSeconds > SessionConstants.maxDeltaSeconds) {
       return false;
     }
 
-    final double? horizontalAccuracyM = sample.accuracyM;
+    final horizontalAccuracyM = sample.accuracyM;
     if (horizontalAccuracyM == null) {
       return false;
     }

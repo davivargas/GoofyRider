@@ -19,12 +19,12 @@ void main() {
     );
   });
 
-  const StoredTokens tokenPair = StoredTokens(
+  const tokenPair = StoredTokens(
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
   );
 
-  const UserProfile userProfile = UserProfile(
+  const userProfile = UserProfile(
     id: 'user-1',
     email: 'test@example.com',
     displayName: 'Tester',
@@ -37,13 +37,13 @@ void main() {
       );
 
   test('login persists the token pair before hydrating the profile', () async {
-    final MockAuthApi authApi = MockAuthApi();
-    final MockTokenStorage tokenStorage = MockTokenStorage();
-    final AuthRepositoryImpl repository = AuthRepositoryImpl(
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
     );
-    final TokenPairResponse loginPayload = TokenPairResponse(
+    final loginPayload = TokenPairResponse(
       accessToken: tokenPair.accessToken,
       refreshToken: tokenPair.refreshToken,
     );
@@ -56,7 +56,7 @@ void main() {
     when(() => authApi.me(accessToken: tokenPair.accessToken))
         .thenAnswer((_) async => userProfileResponse());
 
-    final AuthSession session = await repository.login(
+    final session = await repository.login(
       email: 'Test@Example.com',
       password: 'password123',
     );
@@ -74,17 +74,17 @@ void main() {
   });
 
   test('register keeps the token pair when profile hydration fails', () async {
-    final MockAuthApi authApi = MockAuthApi();
-    final MockTokenStorage tokenStorage = MockTokenStorage();
-    final AuthRepositoryImpl repository = AuthRepositoryImpl(
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
     );
-    final TokenPairResponse registerPayload = TokenPairResponse(
+    final registerPayload = TokenPairResponse(
       accessToken: tokenPair.accessToken,
       refreshToken: tokenPair.refreshToken,
     );
-    final DioException meFailure = DioException(
+    final meFailure = DioException(
       requestOptions: RequestOptions(path: '/auth/me'),
       type: DioExceptionType.connectionError,
       message: 'Network unavailable',
@@ -117,20 +117,20 @@ void main() {
 
   test('restoreSession keeps cached identity when the backend is offline',
       () async {
-    final MockAuthApi authApi = MockAuthApi();
-    final MockTokenStorage tokenStorage = MockTokenStorage();
-    final AuthRepositoryImpl repository = AuthRepositoryImpl(
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
     );
-    final StoredTokens cachedTokens = const StoredTokens(
+    final cachedTokens = const StoredTokens(
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       userId: 'user-1',
       email: 'test@example.com',
       displayName: 'Tester',
     );
-    final DioException offlineError = DioException(
+    final offlineError = DioException(
       requestOptions: RequestOptions(path: '/auth/me'),
       type: DioExceptionType.connectionError,
       message: 'Network unavailable',
@@ -140,7 +140,7 @@ void main() {
     when(() => authApi.me(accessToken: cachedTokens.accessToken))
         .thenThrow(offlineError);
 
-    final AuthSession? session = await repository.restoreSession();
+    final session = await repository.restoreSession();
 
     expect(session, isNotNull);
     expect(session!.user.id, cachedTokens.userId);
@@ -154,21 +154,21 @@ void main() {
 
   test('restoreSession clears tokens when refreshed identity lookup fails online',
       () async {
-    final MockAuthApi authApi = MockAuthApi();
-    final MockTokenStorage tokenStorage = MockTokenStorage();
-    final AuthRepositoryImpl repository = AuthRepositoryImpl(
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
     );
-    final StoredTokens cachedTokens = const StoredTokens(
+    final cachedTokens = const StoredTokens(
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       userId: 'user-1',
       email: 'test@example.com',
       displayName: 'Tester',
     );
-    final RequestOptions meRequest = RequestOptions(path: '/auth/me');
-    final DioException expiredAccess = DioException(
+    final meRequest = RequestOptions(path: '/auth/me');
+    final expiredAccess = DioException(
       requestOptions: meRequest,
       response: Response<dynamic>(
         requestOptions: meRequest,
@@ -176,11 +176,11 @@ void main() {
       ),
       type: DioExceptionType.badResponse,
     );
-    final TokenPairResponse refreshPayload = TokenPairResponse(
+    final refreshPayload = TokenPairResponse(
       accessToken: 'new-access-token',
       refreshToken: 'refresh-token',
     );
-    final DioException rejectedMe = DioException(
+    final rejectedMe = DioException(
       requestOptions: meRequest,
       response: Response<dynamic>(
         requestOptions: meRequest,
@@ -200,7 +200,7 @@ void main() {
         .thenAnswer((_) async {});
     when(() => tokenStorage.clear()).thenAnswer((_) async {});
 
-    final AuthSession? session = await repository.restoreSession();
+    final session = await repository.restoreSession();
 
     expect(session, isNull);
     verify(() => tokenStorage.clear()).called(1);

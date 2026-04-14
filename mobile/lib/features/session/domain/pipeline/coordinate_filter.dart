@@ -19,7 +19,7 @@ class CoordinateFilter {
   }
 
   void seedFromPersistedPoints({required List<LocalSessionPoint> points}) {
-    for (final LocalSessionPoint point in points) {
+    for (final point in points) {
       if (!point.acceptedForAnalytics) {
         continue;
       }
@@ -37,12 +37,12 @@ class CoordinateFilter {
     required double longitude,
     required double? accuracyM,
   }) {
-    final double filteredLat = _nextFilteredCoordinate(
+    final filteredLat = _nextFilteredCoordinate(
       previous: _lastFilteredLatitude,
       current: latitude,
       accuracyM: accuracyM,
     );
-    final double filteredLng = _nextFilteredCoordinate(
+    final filteredLng = _nextFilteredCoordinate(
       previous: _lastFilteredLongitude,
       current: longitude,
       accuracyM: accuracyM,
@@ -80,7 +80,7 @@ class CoordinateFilter {
       return current;
     }
 
-    final double alpha = _horizontalAlpha(accuracyM);
+    final alpha = _horizontalAlpha(accuracyM);
     return previous + (alpha * (current - previous));
   }
 
@@ -89,7 +89,7 @@ class CoordinateFilter {
       return 0.35;
     }
 
-    final double ratio = accuracyM /
+    final ratio = accuracyM /
         SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
     return (0.8 - (ratio * 0.5)).clamp(0.2, 0.75).toDouble();
   }

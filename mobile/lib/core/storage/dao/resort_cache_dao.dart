@@ -18,13 +18,13 @@ class ResortCacheDao {
     Map<String, dynamic> payload, {
     String? ownerUserId,
   }) async {
-    final String effectiveOwnerUserId =
+    final effectiveOwnerUserId =
         _normalizeCachedResortOwnerUserId(ownerUserId);
-    final Map<String, dynamic> payloadToPersist = _prepareCachedResortPayload(
+    final payloadToPersist = _prepareCachedResortPayload(
       payload,
       allowFavoriteState: effectiveOwnerUserId.isNotEmpty,
     );
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customStatement(
       '''
       INSERT INTO cached_resorts (
@@ -56,7 +56,7 @@ class ResortCacheDao {
     String resortId, {
     String? ownerUserId,
   }) async {
-    final String effectiveOwnerUserId =
+    final effectiveOwnerUserId =
         _normalizeCachedResortOwnerUserId(ownerUserId);
     final List<QueryRow> rows;
     if (effectiveOwnerUserId.isEmpty) {
@@ -100,7 +100,7 @@ class ResortCacheDao {
   Future<List<Map<String, dynamic>>> readCachedResorts({
     String? ownerUserId,
   }) async {
-    final String effectiveOwnerUserId =
+    final effectiveOwnerUserId =
         _normalizeCachedResortOwnerUserId(ownerUserId);
     final List<QueryRow> rows;
     if (effectiveOwnerUserId.isEmpty) {
@@ -130,18 +130,18 @@ class ResortCacheDao {
       ],
     ).get();
 
-    final Map<String, Map<String, dynamic>> deduped =
+    final deduped =
         <String, Map<String, dynamic>>{};
-    for (final QueryRow row in rows) {
-      final String resortId = row.data['resort_id'] as String;
+    for (final row in rows) {
+      final resortId = row.data['resort_id'] as String;
       deduped.putIfAbsent(resortId, () => _mapCachedResortRow(row));
     }
 
-    final List<Map<String, dynamic>> cached =
+    final cached =
         deduped.values.toList(growable: false);
     cached.sort((Map<String, dynamic> a, Map<String, dynamic> b) {
-      final String aFetchedAt = a['cached_fetched_at'] as String? ?? '';
-      final String bFetchedAt = b['cached_fetched_at'] as String? ?? '';
+      final aFetchedAt = a['cached_fetched_at'] as String? ?? '';
+      final bFetchedAt = b['cached_fetched_at'] as String? ?? '';
       return bFetchedAt.compareTo(aFetchedAt);
     });
     return cached;
@@ -152,7 +152,7 @@ class ResortCacheDao {
   // ---------------------------------------------------------------------------
 
   String _normalizeCachedResortOwnerUserId(String? ownerUserId) {
-    final String? trimmed = ownerUserId?.trim();
+    final trimmed = ownerUserId?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return '';
     }
@@ -163,7 +163,7 @@ class ResortCacheDao {
     Map<String, dynamic> payload, {
     required bool allowFavoriteState,
   }) {
-    final Map<String, dynamic> sanitized = Map<String, dynamic>.from(payload)
+    final sanitized = Map<String, dynamic>.from(payload)
       ..remove('cached_fetched_at');
     if (!allowFavoriteState) {
       sanitized['is_favorite'] = false;
@@ -172,9 +172,9 @@ class ResortCacheDao {
   }
 
   Map<String, dynamic> _mapCachedResortRow(QueryRow row) {
-    final String ownerUserId =
+    final ownerUserId =
         (row.data['owner_user_id'] as String? ?? '').trim();
-    final Map<String, dynamic> payload =
+    final payload =
         jsonDecode(row.data['payload_json'] as String) as Map<String, dynamic>;
     if (ownerUserId.isEmpty) {
       payload['is_favorite'] = false;

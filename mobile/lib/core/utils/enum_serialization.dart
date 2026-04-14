@@ -1,6 +1,6 @@
 /// Converts an enum value to its wire-format string using a lookup map.
 String enumToWire<T extends Enum>(T value, Map<T, String> wireMap) {
-  final String? wire = wireMap[value];
+  final wire = wireMap[value];
   if (wire == null) {
     throw ArgumentError('No wire value for $value');
   }

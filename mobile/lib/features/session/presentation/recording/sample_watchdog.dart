@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import '../../domain/location_tracking_repository.dart';
-import '../../domain/session_models.dart';
 import '../../domain/tracking_mode_profiles.dart';
 import '../recording_view_state.dart';
 
@@ -64,23 +63,23 @@ class SampleWatchdog {
       return;
     }
 
-    final LocalRideSession? session = _readState().session;
+    final session = _readState().session;
     if (session == null) {
       return;
     }
 
-    final DateTime? referenceTime =
+    final referenceTime =
         lastSampleReceivedAtUtc ?? currentStreamStartedAtUtc;
     if (referenceTime == null) {
       return;
     }
 
-    final Duration staleThreshold =
+    final staleThreshold =
         TrackingModeProfiles.forMode(activeTrackingMode)
             .sampleWatchdogThreshold;
-    final DateTime deadline = referenceTime.add(staleThreshold);
-    final DateTime now = DateTime.now().toUtc();
-    final Duration delay = deadline.difference(now);
+    final deadline = referenceTime.add(staleThreshold);
+    final now = DateTime.now().toUtc();
+    final delay = deadline.difference(now);
 
     if (delay <= Duration.zero) {
       unawaited(_onWatchdogCheck?.call());
@@ -131,23 +130,23 @@ class SampleWatchdog {
       return const WatchdogAction.none();
     }
 
-    final LocalRideSession? session = _readState().session;
+    final session = _readState().session;
     if (session == null) {
       return const WatchdogAction.none();
     }
 
-    final DateTime? referenceTime =
+    final referenceTime =
         lastSampleReceivedAtUtc ?? currentStreamStartedAtUtc;
     if (referenceTime == null) {
       return const WatchdogAction.none();
     }
 
-    final DateTime now = DateTime.now().toUtc();
-    final Duration staleFor = now.difference(referenceTime);
-    final Duration staleThreshold =
+    final now = DateTime.now().toUtc();
+    final staleFor = now.difference(referenceTime);
+    final staleThreshold =
         TrackingModeProfiles.forMode(activeTrackingMode)
             .sampleWatchdogThreshold;
-    final bool hasReceivedSample = lastSampleReceivedAtUtc != null;
+    final hasReceivedSample = lastSampleReceivedAtUtc != null;
 
     if (staleFor < staleThreshold) {
       return WatchdogAction.reschedule(
@@ -161,14 +160,14 @@ class SampleWatchdog {
       return const WatchdogAction.none();
     }
 
-    final DateTime? lastRestart = lastWatchdogRestartAtUtc;
-    final bool restartCoolingDown = lastRestart != null &&
+    final lastRestart = lastWatchdogRestartAtUtc;
+    final restartCoolingDown = lastRestart != null &&
         now.difference(lastRestart) < _sampleWatchdogRestartCooldown;
 
     consecutiveWatchdogStaleEvents += 1;
 
     // --- Attempt recovery mode ---
-    final bool shouldAttemptRecoveryMode =
+    final shouldAttemptRecoveryMode =
         activeTrackingMode != TrackingMode.lowConfidenceRecovery &&
             consecutiveWatchdogStaleEvents == 1;
 
@@ -196,7 +195,7 @@ class SampleWatchdog {
           ),
         );
 
-        final Duration recoveryThreshold = TrackingModeProfiles.forMode(
+        final recoveryThreshold = TrackingModeProfiles.forMode(
           TrackingMode.lowConfidenceRecovery,
         ).sampleWatchdogThreshold;
 
@@ -212,7 +211,7 @@ class SampleWatchdog {
     }
 
     // --- Wait for initial sample grace ---
-    final bool shouldKeepWaitingForInitialSample = !hasReceivedSample &&
+    final shouldKeepWaitingForInitialSample = !hasReceivedSample &&
         staleFor < staleThreshold + _sampleWatchdogInitialSampleRestartGrace;
     if (shouldKeepWaitingForInitialSample) {
       _writeState(
@@ -237,7 +236,7 @@ class SampleWatchdog {
     }
 
     // --- Delay restart after recovery mode ---
-    final bool shouldDelayRestartAfterRecovery =
+    final shouldDelayRestartAfterRecovery =
         activeTrackingMode == TrackingMode.lowConfidenceRecovery &&
             consecutiveWatchdogStaleEvents <
                 _recoveryModeStaleEventsBeforeRestart;
@@ -251,7 +250,7 @@ class SampleWatchdog {
 
     // --- Restart cooldown ---
     if (restartCoolingDown) {
-      final int cooldownRemainingSeconds =
+      final cooldownRemainingSeconds =
           _sampleWatchdogRestartCooldown.inSeconds -
               now.difference(lastRestart).inSeconds;
       return WatchdogAction.restartCooldown(

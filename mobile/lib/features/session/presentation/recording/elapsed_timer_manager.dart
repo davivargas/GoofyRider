@@ -35,9 +35,9 @@ class ElapsedTimerManager {
 
   /// Pauses the elapsed clock, accumulating the active segment duration.
   void pauseElapsedClock() {
-    final DateTime? activeStartedAt = activeSegmentStartedAtUtc;
+    final activeStartedAt = activeSegmentStartedAtUtc;
     if (activeStartedAt != null) {
-      final Duration delta =
+      final delta =
           DateTime.now().toUtc().difference(activeStartedAt);
       if (!delta.isNegative) {
         elapsedBeforeActive += delta;
@@ -50,12 +50,12 @@ class ElapsedTimerManager {
 
   /// Returns the total elapsed duration including the current active segment.
   Duration currentElapsedDuration() {
-    final DateTime? activeStartedAt = activeSegmentStartedAtUtc;
+    final activeStartedAt = activeSegmentStartedAtUtc;
     if (activeStartedAt == null) {
       return elapsedBeforeActive;
     }
 
-    final Duration activeDelta =
+    final activeDelta =
         DateTime.now().toUtc().difference(activeStartedAt);
     if (activeDelta.isNegative) {
       return elapsedBeforeActive;
@@ -88,7 +88,7 @@ class ElapsedTimerManager {
   }
 
   void _pushElapsedTick() {
-    final Duration elapsed = currentElapsedDuration();
+    final elapsed = currentElapsedDuration();
     if (elapsed.inSeconds == _readState().tracking.elapsed.inSeconds) {
       return;
     }

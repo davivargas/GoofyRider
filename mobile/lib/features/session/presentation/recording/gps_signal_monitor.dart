@@ -34,7 +34,7 @@ class GpsSignalMonitor {
 
     _gpsSignalRefreshInFlight = true;
     try {
-      final LocationPermissionState permission =
+      final permission =
           await _locationTrackingRepository.checkPermissions();
       final GpsSignalState signal;
       if (permission == LocationPermissionState.serviceDisabled) {
@@ -49,7 +49,7 @@ class GpsSignalMonitor {
           description: 'No permission',
         );
       } else {
-        final LocationSample? sample =
+        final sample =
             await _locationTrackingRepository.getCurrentLocationSample();
         signal = gpsSignalFromSample(
           sample,
@@ -100,7 +100,7 @@ class GpsSignalMonitor {
       );
     }
 
-    final Duration age =
+    final age =
         DateTime.now().toUtc().difference(sample.timestamp.toUtc());
     if (age > _gpsSignalStaleThreshold) {
       return const GpsSignalState(
@@ -109,7 +109,7 @@ class GpsSignalMonitor {
       );
     }
 
-    final double? accuracyM = sample.accuracyM;
+    final accuracyM = sample.accuracyM;
     if (accuracyM == null) {
       return const GpsSignalState(
         bars: 1,

@@ -28,11 +28,11 @@ class HistoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<SessionHistorySeasonSection>> history =
+    final history =
         ref.watch(historySectionsProvider);
-    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
-    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final AsyncValue<int> unsyncedCount =
+    final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final unsyncedCount =
         ref.watch(unsyncedSessionCountProvider);
 
     return Scaffold(
@@ -63,7 +63,7 @@ class HistoryScreen extends ConsumerWidget {
           },
         ),
         data: (List<SessionHistorySeasonSection> sections) {
-          final int totalSessions = sections.fold<int>(
+          final totalSessions = sections.fold<int>(
             0,
             (int count, SessionHistorySeasonSection section) =>
                 count + section.items.length,
@@ -127,10 +127,10 @@ class _HistorySessionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final LocalRideSession session = item.session;
-    final bool canSync =
+    final session = item.session;
+    final canSync =
         session.localId > 0 && session.isUnsynced && !session.isInProgress;
-    final String syncLabel = switch (session.state) {
+    final syncLabel = switch (session.state) {
       LocalSessionState.synced => 'Synced',
       LocalSessionState.syncPending => 'Pending',
       LocalSessionState.syncFailed => 'Failed',

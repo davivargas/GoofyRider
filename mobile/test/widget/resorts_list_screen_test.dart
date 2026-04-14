@@ -67,7 +67,7 @@ void main() {
 
   testWidgets('resorts screen shows list in success state',
       (WidgetTester tester) async {
-    const ResortSummary resort = ResortSummary(
+    const resort = ResortSummary(
       id: 'r-1',
       name: 'Whistler',
       country: 'Canada',
@@ -110,7 +110,7 @@ void main() {
 
   testWidgets('resorts screen uses amber favorite icon for favorite resort',
       (WidgetTester tester) async {
-    const ResortSummary resort = ResortSummary(
+    const resort = ResortSummary(
       id: 'r-1',
       name: 'Whistler',
       country: 'Canada',
@@ -148,7 +148,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final Icon favoriteIcon = tester.widget<Icon>(find.byIcon(Icons.favorite));
+    final favoriteIcon = tester.widget<Icon>(find.byIcon(Icons.favorite));
     expect(favoriteIcon.color, Colors.amber);
   });
 }

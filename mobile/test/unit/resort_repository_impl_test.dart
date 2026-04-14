@@ -103,7 +103,7 @@ void main() {
       },
     );
 
-    final ResortListResult result =
+    final result =
         await repository.searchResorts(query: 'whistler');
 
     expect(result.usedCache, isFalse);
@@ -127,7 +127,7 @@ void main() {
       (_) async => _resortJson(id: 'whistler', name: 'Whistler Blackcomb'),
     );
 
-    final ResortSummary result = await repository.getResortDetail('whistler');
+    final result = await repository.getResortDetail('whistler');
 
     expect(result.id, 'whistler');
     expect(result.name, 'Whistler Blackcomb');
@@ -143,7 +143,7 @@ void main() {
   });
 
   test('toggleFavoriteResort writes updated favorite state to cache', () async {
-    const ResortSummary resort = ResortSummary(
+    const resort = ResortSummary(
       id: 'whistler',
       name: 'Whistler Blackcomb',
       country: 'Canada',
@@ -160,11 +160,11 @@ void main() {
     );
     when(() => api.removeFavorite('whistler')).thenAnswer((_) async {});
 
-    final ResortSummary updated =
+    final updated =
         await baseRepository.toggleFavoriteResort(resort);
 
     expect(updated.isFavorite, isFalse);
-    final List<dynamic> captured = verify(
+    final captured = verify(
       () => localDatabase.upsertCachedResort(
         captureAny(),
         captureAny(),
@@ -202,14 +202,14 @@ void main() {
       ],
     );
 
-    final List<ResortSummary> favorites =
+    final favorites =
         await baseRepository.listFavoriteResorts();
 
     expect(favorites, hasLength(1));
     expect(favorites.single.id, 'whistler');
     expect(favorites.single.isFavorite, isTrue);
 
-    final List<dynamic> captured = verify(
+    final captured = verify(
       () => localDatabase.upsertCachedResort(
         captureAny(),
         captureAny(),

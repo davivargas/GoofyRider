@@ -40,8 +40,8 @@ void main() {
   test(
       'aggregates descent, lift, and idle time and keeps ride avg descent-only',
       () {
-    final DateTime start = DateTime.utc(2026, 2, 1, 9, 0, 0);
-    final List<LocalSessionPoint> points = <LocalSessionPoint>[
+    final start = DateTime.utc(2026, 2, 1, 9, 0, 0);
+    final points = <LocalSessionPoint>[
       _point(
         start: start,
         offsetSeconds: 0,
@@ -100,10 +100,10 @@ void main() {
       ),
     ];
 
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final analysis = analyzeSessionTimeline(
       points: points,
     );
-    final SessionStats stats = SessionStats(
+    final stats = SessionStats(
       durationS: 30,
       distanceM: analysis.distanceM,
       maxSpeedMps: 16,
@@ -129,8 +129,8 @@ void main() {
   });
 
   test('stored recovery samples do not fragment a descent timeline', () {
-    final DateTime start = DateTime.utc(2026, 2, 2, 9, 0, 0);
-    final List<LocalSessionPoint> points = <LocalSessionPoint>[
+    final start = DateTime.utc(2026, 2, 2, 9, 0, 0);
+    final points = <LocalSessionPoint>[
       _point(
         start: start,
         offsetSeconds: 0,
@@ -172,7 +172,7 @@ void main() {
       ),
     ];
 
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final analysis = analyzeSessionTimeline(
       points: points,
     );
 
@@ -182,11 +182,11 @@ void main() {
   });
 
   test('replay fallback keeps a brief slowdown inside a descent segment', () {
-    final DateTime start = DateTime.utc(2026, 2, 3, 9, 0, 0);
-    double latitude = 49.3;
-    final List<LocalSessionPoint> points = <LocalSessionPoint>[];
+    final start = DateTime.utc(2026, 2, 3, 9, 0, 0);
+    var latitude = 49.3;
+    final points = <LocalSessionPoint>[];
 
-    for (int index = 0; index < 3; index++) {
+    for (var index = 0; index < 3; index++) {
       points.add(
         _point(
           start: start,
@@ -202,7 +202,7 @@ void main() {
       latitude += 0.000001;
     }
 
-    for (int index = 3; index < 12; index++) {
+    for (var index = 3; index < 12; index++) {
       points.add(
         _point(
           start: start,
@@ -218,7 +218,7 @@ void main() {
       latitude += 0.00012;
     }
 
-    for (int index = 12; index < 17; index++) {
+    for (var index = 12; index < 17; index++) {
       points.add(
         _point(
           start: start,
@@ -234,10 +234,10 @@ void main() {
       latitude += 0.000025;
     }
 
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final analysis = analyzeSessionTimeline(
       points: points,
     );
-    final int firstDescentIndex = analysis.segments.indexWhere(
+    final firstDescentIndex = analysis.segments.indexWhere(
       (SessionTimelineSegment segment) =>
           segment.type == SessionActivityType.descent,
     );
@@ -254,8 +254,8 @@ void main() {
   });
 
   test('replay fallback recognizes lift segments for old sessions', () {
-    final DateTime start = DateTime.utc(2026, 2, 4, 9, 0, 0);
-    final List<LocalSessionPoint> points = <LocalSessionPoint>[
+    final start = DateTime.utc(2026, 2, 4, 9, 0, 0);
+    final points = <LocalSessionPoint>[
       for (int index = 0; index < 4; index++)
         _point(
           start: start,
@@ -280,7 +280,7 @@ void main() {
         ),
     ];
 
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final analysis = analyzeSessionTimeline(
       points: points,
     );
 

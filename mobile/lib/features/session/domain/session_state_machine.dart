@@ -33,8 +33,8 @@ class SessionStateMachine {
     LocalSessionState current,
     LocalSessionState target,
   ) {
-    final LocalSessionState canonicalCurrent = _canonical(current);
-    final LocalSessionState canonicalTarget = _canonical(target);
+    final canonicalCurrent = _canonical(current);
+    final canonicalTarget = _canonical(target);
     if (!_allowed(canonicalCurrent).contains(canonicalTarget)) {
       throw StateError(
           'Invalid transition: ${canonicalCurrent.wireValue} -> ${canonicalTarget.wireValue}');

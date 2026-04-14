@@ -23,7 +23,7 @@ class TrackingDiagnosticsDao {
     String? message,
     Map<String, dynamic>? details,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customInsert(
       '''
       INSERT INTO local_session_tracking_diagnostics (
@@ -72,9 +72,9 @@ class TrackingDiagnosticsDao {
     int localSessionId, {
     int limit = 120,
   }) async {
-    final int safeLimit =
+    final safeLimit =
         limit.clamp(1, _maxTrackingDiagnosticsPerSession).toInt();
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_session_tracking_diagnostics
@@ -97,7 +97,7 @@ class TrackingDiagnosticsDao {
 
   TrackingDiagnosticEvent _mapTrackingDiagnostic(QueryRow row) {
     final Map<String, Object?> data = row.data;
-    final String? detailsJson = data['details_json'] as String?;
+    final detailsJson = data['details_json'] as String?;
     return TrackingDiagnosticEvent(
       id: h.asInt(data['id']),
       localSessionId: h.asInt(data['local_session_id']),

@@ -164,7 +164,7 @@ class FakeSessionRepository implements SessionRepository {
   Future<int> unsyncedCount() async => 0;
 
   LocalRideSession _buildSession(LocalSessionState state) {
-    final DateTime now = DateTime.utc(2026, 1, 1);
+    final now = DateTime.utc(2026, 1, 1);
     return LocalRideSession(
       localId: 1,
       ownerUserId: 'user-1',
@@ -212,7 +212,7 @@ class _FakeRecordingController extends RecordingController {
 void main() {
   testWidgets('record screen shows gps badge and resets after finish',
       (WidgetTester tester) async {
-    final FakeSessionRepository fakeRepository = FakeSessionRepository();
+    final fakeRepository = FakeSessionRepository();
 
     await tester.pumpWidget(
       ProviderScope(
@@ -242,10 +242,10 @@ void main() {
 
   testWidgets('record screen renders vertical and altitude cards in meters',
       (WidgetTester tester) async {
-    final FakeSessionRepository fakeRepository = FakeSessionRepository();
-    final FakeLocationRepository fakeLocationRepository =
+    final fakeRepository = FakeSessionRepository();
+    final fakeLocationRepository =
         FakeLocationRepository();
-    final _FakeRecordingController fakeController = _FakeRecordingController(
+    final fakeController = _FakeRecordingController(
       sessionRepository: fakeRepository,
       locationTrackingRepository: fakeLocationRepository,
       initialState: RecordingViewState.initial().copyWith(
@@ -300,10 +300,10 @@ void main() {
 
   testWidgets('record screen renders vertical and altitude cards in feet',
       (WidgetTester tester) async {
-    final FakeSessionRepository fakeRepository = FakeSessionRepository();
-    final FakeLocationRepository fakeLocationRepository =
+    final fakeRepository = FakeSessionRepository();
+    final fakeLocationRepository =
         FakeLocationRepository();
-    final _FakeRecordingController fakeController = _FakeRecordingController(
+    final fakeController = _FakeRecordingController(
       sessionRepository: fakeRepository,
       locationTrackingRepository: fakeLocationRepository,
       initialState: RecordingViewState.initial().copyWith(

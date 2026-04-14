@@ -10,7 +10,6 @@ import '../data/native_android_tracking_repository.dart';
 import '../data/session_api.dart';
 import '../data/session_repository_impl.dart';
 import '../domain/location_tracking_repository.dart';
-import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import 'history_view_models.dart';
 import 'recording_controller.dart';
@@ -66,14 +65,14 @@ final historyProvider = FutureProvider.autoDispose(
 
 final historySectionsProvider =
     FutureProvider.autoDispose<List<SessionHistorySeasonSection>>((ref) async {
-  final List<LocalRideSession> sessions =
+  final sessions =
       await ref.watch(historyProvider.future);
-  final SessionRepository repository = ref.watch(sessionRepositoryProvider);
+  final repository = ref.watch(sessionRepositoryProvider);
 
-  final List<SessionHistoryEntryViewModel> items =
+  final items =
       <SessionHistoryEntryViewModel>[];
-  for (final LocalRideSession session in sessions) {
-    final String resortLabel = await repository.resolveSessionResortLabel(
+  for (final session in sessions) {
+    final resortLabel = await repository.resolveSessionResortLabel(
       session,
     );
     items.add(

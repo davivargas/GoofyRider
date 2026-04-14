@@ -37,7 +37,7 @@ class PermissionManager {
     required Future<void> Function(LocationPermissionState) onPermissionLoss,
     required Future<void> Function() refreshGpsSignal,
   }) async {
-    final LocationPermissionState permission =
+    final permission =
         await _locationTrackingRepository.checkPermissions();
     if (_readState().phase == RecordScreenPhase.recording &&
         permission != LocationPermissionState.granted) {
@@ -63,7 +63,7 @@ class PermissionManager {
     required Future<void> Function() refreshGpsSignal,
     required void Function(bool) setPhaseTransitionInFlight,
   }) async {
-    final RecordingViewState currentState = _readState();
+    final currentState = _readState();
     if (phaseTransitionInFlight ||
         currentState.phase == RecordScreenPhase.requestingPermissions ||
         currentState.phase == RecordScreenPhase.finishing) {
@@ -71,7 +71,7 @@ class PermissionManager {
     }
 
     setPhaseTransitionInFlight(true);
-    final RecordScreenPhase previousPhase = currentState.phase;
+    final previousPhase = currentState.phase;
     try {
       _writeState(
         _readState().copyWith(
@@ -80,7 +80,7 @@ class PermissionManager {
         ),
       );
 
-      final LocationPermissionState permission =
+      final permission =
           await _locationTrackingRepository.ensurePermissions();
 
       if (previousPhase == RecordScreenPhase.recording &&
@@ -115,7 +115,7 @@ class PermissionManager {
   }
 
   Future<void> openLocationPermissionSettings() async {
-    final bool opened = await _locationTrackingRepository.openAppSettings();
+    final opened = await _locationTrackingRepository.openAppSettings();
     if (!opened) {
       _writeState(
         _readState().copyWith(
@@ -128,7 +128,7 @@ class PermissionManager {
   }
 
   Future<void> openLocationServiceSettings() async {
-    final bool opened =
+    final opened =
         await _locationTrackingRepository.openLocationSettings();
     if (!opened) {
       _writeState(

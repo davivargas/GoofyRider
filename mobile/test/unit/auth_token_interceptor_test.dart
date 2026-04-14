@@ -9,8 +9,8 @@ class MockErrorInterceptorHandler extends Mock
 
 void main() {
   test('does not force logout for preserved session sync failures', () async {
-    bool authResetCalled = false;
-    final AuthTokenInterceptor interceptor = AuthTokenInterceptor(
+    var authResetCalled = false;
+    final interceptor = AuthTokenInterceptor(
       dio: Dio(),
       accessTokenGetter: () async => 'access-token',
       refreshTokenGetter: () async => 'refresh-token',
@@ -19,14 +19,14 @@ void main() {
         authResetCalled = true;
       },
     );
-    final MockErrorInterceptorHandler handler = MockErrorInterceptorHandler();
-    final RequestOptions requestOptions = RequestOptions(
+    final handler = MockErrorInterceptorHandler();
+    final requestOptions = RequestOptions(
       path: '/sessions/remote-1/points:batch',
       extra: <String, dynamic>{
         AuthTokenInterceptor.preserveAuthOnFailureExtraKey: true,
       },
     );
-    final DioException exception = DioException(
+    final exception = DioException(
       requestOptions: requestOptions,
       response: Response<dynamic>(
         requestOptions: requestOptions,

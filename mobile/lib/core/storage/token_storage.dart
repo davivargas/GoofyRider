@@ -51,16 +51,16 @@ class SecureTokenStorage implements TokenStorage {
     if (_cacheLoaded) {
       return _cached;
     }
-    final String? access = await _storage.read(key: _accessKey);
-    final String? refresh = await _storage.read(key: _refreshKey);
+    final access = await _storage.read(key: _accessKey);
+    final refresh = await _storage.read(key: _refreshKey);
     if (access == null || refresh == null) {
       _cached = null;
       _cacheLoaded = true;
       return null;
     }
-    final String? userId = await _storage.read(key: _userIdKey);
-    final String? email = await _storage.read(key: _emailKey);
-    final String? displayName = await _storage.read(key: _displayNameKey);
+    final userId = await _storage.read(key: _userIdKey);
+    final email = await _storage.read(key: _emailKey);
+    final displayName = await _storage.read(key: _displayNameKey);
     _cached = StoredTokens(
       accessToken: access,
       refreshToken: refresh,

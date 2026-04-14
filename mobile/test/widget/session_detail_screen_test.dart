@@ -120,7 +120,7 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 LocalRideSession _buildSession() {
-  final DateTime now = DateTime.utc(2026, 1, 1, 9, 0, 0);
+  final now = DateTime.utc(2026, 1, 1, 9, 0, 0);
   return LocalRideSession(
     localId: 1,
     ownerUserId: 'user-1',
@@ -150,8 +150,8 @@ LocalSessionPoint _point({
   required double longitude,
   required String motionState,
 }) {
-  final DateTime startedAt = DateTime.utc(2026, 1, 1, 9, 0, 0);
-  final DateTime recordedAt = startedAt.add(Duration(seconds: offsetS));
+  final startedAt = DateTime.utc(2026, 1, 1, 9, 0, 0);
+  final recordedAt = startedAt.add(Duration(seconds: offsetS));
   return LocalSessionPoint(
     id: id,
     localSessionId: 1,
@@ -178,8 +178,8 @@ LocalSessionPoint _point({
 }
 
 SessionDetail _buildSegmentedDetail() {
-  final LocalRideSession session = _buildSession();
-  final List<LocalSessionPoint> points = <LocalSessionPoint>[
+  final session = _buildSession();
+  final points = <LocalSessionPoint>[
     _point(
       id: 1,
       offsetS: 0,
@@ -224,7 +224,7 @@ SessionDetail _buildSegmentedDetail() {
     ),
   ];
 
-  const SessionStats stats = SessionStats(
+  const stats = SessionStats(
     durationS: 600,
     distanceM: 120,
     maxSpeedMps: 18,
@@ -239,7 +239,7 @@ SessionDetail _buildSegmentedDetail() {
     idleDistanceM: 20,
   );
 
-  final List<SessionTimelineSegment> timeline = <SessionTimelineSegment>[
+  final timeline = <SessionTimelineSegment>[
     SessionTimelineSegment(
       type: SessionActivityType.descent,
       startedAt: points[0].recordedAt,
@@ -283,7 +283,7 @@ SessionDetail _buildSegmentedDetail() {
 }
 
 SessionDetail _buildLegacyDetail() {
-  final LocalRideSession session = _buildSession();
+  final session = _buildSession();
   return SessionDetail(
     session: session,
     points: const <LocalSessionPoint>[],
@@ -302,7 +302,7 @@ SessionDetail _buildLegacyDetail() {
 }
 
 SessionDetail _buildUnsyncedDetail() {
-  final LocalRideSession session = LocalRideSession(
+  final session = LocalRideSession(
     localId: 1,
     ownerUserId: 'user-1',
     remoteId: null,
@@ -405,7 +405,7 @@ void main() {
 
   testWidgets('session detail screen exposes sync action for unsynced sessions',
       (WidgetTester tester) async {
-    final FakeSessionRepository repository =
+    final repository =
         FakeSessionRepository(_buildUnsyncedDetail());
 
     await tester.pumpWidget(
@@ -440,7 +440,7 @@ void main() {
   testWidgets(
       'session detail delete action confirms, deletes, and pops back to history',
       (WidgetTester tester) async {
-    final FakeSessionRepository repository =
+    final repository =
         FakeSessionRepository(_buildSegmentedDetail());
 
     await tester.pumpWidget(
@@ -480,7 +480,7 @@ void main() {
   testWidgets(
       'session detail delete shows queued reconciliation message when remote delete is deferred',
       (WidgetTester tester) async {
-    final FakeSessionRepository repository = FakeSessionRepository(
+    final repository = FakeSessionRepository(
       _buildSegmentedDetail(),
       deleteResult: const DeleteSessionResult(
         disposition: DeleteSessionDisposition.queuedRemoteDelete,
@@ -525,7 +525,7 @@ void main() {
   testWidgets(
       'session detail delete failure shows AppFailure message',
       (WidgetTester tester) async {
-    final FakeSessionRepository repository = FakeSessionRepository(
+    final repository = FakeSessionRepository(
       _buildSegmentedDetail(),
       deleteError: const NetworkFailure('Could not connect to backend.'),
     );

@@ -70,12 +70,12 @@ class DriftLocalDatabase extends GeneratedDatabase {
   // ---------------------------------------------------------------------------
 
   static Future<DriftLocalDatabase> open() async {
-    final Directory directory = await getApplicationDocumentsDirectory();
+    final directory = await getApplicationDocumentsDirectory();
     return openAtPath(path.join(directory.path, _dbFileName));
   }
 
   static Future<DriftLocalDatabase> openAtPath(String filePath) async {
-    final File file = File(filePath);
+    final file = File(filePath);
     await file.parent.create(recursive: true);
     return _openWithConnection(DatabaseConnection(NativeDatabase(file)));
   }
@@ -91,7 +91,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
   static Future<DriftLocalDatabase> _openWithConnection(
     DatabaseConnection connection,
   ) async {
-    final DriftLocalDatabase database = DriftLocalDatabase._(connection);
+    final database = DriftLocalDatabase._(connection);
     await database.initialize();
     return database;
   }
@@ -114,9 +114,9 @@ class DriftLocalDatabase extends GeneratedDatabase {
   // ---------------------------------------------------------------------------
 
   Future<void> initialize() async {
-    final List<QueryRow> versionRows =
+    final versionRows =
         await customSelect('PRAGMA user_version').get();
-    final int currentVersion = versionRows.isNotEmpty
+    final currentVersion = versionRows.isNotEmpty
         ? (versionRows.first.data.values.first as int? ?? 0)
         : 0;
     if (currentVersion >= schemaVersion) {
@@ -743,7 +743,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
   Future<void> _enforceRemoteSessionIdentityUniqueness() async {
     await transaction(() async {
-      final List<QueryRow> duplicateKeys = await customSelect(
+      final duplicateKeys = await customSelect(
         '''
         SELECT owner_user_id, remote_id
         FROM local_ride_sessions
@@ -754,10 +754,10 @@ class DriftLocalDatabase extends GeneratedDatabase {
         ''',
       ).get();
 
-      for (final QueryRow key in duplicateKeys) {
-        final String ownerUserId = key.data['owner_user_id'] as String;
-        final String remoteId = key.data['remote_id'] as String;
-        final List<QueryRow> duplicates = await customSelect(
+      for (final key in duplicateKeys) {
+        final ownerUserId = key.data['owner_user_id'] as String;
+        final remoteId = key.data['remote_id'] as String;
+        final duplicates = await customSelect(
           '''
           SELECT local_id
           FROM local_ride_sessions
@@ -774,9 +774,9 @@ class DriftLocalDatabase extends GeneratedDatabase {
           continue;
         }
 
-        final int keepLocalId = _asInt(duplicates.first.data['local_id']);
-        for (final QueryRow duplicate in duplicates.skip(1)) {
-          final int duplicateLocalId = _asInt(duplicate.data['local_id']);
+        final keepLocalId = _asInt(duplicates.first.data['local_id']);
+        for (final duplicate in duplicates.skip(1)) {
+          final duplicateLocalId = _asInt(duplicate.data['local_id']);
           await customStatement(
             '''
             UPDATE local_session_points
@@ -859,9 +859,9 @@ class DriftLocalDatabase extends GeneratedDatabase {
   }
 
   Future<void> _migrateCachedResortSchema() async {
-    final List<QueryRow> columns =
+    final columns =
         await customSelect('PRAGMA table_info(cached_resorts)').get();
-    final Set<String> columnNames = columns
+    final columnNames = columns
         .map((QueryRow row) => row.data['name']?.toString() ?? '')
         .where((String name) => name.isNotEmpty)
         .toSet();
@@ -869,7 +869,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       return;
     }
 
-    final List<QueryRow> legacyRows = await customSelect(
+    final legacyRows = await customSelect(
       '''
       SELECT resort_id, payload_json, fetched_at
       FROM cached_resorts
@@ -887,7 +887,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
       )
     ''');
 
-    for (final QueryRow row in legacyRows) {
+    for (final row in legacyRows) {
       await customStatement(
         '''
         INSERT INTO cached_resorts (
@@ -929,7 +929,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
   }
 
   Future<void> _migrateLegacyDeletedRemoteSessionTombstones() async {
-    final List<QueryRow> tableRows = await customSelect(
+    final tableRows = await customSelect(
       '''
       SELECT name
       FROM sqlite_master
@@ -941,19 +941,19 @@ class DriftLocalDatabase extends GeneratedDatabase {
       return;
     }
 
-    final List<QueryRow> legacyColumns =
+    final legacyColumns =
         await customSelect('PRAGMA table_info(deleted_remote_sessions)').get();
-    final Set<String> legacyColumnNames = legacyColumns
+    final legacyColumnNames = legacyColumns
         .map((QueryRow row) => row.data['name']?.toString() ?? '')
         .where((String name) => name.isNotEmpty)
         .toSet();
-    final bool hasDeletedAt = legacyColumnNames.contains('deleted_at');
-    final bool hasLastError = legacyColumnNames.contains('last_error');
-    final String requestedAtExpr =
+    final hasDeletedAt = legacyColumnNames.contains('deleted_at');
+    final hasLastError = legacyColumnNames.contains('last_error');
+    final requestedAtExpr =
         hasDeletedAt ? 'deleted_at' : "'1970-01-01T00:00:00.000Z'";
-    final String lastAttemptAtExpr = hasDeletedAt ? 'deleted_at' : 'NULL';
-    final String attemptCountExpr = hasDeletedAt ? '1' : '0';
-    final String lastErrorExpr = hasLastError
+    final lastAttemptAtExpr = hasDeletedAt ? 'deleted_at' : 'NULL';
+    final attemptCountExpr = hasDeletedAt ? '1' : '0';
+    final lastErrorExpr = hasLastError
         ? 'COALESCE(last_error, \'Migrated legacy pending delete record.\')'
         : '\'Migrated legacy pending delete record.\'';
 
@@ -982,10 +982,10 @@ class DriftLocalDatabase extends GeneratedDatabase {
   }
 
   Future<void> _addColumnIfMissing(String table, String columnDef) async {
-    final String columnName = columnDef.split(' ').first;
-    final List<QueryRow> rows =
+    final columnName = columnDef.split(' ').first;
+    final rows =
         await customSelect('PRAGMA table_info($table)').get();
-    final bool exists = rows.any(
+    final exists = rows.any(
       (QueryRow row) => row.data['name']?.toString() == columnName,
     );
     if (exists) {

@@ -20,34 +20,34 @@ class WeatherRepositoryImpl implements WeatherRepository {
   @override
   Future<ResortWeather?> getResortWeather(String resortId) async {
     try {
-      final Map<String, dynamic> payload =
+      final payload =
           await _api.getResortWeather(resortId);
       await _localDatabase.upsertCachedWeather(resortId, payload);
       return ResortWeather.fromJson(payload, fromCache: false, stale: false);
     } on DioException {
-      final Map<String, dynamic>? cached =
+      final cached =
           await _localDatabase.readCachedWeather(resortId);
       if (cached == null) {
         return null;
       }
-      final bool stale = isCachedWeatherStale(cached);
+      final stale = isCachedWeatherStale(cached);
       return ResortWeather.fromJson(cached, fromCache: true, stale: stale);
     }
   }
 
   @override
   Future<ResortWeather?> refreshResortWeatherIfStale(String resortId) async {
-    final Map<String, dynamic>? cached =
+    final cached =
         await _localDatabase.readCachedWeather(resortId);
     if (cached != null) {
-      final bool stale = isCachedWeatherStale(cached);
+      final stale = isCachedWeatherStale(cached);
       if (!stale) {
         return ResortWeather.fromJson(cached, fromCache: true, stale: false);
       }
     }
 
     try {
-      final Map<String, dynamic> payload =
+      final payload =
           await _api.getResortWeather(resortId);
       await _localDatabase.upsertCachedWeather(resortId, payload);
       return ResortWeather.fromJson(payload, fromCache: false, stale: false);

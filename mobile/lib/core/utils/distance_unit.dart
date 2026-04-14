@@ -35,7 +35,7 @@ extension DistanceUnitFormatting on DistanceUnit {
     double valueMeters, {
     int fractionDigits = 0,
   }) {
-    final double converted = convertFromMeters(valueMeters);
+    final converted = convertFromMeters(valueMeters);
     return '${converted.toStringAsFixed(fractionDigits)} $shortLabel';
   }
 }

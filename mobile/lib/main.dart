@@ -21,7 +21,7 @@ Future<void> runAppWith({
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    final DriftLocalDatabase database = await loader();
+    final database = await loader();
     final activeMapTileProviderConfig = AppConstants.activeMapTileProviderConfig;
     runApp(
       ProviderScope(
@@ -115,8 +115,8 @@ class _GoofyRiderAppState extends ConsumerState<GoofyRiderApp>
   @override
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authControllerProvider, (previous, next) {
-      final String? previousUserId = previous?.session?.user.id;
-      final String? nextUserId = next.session?.user.id;
+      final previousUserId = previous?.session?.user.id;
+      final nextUserId = next.session?.user.id;
       if (next.status == AuthStatus.authenticated &&
           nextUserId != null &&
           nextUserId != previousUserId) {

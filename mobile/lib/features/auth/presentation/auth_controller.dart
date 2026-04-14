@@ -12,7 +12,7 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> bootstrap() async {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
-      final AuthSession? session = await _repository.restoreSession();
+      final session = await _repository.restoreSession();
       if (session == null) {
         state = const AuthState(status: AuthStatus.unauthenticated);
       } else {
@@ -29,7 +29,7 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> login(String email, String password) async {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
-      final AuthSession session = await _repository.login(email: email, password: password);
+      final session = await _repository.login(email: email, password: password);
       state = AuthState(status: AuthStatus.authenticated, session: session);
     } on AppFailure catch (failure) {
       state = AuthState(
@@ -47,7 +47,7 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> register(String email, String password, String displayName) async {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
-      final AuthSession session = await _repository.register(
+      final session = await _repository.register(
         email: email,
         password: password,
         displayName: displayName,
@@ -80,13 +80,13 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<String?> refreshAccessToken(String refreshToken) async {
-    final String? refreshed = await _repository.refreshAccessToken(refreshToken);
+    final refreshed = await _repository.refreshAccessToken(refreshToken);
     if (refreshed == null) {
       state = const AuthState(status: AuthStatus.unauthenticated);
       return null;
     }
 
-    final AuthSession? existing = state.session;
+    final existing = state.session;
     if (existing != null) {
       state = AuthState(
         status: AuthStatus.authenticated,

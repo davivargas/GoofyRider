@@ -16,7 +16,7 @@ class PendingDeleteDao {
     required String ownerUserId,
     required String remoteId,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customStatement(
       '''
       INSERT INTO pending_remote_session_deletes (
@@ -53,8 +53,8 @@ class PendingDeleteDao {
     required String lastError,
     DateTime? nextAttemptAt,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
-    final DateTime effectiveNextAttemptAt = (nextAttemptAt ?? now).toUtc();
+    final now = DateTime.now().toUtc();
+    final effectiveNextAttemptAt = (nextAttemptAt ?? now).toUtc();
     await _db.customStatement(
       '''
       INSERT INTO pending_remote_session_deletes (
@@ -92,7 +92,7 @@ class PendingDeleteDao {
     required String remoteId,
     required String lastError,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customStatement(
       '''
       INSERT INTO pending_remote_session_deletes (
@@ -148,7 +148,7 @@ class PendingDeleteDao {
   Future<Set<String>> listPendingRemoteSessionDeleteIds({
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT remote_id
       FROM pending_remote_session_deletes
@@ -166,8 +166,8 @@ class PendingDeleteDao {
   Future<List<String>> listPendingRemoteDeleteIds({
     required String ownerUserId,
   }) async {
-    final String now = DateTime.now().toUtc().toIso8601String();
-    final List<QueryRow> rows = await _db.customSelect(
+    final now = DateTime.now().toUtc().toIso8601String();
+    final rows = await _db.customSelect(
       '''
       SELECT remote_id
       FROM pending_remote_session_deletes
@@ -194,8 +194,8 @@ class PendingDeleteDao {
       listRetryablePendingRemoteDeletes({
     required String ownerUserId,
   }) async {
-    final String now = DateTime.now().toUtc().toIso8601String();
-    final List<QueryRow> rows = await _db.customSelect(
+    final now = DateTime.now().toUtc().toIso8601String();
+    final rows = await _db.customSelect(
       '''
       SELECT owner_user_id, remote_id, attempt_count
       FROM pending_remote_session_deletes

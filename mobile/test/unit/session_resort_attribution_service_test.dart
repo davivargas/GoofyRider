@@ -27,12 +27,12 @@ void main() {
       },
     );
 
-    final LocalRideSession session = _buildSession(
+    final session = _buildSession(
       localId: 1,
       resortId: 'resort-1',
     );
 
-    final ResolvedSessionResort resolved = await service.resolve(session);
+    final resolved = await service.resolve(session);
 
     expect(resolved.label, 'Whistler Blackcomb');
     expect(resolved.resortId, 'resort-1');
@@ -52,7 +52,7 @@ void main() {
       },
     );
 
-    final int localId = await database.insertLocalSession(
+    final localId = await database.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
     );
@@ -71,9 +71,9 @@ void main() {
       ),
     );
 
-    final LocalRideSession session =
+    final session =
         (await database.getSessionById(localId, ownerUserId: 'user-1'))!;
-    final ResolvedSessionResort resolved = await service.resolve(session);
+    final resolved = await service.resolve(session);
 
     expect(resolved.label, 'Whistler Blackcomb');
     expect(resolved.resortId, 'resort-1');
@@ -93,7 +93,7 @@ void main() {
       },
     );
 
-    final int localId = await database.insertLocalSession(
+    final localId = await database.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
     );
@@ -112,9 +112,9 @@ void main() {
       ),
     );
 
-    final LocalRideSession session =
+    final session =
         (await database.getSessionById(localId, ownerUserId: 'user-1'))!;
-    final ResolvedSessionResort resolved = await service.resolve(session);
+    final resolved = await service.resolve(session);
 
     expect(resolved.label, unknownSessionResortLabel);
     expect(resolved.resortId, isNull);
@@ -125,7 +125,7 @@ LocalRideSession _buildSession({
   required int localId,
   String? resortId,
 }) {
-  final DateTime now = DateTime.utc(2026, 1, 1);
+  final now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: localId,
     ownerUserId: 'user-1',

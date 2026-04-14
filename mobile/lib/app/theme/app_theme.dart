@@ -17,7 +17,7 @@ class AppTheme {
   AppTheme._();
 
   static ThemeData dark() {
-    final ColorScheme scheme = ColorScheme.fromSeed(
+    final scheme = ColorScheme.fromSeed(
       seedColor: AppPalette.alpine,
       brightness: Brightness.dark,
       surface: AppPalette.deepBlue,
@@ -52,7 +52,7 @@ class AppTheme {
   }
 
   static ThemeData light() {
-    final ColorScheme scheme = ColorScheme.fromSeed(
+    final scheme = ColorScheme.fromSeed(
       seedColor: AppPalette.alpine,
       brightness: Brightness.light,
       surface: AppPalette.snow,

@@ -19,7 +19,7 @@ class AppConstants {
   );
 
   static String get apiBaseUrl {
-    final String configuredApiBaseUrl = _configuredApiBaseUrl.trim();
+    final configuredApiBaseUrl = _configuredApiBaseUrl.trim();
     if (configuredApiBaseUrl.isNotEmpty) {
       return configuredApiBaseUrl;
     }
@@ -43,8 +43,8 @@ class AppConstants {
     required String accessToken,
     required bool isReleaseBuild,
   }) {
-    final bool styleIdPresent = styleId.isNotEmpty;
-    final bool accessTokenPresent = accessToken.isNotEmpty;
+    final styleIdPresent = styleId.isNotEmpty;
+    final accessTokenPresent = accessToken.isNotEmpty;
 
     if (styleIdPresent && accessTokenPresent) {
       return MapTileProviderConfig.mapbox(
@@ -65,7 +65,7 @@ class AppConstants {
       return MapTileProviderConfig.devFallback;
     }
 
-    final List<String> missingVariables = <String>[
+    final missingVariables = <String>[
       if (!styleIdPresent) 'MAPBOX_STYLE_ID',
       if (!accessTokenPresent) 'MAPBOX_ACCESS_TOKEN',
     ];

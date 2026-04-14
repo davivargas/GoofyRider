@@ -6,7 +6,7 @@ void main() {
   testWidgets(
       'runAppWith shows BootstrapErrorApp with error details when storage open fails',
       (WidgetTester tester) async {
-    int attempts = 0;
+    var attempts = 0;
 
     await runAppWith(
       loader: () async {
@@ -24,7 +24,7 @@ void main() {
 
   testWidgets('BootstrapErrorApp retry button re-invokes the loader',
       (WidgetTester tester) async {
-    int attempts = 0;
+    var attempts = 0;
 
     await runAppWith(
       loader: () async {

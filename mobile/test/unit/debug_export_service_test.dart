@@ -25,7 +25,7 @@ void main() {
   });
 
   test('export writes rich snapshot with masked email and capped points', () async {
-    final int sessionId = await database.insertLocalSession(
+    final sessionId = await database.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
       resortId: 'resort-1',
@@ -37,7 +37,7 @@ void main() {
       lastSyncError: 'Network timeout',
     );
 
-    for (int index = 0; index < 120; index++) {
+    for (var index = 0; index < 120; index++) {
       await database.insertPoint(
         localSessionId: sessionId,
         point: NewSessionPoint(
@@ -94,11 +94,11 @@ void main() {
       },
     );
 
-    final DebugExportService service = DebugExportService(
+    final service = DebugExportService(
       localDatabase: database,
       documentsDirectoryProvider: () async => tempDirectory,
     );
-    final File file = await service.export(
+    final file = await service.export(
       ownerUserId: 'user-1',
       userEmail: 'rider@example.com',
       speedUnit: SpeedUnit.kilometersPerHour,
@@ -106,7 +106,7 @@ void main() {
     );
 
     expect(await file.exists(), isTrue);
-    final Map<String, dynamic> payload =
+    final payload =
         jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     expect(payload['schema_version'], 2);
     expect(payload['summary']['session_count'], 1);
@@ -120,9 +120,9 @@ void main() {
     expect(payload['cached_resorts'], isNotEmpty);
     expect(payload['cached_weather_metadata'], isNotEmpty);
 
-    final Map<String, dynamic> exportedSession =
+    final exportedSession =
         (payload['sessions'] as List<dynamic>).first as Map<String, dynamic>;
-    final Map<String, dynamic> pointSample =
+    final pointSample =
         exportedSession['point_sample'] as Map<String, dynamic>;
     expect(pointSample['included'], isTrue);
     expect(pointSample['accepted_points_preferred'], isTrue);

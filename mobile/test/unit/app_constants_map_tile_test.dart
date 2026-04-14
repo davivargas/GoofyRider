@@ -4,7 +4,7 @@ import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 void main() {
   group('AppConstants.resolveMapTileProviderConfig', () {
     test('returns Mapbox config when both defines are present', () {
-      final MapTileProviderConfig config =
+      final config =
           AppConstants.resolveMapTileProviderConfig(
         styleId: 'mapbox/outdoors-v12',
         accessToken: 'pk.test-token',
@@ -29,7 +29,7 @@ void main() {
     test(
         'returns dev fallback in debug build when Mapbox defines are absent',
         () {
-      final MapTileProviderConfig config =
+      final config =
           AppConstants.resolveMapTileProviderConfig(
         styleId: '',
         accessToken: '',
@@ -118,7 +118,7 @@ void main() {
 
   group('MapTileProviderConfig', () {
     test('attribution joins attributionLines with spaces', () {
-      const MapTileProviderConfig config = MapTileProviderConfig(
+      const config = MapTileProviderConfig(
         kind: MapTileProviderKind.mapbox,
         urlTemplate: 'https://example.com/{z}/{x}/{y}',
         attributionLines: <String>['© A', '© B'],

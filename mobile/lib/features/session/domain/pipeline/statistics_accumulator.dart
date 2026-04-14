@@ -63,7 +63,7 @@ class StatisticsAccumulator {
       return 0;
     }
 
-    final double segmentDistanceM = haversineDistanceMeters(
+    final segmentDistanceM = haversineDistanceMeters(
       lastFilteredLatitude,
       lastFilteredLongitude,
       filteredLatitude,
@@ -105,7 +105,7 @@ class StatisticsAccumulator {
       return;
     }
 
-    final int deltaMilliseconds = (deltaSeconds * 1000).round();
+    final deltaMilliseconds = (deltaSeconds * 1000).round();
 
     switch (activityType) {
       case SessionActivityType.descent:

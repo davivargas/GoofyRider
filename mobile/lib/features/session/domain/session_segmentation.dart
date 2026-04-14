@@ -74,7 +74,7 @@ SessionTimelineAnalysis analyzeSessionTimeline({
     if (cached != null) return cached;
   }
 
-  final List<LocalSessionPoint> accepted = points
+  final accepted = points
       .where((LocalSessionPoint point) => point.acceptedForAnalytics)
       .toList(growable: false)
     ..sort(
@@ -95,29 +95,29 @@ SessionTimelineAnalysis analyzeSessionTimeline({
     );
   }
 
-  final List<SessionActivityType> activities = _resolvedActivityTypes(accepted);
-  final int maxDeltaMilliseconds = SessionConstants.maxDeltaSeconds * 1000;
+  final activities = _resolvedActivityTypes(accepted);
+  final maxDeltaMilliseconds = SessionConstants.maxDeltaSeconds * 1000;
 
-  final Map<SessionActivityType, int> durationByTypeMs =
+  final durationByTypeMs =
       <SessionActivityType, int>{
     SessionActivityType.descent: 0,
     SessionActivityType.lift: 0,
     SessionActivityType.idle: 0,
   };
-  final Map<SessionActivityType, double> distanceByTypeM =
+  final distanceByTypeM =
       <SessionActivityType, double>{
     SessionActivityType.descent: 0,
     SessionActivityType.lift: 0,
     SessionActivityType.idle: 0,
   };
 
-  final List<SessionTimelineSegment> segments = <SessionTimelineSegment>[];
+  final segments = <SessionTimelineSegment>[];
   _SegmentBuilder? currentSegment;
 
-  for (int index = 1; index < accepted.length; index++) {
-    final LocalSessionPoint previous = accepted[index - 1];
-    final LocalSessionPoint current = accepted[index];
-    final int deltaMilliseconds =
+  for (var index = 1; index < accepted.length; index++) {
+    final previous = accepted[index - 1];
+    final current = accepted[index];
+    final deltaMilliseconds =
         current.recordedAt.difference(previous.recordedAt).inMilliseconds;
 
     if (deltaMilliseconds <= 0 || deltaMilliseconds > maxDeltaMilliseconds) {
@@ -128,8 +128,8 @@ SessionTimelineAnalysis analyzeSessionTimeline({
       continue;
     }
 
-    final SessionActivityType activity = activities[index];
-    final double intervalDistanceM =
+    final activity = activities[index];
+    final intervalDistanceM =
         _intervalDistanceMeters(previous: previous, current: current);
     durationByTypeMs[activity] =
         durationByTypeMs[activity]! + deltaMilliseconds;
@@ -189,7 +189,7 @@ SessionTimelineAnalysis analyzeSessionTimeline({
 
 List<SessionActivityType> _resolvedActivityTypes(
     List<LocalSessionPoint> points) {
-  final bool hasStoredMotionStates = points.every(
+  final hasStoredMotionStates = points.every(
     (LocalSessionPoint point) =>
         point.motionState != null && point.motionState!.isNotEmpty,
   );
@@ -198,10 +198,10 @@ List<SessionActivityType> _resolvedActivityTypes(
     return _replayedActivityTypes(points);
   }
 
-  final List<SessionActivityType> resolved = <SessionActivityType>[];
+  final resolved = <SessionActivityType>[];
   SessionActivityType? lastStableActivity;
-  for (final LocalSessionPoint point in points) {
-    final SessionActivityType activity = _activityFromMotionState(
+  for (final point in points) {
+    final activity = _activityFromMotionState(
       point.motionState,
       lastStableActivity: lastStableActivity,
     );
@@ -215,16 +215,16 @@ List<SessionActivityType> _resolvedActivityTypes(
 
 List<SessionActivityType> _replayedActivityTypes(
     List<LocalSessionPoint> points) {
-  final TrackingPipelineEngine engine = TrackingPipelineEngine();
-  final DateTime sessionStartedAtUtc = points.first.recordedAt.toUtc();
-  final List<SessionActivityType> resolved = <SessionActivityType>[];
-  int cumulativeAcceptedMilliseconds = 0;
+  final engine = TrackingPipelineEngine();
+  final sessionStartedAtUtc = points.first.recordedAt.toUtc();
+  final resolved = <SessionActivityType>[];
+  var cumulativeAcceptedMilliseconds = 0;
   DateTime? previousAcceptedAtUtc;
 
-  for (final LocalSessionPoint point in points) {
-    final DateTime pointTimeUtc = point.recordedAt.toUtc();
+  for (final point in points) {
+    final pointTimeUtc = point.recordedAt.toUtc();
     if (previousAcceptedAtUtc != null) {
-      final int deltaMilliseconds =
+      final deltaMilliseconds =
           pointTimeUtc.difference(previousAcceptedAtUtc).inMilliseconds;
       if (deltaMilliseconds > 0 &&
           deltaMilliseconds <= SessionConstants.maxDeltaSeconds * 1000) {
@@ -232,7 +232,7 @@ List<SessionActivityType> _replayedActivityTypes(
       }
     }
 
-    final TrackingProcessResult replayed = engine.processSample(
+    final replayed = engine.processSample(
       sample: LocationSample(
         timestamp: pointTimeUtc,
         latitude: point.latitude,
@@ -294,10 +294,10 @@ double _intervalDistanceMeters({
     return current.distanceDeltaM! > 0 ? current.distanceDeltaM! : 0;
   }
 
-  final double startLat = previous.filteredLatitude ?? previous.latitude;
-  final double startLng = previous.filteredLongitude ?? previous.longitude;
-  final double endLat = current.filteredLatitude ?? current.latitude;
-  final double endLng = current.filteredLongitude ?? current.longitude;
+  final startLat = previous.filteredLatitude ?? previous.latitude;
+  final startLng = previous.filteredLongitude ?? previous.longitude;
+  final endLat = current.filteredLatitude ?? current.latitude;
+  final endLng = current.filteredLongitude ?? current.longitude;
   return haversineDistanceMeters(startLat, startLng, endLat, endLng);
 }
 

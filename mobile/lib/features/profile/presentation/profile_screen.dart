@@ -19,7 +19,7 @@ typedef DebugExportAction = Future<String> Function({
 });
 
 final debugExportActionProvider = Provider<DebugExportAction>((ref) {
-  final DebugExportService service = DebugExportService(
+  final service = DebugExportService(
     localDatabase: ref.watch(driftLocalDatabaseProvider),
   );
   return ({
@@ -44,8 +44,8 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
-    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
-    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
 
@@ -148,7 +148,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
               trailing: const Icon(Icons.download_outlined),
               onTap: () async {
-                final String? ownerUserId = authState.session?.user.id;
+                final ownerUserId = authState.session?.user.id;
                 if (ownerUserId == null || ownerUserId.isEmpty) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -161,9 +161,9 @@ class ProfileScreen extends ConsumerWidget {
                 }
 
                 try {
-                  final DebugExportAction exportAction =
+                  final exportAction =
                       ref.read(debugExportActionProvider);
-                  final String filePath = await exportAction(
+                  final filePath = await exportAction(
                     ownerUserId: ownerUserId,
                     userEmail: authState.session?.user.email,
                     speedUnit: speedUnit,

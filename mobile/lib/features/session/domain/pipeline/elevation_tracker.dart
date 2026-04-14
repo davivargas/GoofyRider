@@ -42,14 +42,14 @@ class ElevationTracker {
       );
     }
 
-    final double? previousFilteredAltitude = lastFilteredAltitude;
-    final double alpha = _verticalAlpha(sample.verticalAccuracyM);
-    final double filteredAltitude = previousFilteredAltitude == null
+    final previousFilteredAltitude = lastFilteredAltitude;
+    final alpha = _verticalAlpha(sample.verticalAccuracyM);
+    final filteredAltitude = previousFilteredAltitude == null
         ? sample.altitudeM!
         : previousFilteredAltitude +
             (alpha * (sample.altitudeM! - previousFilteredAltitude));
 
-    final bool acceptedForVerticalState =
+    final acceptedForVerticalState =
         quality.qualityClass != TrackingQualityClass.reject;
     if (!acceptedForVerticalState) {
       return VerticalResult(
@@ -58,8 +58,8 @@ class ElevationTracker {
       );
     }
 
-    final double delta = previousFilteredAltitude == null
-        ? 0
+    final delta = previousFilteredAltitude == null
+        ? 0.0
         : filteredAltitude - previousFilteredAltitude;
 
     if (!_isVerticalReliable(sample.verticalAccuracyM)) {

@@ -135,7 +135,7 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 LocalRideSession buildSession() {
-  final DateTime now = DateTime.utc(2026, 1, 1);
+  final now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: 1,
     ownerUserId: 'user-1',
@@ -161,8 +161,8 @@ LocalRideSession buildSession() {
 void main() {
   testWidgets('history screen renders season header and resolved resort label',
       (WidgetTester tester) async {
-    final LocalRideSession session = buildSession();
-    final FakeSessionRepository repository =
+    final session = buildSession();
+    final repository =
         FakeSessionRepository(<LocalRideSession>[session]);
 
     await tester.pumpWidget(
@@ -206,8 +206,8 @@ void main() {
   testWidgets(
       'history screen keeps sync state visible and no per-card overflow actions',
       (WidgetTester tester) async {
-    final LocalRideSession session = buildSession();
-    final FakeSessionRepository repository =
+    final session = buildSession();
+    final repository =
         FakeSessionRepository(<LocalRideSession>[session]);
 
     await tester.pumpWidget(

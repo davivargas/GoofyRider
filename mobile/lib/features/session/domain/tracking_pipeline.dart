@@ -2,7 +2,6 @@ import 'location_tracking_repository.dart';
 import 'pipeline/coordinate_filter.dart';
 import 'pipeline/elevation_tracker.dart';
 import 'pipeline/motion_state_detector.dart';
-import 'pipeline/pipeline_types.dart';
 import 'pipeline/quality_classifier.dart';
 import 'pipeline/speed_fusion.dart';
 import 'pipeline/statistics_accumulator.dart';
@@ -163,7 +162,7 @@ class TrackingPipelineEngine {
     required int activeDurationS,
   }) {
     // Stage 1: Quality classification
-    final QualityDecision quality = _qualityClassifier.classify(
+    final quality = _qualityClassifier.classify(
       sample: sample,
       lastAcceptedLatitude: _speedFusion.lastAcceptedLatitude,
       lastAcceptedLongitude: _speedFusion.lastAcceptedLongitude,
@@ -172,36 +171,36 @@ class TrackingPipelineEngine {
     );
 
     // Stage 2: Coordinate filtering
-    final ({double latitude, double longitude}) filtered =
+    final filtered =
         _coordinateFilter.filter(
       latitude: sample.latitude,
       longitude: sample.longitude,
       accuracyM: sample.accuracyM,
     );
-    final double filteredLatitude = filtered.latitude;
-    final double filteredLongitude = filtered.longitude;
+    final filteredLatitude = filtered.latitude;
+    final filteredLongitude = filtered.longitude;
 
     // Stage 3: Speed derivation and fusion
-    final double derivedSpeedMps = _speedFusion.deriveSpeed(
+    final derivedSpeedMps = _speedFusion.deriveSpeed(
       sample: sample,
       filteredLatitude: filteredLatitude,
       filteredLongitude: filteredLongitude,
       lastFilteredLatitude: _coordinateFilter.lastFilteredLatitude,
       lastFilteredLongitude: _coordinateFilter.lastFilteredLongitude,
     );
-    final FusedSpeedResult fusedSpeed = _speedFusion.fuseSpeed(
+    final fusedSpeed = _speedFusion.fuseSpeed(
       sample: sample,
       derivedSpeedMps: derivedSpeedMps,
       motionState: _motionStateDetector.motionState,
     );
-    final double fusedSpeedMps = fusedSpeed.speedMps;
+    final fusedSpeedMps = fusedSpeed.speedMps;
 
-    final bool acceptedForAnalytics =
+    final acceptedForAnalytics =
         quality.qualityClass != TrackingQualityClass.reject;
-    final bool acceptedForReplay = acceptedForAnalytics;
+    final acceptedForReplay = acceptedForAnalytics;
 
     // Stage 6 (partial): Distance delta
-    final double distanceDeltaM = _statisticsAccumulator.distanceDelta(
+    final distanceDeltaM = _statisticsAccumulator.distanceDelta(
       quality: quality,
       filteredLatitude: filteredLatitude,
       filteredLongitude: filteredLongitude,
@@ -214,20 +213,20 @@ class TrackingPipelineEngine {
     _statisticsAccumulator.addDistance(distanceDeltaM);
 
     // Stage 5: Elevation tracking
-    final VerticalResult vertical = _elevationTracker.updateVertical(
+    final vertical = _elevationTracker.updateVertical(
       sample: sample,
       quality: quality,
       lastFilteredAltitude: _coordinateFilter.lastFilteredAltitude,
     );
 
     // Stage 4: Motion state detection
-    final double headingStability = _motionStateDetector.updateHeadingWindow(
+    final headingStability = _motionStateDetector.updateHeadingWindow(
       sample: sample,
       quality: quality,
     );
-    final double deltaSeconds =
+    final deltaSeconds =
         _speedFusion.deltaSecondsFromLastAccepted(sample);
-    final MotionState smoothingMotionState = _motionStateDetector.motionState;
+    final smoothingMotionState = _motionStateDetector.motionState;
     _motionStateDetector.updateMotionState(
       quality: quality,
       speedMps: fusedSpeedMps,
@@ -280,7 +279,7 @@ class TrackingPipelineEngine {
     }
 
     // Stage 3 (continued): Live speed smoothing
-    final double liveSpeed = _speedFusion.updateLiveSpeed(
+    final liveSpeed = _speedFusion.updateLiveSpeed(
       rawSpeedMps: fusedSpeedMps,
       sampleTimeUtc: sample.timestamp.toUtc(),
       acceptedForAnalytics: acceptedForAnalytics,
@@ -288,7 +287,7 @@ class TrackingPipelineEngine {
     );
 
     // Stage 6 (continued): Build stats
-    final SessionStats stats = _statisticsAccumulator.buildStats(
+    final stats = _statisticsAccumulator.buildStats(
       activeDurationS: activeDurationS,
       maxSpeedMps: _speedFusion.maxSpeedMps,
       elevationGainMeters: _elevationTracker.elevationGainMeters,
@@ -296,7 +295,7 @@ class TrackingPipelineEngine {
     );
 
     // Build the output point
-    final NewSessionPoint point = NewSessionPoint(
+    final point = NewSessionPoint(
       recordedAt: sample.timestamp.toUtc(),
       tOffsetMs: sample.timestamp
           .toUtc()
