@@ -167,10 +167,6 @@ class SampleWatchdog {
     if (shouldKeepWaitingForInitialSample) {
       _writeState(
         _readState().copyWith(
-          permission: _readState().permission.copyWith(
-            errorMessage:
-                'Still waiting for initial GPS fix (${staleFor.inSeconds}s). Continuing recovery...',
-          ),
           tracking: _readState().tracking.copyWith(
             gpsSignal: const GpsSignalState(
               bars: 0,
@@ -202,10 +198,6 @@ class SampleWatchdog {
     // --- Trigger stream restart ---
     _writeState(
       _readState().copyWith(
-        permission: _readState().permission.copyWith(
-          errorMessage:
-              'No location updates for ${staleFor.inSeconds}s. Reconnecting...',
-        ),
         tracking: _readState().tracking.copyWith(
           gpsSignal: const GpsSignalState(
             bars: 0,
