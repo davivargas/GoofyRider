@@ -16,7 +16,7 @@ class MapAttribution extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RichAttributionWidget(
-      alignment: AttributionAlignment.bottomRight,
+      alignment: AttributionAlignment.bottomLeft,
       attributions: <SourceAttribution>[
         for (final String line in config.attributionLines)
           TextSourceAttribution(_sanitizeForOverlay(line)),

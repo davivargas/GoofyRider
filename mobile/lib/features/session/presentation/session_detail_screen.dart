@@ -131,16 +131,16 @@ class SessionDetailScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: <Widget>[
-              Card(
-                child: ListTile(
-                  title: Text(
-                    session.startedAt.toDayLabel(),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle:
-                      Text('Started at ${session.startedAt.toTimeLabel()}'),
-                ),
-              ),
+              // Card(
+              //   child: ListTile(
+              //     title: Text(
+              //       session.startedAt.toDayLabel(),
+              //       style: const TextStyle(fontWeight: FontWeight.w700),
+              //     ),
+              //     subtitle:
+              //         Text('Started at ${session.startedAt.toTimeLabel()}'),
+              //   ),
+              // ),
               const SizedBox(height: 12),
               _summaryCards(data, speedUnit, distanceUnit),
               const SizedBox(height: 12),
@@ -235,7 +235,7 @@ class SessionDetailScreen extends ConsumerWidget {
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        _summaryCard('Session', formatSecondsAsDuration(stats.durationS)),
+        _summaryCard('Duration', formatSecondsAsDuration(stats.durationS)),
         _summaryCard('Ride time', formatSecondsAsDuration(rideDurationS)),
         _summaryCard('Lift', liftDuration),
         _summaryCard('Idle', idleDuration),
@@ -333,11 +333,11 @@ class SessionDetailScreen extends ConsumerWidget {
             .toList(growable: false);
 
     return SizedBox(
-      height: 260,
+      height: 380,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: FlutterMap(
-          options: MapOptions(initialCenter: route.first, initialZoom: 12),
+          options: MapOptions(initialCenter: route.first, initialZoom: 14),
           children: <Widget>[
             TileLayer(
               urlTemplate: activeMapTileProviderConfig.urlTemplate,
@@ -354,7 +354,11 @@ class SessionDetailScreen extends ConsumerWidget {
                   point: route.last,
                   width: 30,
                   height: 30,
-                  child: const Icon(Icons.flag, size: 22),
+                  child: const Icon(
+                    Icons.flag,
+                    size: 22,
+                    color: Colors.black,
+                  ),
                 ),
               ],
             ),

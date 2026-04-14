@@ -160,7 +160,11 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                                 point: route.last,
                                 width: 32,
                                 height: 32,
-                                child: const Icon(Icons.snowboarding, size: 28),
+                                child: const Icon(
+                                  Icons.snowboarding,
+                                  size: 28,
+                                  color: Colors.black,
+                                ),
                               ),
                             ],
                           ),
