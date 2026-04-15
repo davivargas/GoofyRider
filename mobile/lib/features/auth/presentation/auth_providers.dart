@@ -25,9 +25,9 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
 );
 
 final authorizedDioProvider = Provider<Dio>((ref) {
-  final Dio baseDio = ref.watch(baseDioProvider);
-  final Dio authorizedDio = Dio(baseDio.options.copyWith());
-  final AuthController controller = ref.read(authControllerProvider.notifier);
+  final baseDio = ref.watch(baseDioProvider);
+  final authorizedDio = Dio(baseDio.options.copyWith());
+  final controller = ref.read(authControllerProvider.notifier);
 
   authorizedDio.interceptors.add(
     AuthTokenInterceptor(

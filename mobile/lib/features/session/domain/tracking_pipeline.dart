@@ -2,7 +2,6 @@ import 'location_tracking_repository.dart';
 import 'pipeline/coordinate_filter.dart';
 import 'pipeline/elevation_tracker.dart';
 import 'pipeline/motion_state_detector.dart';
-import 'pipeline/pipeline_types.dart';
 import 'pipeline/quality_classifier.dart';
 import 'pipeline/speed_fusion.dart';
 import 'pipeline/statistics_accumulator.dart';
@@ -33,7 +32,6 @@ enum TrackingQualityReason {
   nonMonotonicTimestamp,
   duplicateMonotonicTime,
   poorHorizontalAccuracy,
-  unstableInitialFix,
   implausibleJump,
   implausibleSpeedSpike,
 }
@@ -51,8 +49,6 @@ extension TrackingQualityReasonWire on TrackingQualityReason {
         return 'duplicate_monotonic_time';
       case TrackingQualityReason.poorHorizontalAccuracy:
         return 'poor_horizontal_accuracy';
-      case TrackingQualityReason.unstableInitialFix:
-        return 'unstable_initial_fix';
       case TrackingQualityReason.implausibleJump:
         return 'implausible_jump';
       case TrackingQualityReason.implausibleSpeedSpike:
@@ -94,7 +90,6 @@ class TrackingProcessResult {
     required this.currentAltitudeM,
     required this.lowAccuracy,
     required this.motionState,
-    required this.trackingMode,
     required this.acceptedForReplay,
     required this.routeLatitude,
     required this.routeLongitude,
@@ -106,7 +101,6 @@ class TrackingProcessResult {
   final double? currentAltitudeM;
   final bool lowAccuracy;
   final MotionState motionState;
-  final TrackingMode trackingMode;
   final bool acceptedForReplay;
   final double? routeLatitude;
   final double? routeLongitude;
@@ -163,7 +157,7 @@ class TrackingPipelineEngine {
     required int activeDurationS,
   }) {
     // Stage 1: Quality classification
-    final QualityDecision quality = _qualityClassifier.classify(
+    final quality = _qualityClassifier.classify(
       sample: sample,
       lastAcceptedLatitude: _speedFusion.lastAcceptedLatitude,
       lastAcceptedLongitude: _speedFusion.lastAcceptedLongitude,
@@ -172,36 +166,36 @@ class TrackingPipelineEngine {
     );
 
     // Stage 2: Coordinate filtering
-    final ({double latitude, double longitude}) filtered =
+    final filtered =
         _coordinateFilter.filter(
       latitude: sample.latitude,
       longitude: sample.longitude,
       accuracyM: sample.accuracyM,
     );
-    final double filteredLatitude = filtered.latitude;
-    final double filteredLongitude = filtered.longitude;
+    final filteredLatitude = filtered.latitude;
+    final filteredLongitude = filtered.longitude;
 
     // Stage 3: Speed derivation and fusion
-    final double derivedSpeedMps = _speedFusion.deriveSpeed(
+    final derivedSpeedMps = _speedFusion.deriveSpeed(
       sample: sample,
       filteredLatitude: filteredLatitude,
       filteredLongitude: filteredLongitude,
       lastFilteredLatitude: _coordinateFilter.lastFilteredLatitude,
       lastFilteredLongitude: _coordinateFilter.lastFilteredLongitude,
     );
-    final FusedSpeedResult fusedSpeed = _speedFusion.fuseSpeed(
+    final fusedSpeed = _speedFusion.fuseSpeed(
       sample: sample,
       derivedSpeedMps: derivedSpeedMps,
       motionState: _motionStateDetector.motionState,
     );
-    final double fusedSpeedMps = fusedSpeed.speedMps;
+    final fusedSpeedMps = fusedSpeed.speedMps;
 
-    final bool acceptedForAnalytics =
+    final acceptedForAnalytics =
         quality.qualityClass != TrackingQualityClass.reject;
-    final bool acceptedForReplay = acceptedForAnalytics;
+    final acceptedForReplay = acceptedForAnalytics;
 
     // Stage 6 (partial): Distance delta
-    final double distanceDeltaM = _statisticsAccumulator.distanceDelta(
+    final distanceDeltaM = _statisticsAccumulator.distanceDelta(
       quality: quality,
       filteredLatitude: filteredLatitude,
       filteredLongitude: filteredLongitude,
@@ -214,27 +208,26 @@ class TrackingPipelineEngine {
     _statisticsAccumulator.addDistance(distanceDeltaM);
 
     // Stage 5: Elevation tracking
-    final VerticalResult vertical = _elevationTracker.updateVertical(
+    final vertical = _elevationTracker.updateVertical(
       sample: sample,
       quality: quality,
       lastFilteredAltitude: _coordinateFilter.lastFilteredAltitude,
     );
 
     // Stage 4: Motion state detection
-    final double headingStability = _motionStateDetector.updateHeadingWindow(
+    final headingStability = _motionStateDetector.updateHeadingWindow(
       sample: sample,
       quality: quality,
     );
-    final double deltaSeconds =
+    final deltaSeconds =
         _speedFusion.deltaSecondsFromLastAccepted(sample);
-    final MotionState smoothingMotionState = _motionStateDetector.motionState;
+    final smoothingMotionState = _motionStateDetector.motionState;
     _motionStateDetector.updateMotionState(
       quality: quality,
       speedMps: fusedSpeedMps,
       verticalDeltaM: vertical.deltaM,
       headingStability: headingStability,
       deltaSeconds: deltaSeconds,
-      stableFixSamples: _stableFixSamplesFromClassifier,
     );
 
     // Stage 6 (continued): Accumulate activity totals
@@ -244,6 +237,9 @@ class TrackingPipelineEngine {
       distanceDeltaM: distanceDeltaM,
       activityType: _motionStateDetector.activityTypeForMotionState(
         _motionStateDetector.motionState,
+        sampleTimeUtc: sample.timestamp.toUtc(),
+        latitude: sample.latitude,
+        longitude: sample.longitude,
       ),
     );
 
@@ -271,7 +267,6 @@ class TrackingPipelineEngine {
         latitude: filteredLatitude,
         longitude: filteredLongitude,
       );
-      _qualityClassifier.recordAccepted(quality.qualityClass);
     }
 
     // Commit filtered altitude (accepted samples update the filter baseline)
@@ -280,7 +275,7 @@ class TrackingPipelineEngine {
     }
 
     // Stage 3 (continued): Live speed smoothing
-    final double liveSpeed = _speedFusion.updateLiveSpeed(
+    final liveSpeed = _speedFusion.updateLiveSpeed(
       rawSpeedMps: fusedSpeedMps,
       sampleTimeUtc: sample.timestamp.toUtc(),
       acceptedForAnalytics: acceptedForAnalytics,
@@ -288,7 +283,7 @@ class TrackingPipelineEngine {
     );
 
     // Stage 6 (continued): Build stats
-    final SessionStats stats = _statisticsAccumulator.buildStats(
+    final stats = _statisticsAccumulator.buildStats(
       activeDurationS: activeDurationS,
       maxSpeedMps: _speedFusion.maxSpeedMps,
       elevationGainMeters: _elevationTracker.elevationGainMeters,
@@ -296,7 +291,7 @@ class TrackingPipelineEngine {
     );
 
     // Build the output point
-    final NewSessionPoint point = NewSessionPoint(
+    final point = NewSessionPoint(
       recordedAt: sample.timestamp.toUtc(),
       tOffsetMs: sample.timestamp
           .toUtc()
@@ -335,32 +330,10 @@ class TrackingPipelineEngine {
       lowAccuracy:
           quality.qualityClass == TrackingQualityClass.acceptLowConfidence,
       motionState: _motionStateDetector.motionState,
-      trackingMode: _toTrackingMode(_motionStateDetector.motionState),
       acceptedForReplay: acceptedForReplay,
       routeLatitude: acceptedForReplay ? filteredLatitude : null,
       routeLongitude: acceptedForReplay ? filteredLongitude : null,
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
-  int get _stableFixSamplesFromClassifier =>
-      _qualityClassifier.stableFixSamples;
-
-  TrackingMode _toTrackingMode(MotionState motionState) {
-    switch (motionState) {
-      case MotionState.initializingFix:
-        return TrackingMode.initializingFix;
-      case MotionState.activeDescent:
-        return TrackingMode.activeDescent;
-      case MotionState.liftUphill:
-        return TrackingMode.liftUphill;
-      case MotionState.stoppedIdle:
-        return TrackingMode.stoppedIdle;
-      case MotionState.lowConfidenceRecovery:
-        return TrackingMode.lowConfidenceRecovery;
-    }
-  }
 }

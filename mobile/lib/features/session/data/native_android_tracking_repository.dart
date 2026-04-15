@@ -37,18 +37,18 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
-    final LocationPermissionState initialState =
+    final initialState =
         await _permissionsDelegate.ensurePermissions();
     if (initialState != LocationPermissionState.grantedForegroundOnly) {
       return initialState;
     }
 
     try {
-      final Map<Object?, Object?>? response =
+      final response =
           await _controlChannel.invokeMapMethod<Object?, Object?>(
         'ensureBackgroundLocationPermission',
       );
-      final String? status = response?['status'] as String?;
+      final status = response?['status'] as String?;
       switch (status) {
         case 'granted':
         case 'needs_settings':
@@ -66,6 +66,11 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     } on MissingPluginException {
       return initialState;
     }
+  }
+
+  @override
+  Future<LocationPermissionState> ensureForegroundPermission() {
+    return _permissionsDelegate.ensureForegroundPermission();
   }
 
   @override
@@ -89,14 +94,14 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   /// geolocator-based readiness path when the bridge is unavailable.
   Future<String?> checkRecordingReadiness() async {
     try {
-      final Map<Object?, Object?>? response =
+      final response =
           await _controlChannel.invokeMapMethod<Object?, Object?>(
         'checkLocationSettings',
       );
       if (response?['ok'] == true) {
         return null;
       }
-      final String? message = response?['message'] as String?;
+      final message = response?['message'] as String?;
       if (message != null && message.isNotEmpty) {
         return message;
       }
@@ -117,7 +122,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     try {
       iterator =
           StreamIterator<dynamic>(_eventChannel.receiveBroadcastStream());
-      final Future<bool> firstEventFuture = iterator.moveNext();
+      final firstEventFuture = iterator.moveNext();
       bool hasFirstEvent;
       try {
         hasFirstEvent =
@@ -139,11 +144,11 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
         return;
       }
 
-      for (final LocationSample sample in _mapSamples(iterator.current)) {
+      for (final sample in _mapSamples(iterator.current)) {
         yield sample;
       }
       while (await iterator.moveNext()) {
-        for (final LocationSample sample in _mapSamples(iterator.current)) {
+        for (final sample in _mapSamples(iterator.current)) {
           yield sample;
         }
       }
@@ -160,7 +165,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
 
   @override
   Future<void> setTrackingMode(TrackingMode mode) async {
-    final TrackingModeProfile profile = TrackingModeProfiles.forMode(mode);
+    final profile = TrackingModeProfiles.forMode(mode);
     try {
       await _controlChannel.invokeMethod<void>(
         'setTrackingMode',
@@ -178,8 +183,8 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   }
 
   int _sampleSortComparator(LocationSample a, LocationSample b) {
-    final int? elapsedA = a.elapsedRealtimeNs;
-    final int? elapsedB = b.elapsedRealtimeNs;
+    final elapsedA = a.elapsedRealtimeNs;
+    final elapsedB = b.elapsedRealtimeNs;
     if (elapsedA != null && elapsedB != null) {
       return elapsedA.compareTo(elapsedB);
     }
@@ -187,7 +192,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   }
 
   List<LocationSample> _mapSamples(dynamic event) {
-    final List<LocationSample> samples = _extractRawSamples(event)
+    final samples = _extractRawSamples(event)
         .map(_tryMapSample)
         .whereType<LocationSample>()
         .toList(growable: false);
@@ -199,7 +204,14 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
 
   List<Map<String, dynamic>> _extractRawSamples(dynamic event) {
     if (event is Map) {
-      final Map<String, dynamic> rawEvent = _normalizeMap(event);
+      final rawEvent = _normalizeMap(event);
+      if (rawEvent.containsKey('diagnostic')) {
+        debugPrint(
+          'NativeAndroidTrackingRepository: native diagnostic '
+          '${rawEvent['diagnostic']}',
+        );
+        return const <Map<String, dynamic>>[];
+      }
       if (rawEvent.containsKey('samples')) {
         final dynamic samples = rawEvent['samples'];
         if (samples is! List) {
@@ -272,7 +284,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     required double min,
     required double max,
   }) {
-    final double? parsed = _tryParseFiniteDouble(value);
+    final parsed = _tryParseFiniteDouble(value);
     if (parsed == null || parsed < min || parsed > max) {
       throw const FormatException('Invalid coordinate');
     }
@@ -283,7 +295,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
     if (value == null) {
       return null;
     }
-    final double? parsed = _tryParseFiniteDouble(value);
+    final parsed = _tryParseFiniteDouble(value);
     if (parsed == null) {
       throw const FormatException('Invalid double');
     }
@@ -303,7 +315,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
       }
       return value.toInt();
     }
-    final int? parsed = int.tryParse(value.toString());
+    final parsed = int.tryParse(value.toString());
     if (parsed == null) {
       throw const FormatException('Invalid int');
     }
@@ -332,10 +344,10 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
 
   double? _tryParseFiniteDouble(dynamic value) {
     if (value is num) {
-      final double parsed = value.toDouble();
+      final parsed = value.toDouble();
       return parsed.isFinite ? parsed : null;
     }
-    final double? parsed = double.tryParse(value.toString());
+    final parsed = double.tryParse(value.toString());
     if (parsed == null || !parsed.isFinite) {
       return null;
     }

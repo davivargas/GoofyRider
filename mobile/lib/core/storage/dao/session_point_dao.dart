@@ -17,7 +17,7 @@ class SessionPointDao {
     required int localSessionId,
     required NewSessionPoint point,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.transaction(() async {
       await _db.customInsert(
         '''
@@ -94,14 +94,14 @@ class SessionPointDao {
     required int localSessionId,
     required List<NewSessionPoint> points,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.transaction(() async {
       await _db.customStatement(
         'DELETE FROM local_session_points WHERE local_session_id = ?',
         <Object?>[localSessionId],
       );
 
-      for (final NewSessionPoint point in points) {
+      for (final point in points) {
         await _db.customInsert(
           '''
           INSERT OR IGNORE INTO local_session_points (
@@ -180,7 +180,7 @@ class SessionPointDao {
   // ---------------------------------------------------------------------------
 
   Future<LocalSessionPoint?> latestAcceptedPoint(int localSessionId) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_session_points
@@ -204,9 +204,9 @@ class SessionPointDao {
     int localSessionId, {
     bool onlyAccepted = false,
   }) async {
-    final String acceptedClause =
+    final acceptedClause =
         onlyAccepted ? 'AND accepted_for_analytics = 1' : '';
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT *
       FROM local_session_points

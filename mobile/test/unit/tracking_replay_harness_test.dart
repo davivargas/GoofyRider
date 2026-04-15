@@ -21,14 +21,14 @@ class ReplayOutcome {
 }
 
 ReplayOutcome replayTrace(List<LocationSample> samples) {
-  final DateTime startedAt = samples.first.timestamp.toUtc();
-  final TrackingPipelineEngine engine = TrackingPipelineEngine();
-  int acceptedCount = 0;
-  int rejectCount = 0;
-  int lowConfidenceCount = 0;
+  final startedAt = samples.first.timestamp.toUtc();
+  final engine = TrackingPipelineEngine();
+  var acceptedCount = 0;
+  var rejectCount = 0;
+  var lowConfidenceCount = 0;
   TrackingProcessResult? last;
 
-  for (final LocationSample sample in samples) {
+  for (final sample in samples) {
     last = engine.processSample(
       sample: sample,
       sessionStartedAtUtc: startedAt,
@@ -81,8 +81,8 @@ LocationSample _sample({
 
 void main() {
   test('replay harness suppresses static jitter distance inflation', () {
-    final DateTime start = DateTime.utc(2026, 2, 1, 10, 0, 0);
-    final List<LocationSample> trace = <LocationSample>[
+    final start = DateTime.utc(2026, 2, 1, 10, 0, 0);
+    final trace = <LocationSample>[
       for (int i = 0; i < 40; i++)
         _sample(
           at: start.add(Duration(seconds: i)),
@@ -92,14 +92,14 @@ void main() {
         ),
     ];
 
-    final ReplayOutcome outcome = replayTrace(trace);
+    final outcome = replayTrace(trace);
     expect(outcome.distanceM, lessThan(30));
     expect(outcome.maxSpeedMps, lessThan(4));
   });
 
   test('replay harness rejects geometry spikes and keeps max speed sane', () {
-    final DateTime start = DateTime.utc(2026, 2, 2, 10, 0, 0);
-    final List<LocationSample> trace = <LocationSample>[
+    final start = DateTime.utc(2026, 2, 2, 10, 0, 0);
+    final trace = <LocationSample>[
       for (int i = 0; i < 10; i++)
         _sample(
           at: start.add(Duration(seconds: i)),
@@ -122,14 +122,14 @@ void main() {
         ),
     ];
 
-    final ReplayOutcome outcome = replayTrace(trace);
+    final outcome = replayTrace(trace);
     expect(outcome.rejectCount, greaterThanOrEqualTo(1));
     expect(outcome.maxSpeedMps, lessThan(25));
   });
 
   test('replay harness requires heading stability to classify lift motion', () {
-    final DateTime start = DateTime.utc(2026, 2, 3, 10, 0, 0);
-    final List<LocationSample> trace = <LocationSample>[
+    final start = DateTime.utc(2026, 2, 3, 10, 0, 0);
+    final trace = <LocationSample>[
       for (int i = 0; i < 4; i++)
         _sample(
           at: start.add(Duration(seconds: i)),
@@ -159,10 +159,10 @@ void main() {
   test(
       'replay harness marks active descent with 30m accuracy as low confidence',
       () {
-    final DateTime start = DateTime.utc(2026, 2, 4, 10, 0, 0);
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 2, 4, 10, 0, 0);
+    final engine = TrackingPipelineEngine();
 
-    for (int i = 0; i < 14; i++) {
+    for (var i = 0; i < 14; i++) {
       engine.processSample(
         sample: _sample(
           at: start.add(Duration(seconds: i)),
@@ -179,7 +179,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult lowConfidence = engine.processSample(
+    final lowConfidence = engine.processSample(
       sample: _sample(
         at: start.add(const Duration(seconds: 15)),
         lat: 50.0013,

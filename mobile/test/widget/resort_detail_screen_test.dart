@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:goofyrider_mobile/core/constants/app_constants.dart';
+import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_repository.dart';
 import 'package:goofyrider_mobile/features/resorts/presentation/resort_detail_screen.dart';
@@ -65,17 +67,6 @@ ResortSummary _resort({required bool isFavorite}) {
 }
 
 void main() {
-  Future<void> _scrollToLabel(WidgetTester tester, String label) async {
-    final Finder target = find.text(label, skipOffstage: false);
-    expect(target, findsOneWidget);
-    await tester.dragUntilVisible(
-      target,
-      find.byType(ListView),
-      const Offset(0, -250),
-    );
-    await tester.pumpAndSettle();
-  }
-
   Widget _buildTestHost({required ResortRepository repository}) {
     return ProviderScope(
       overrides: <Override>[
@@ -83,6 +74,8 @@ void main() {
         resortWeatherProvider.overrideWith(
           (Ref ref, String resortId) async => null,
         ),
+        activeMapTileProviderConfigProvider
+            .overrideWithValue(MapTileProviderConfig.devFallback),
       ],
       child: MaterialApp(
         home: MediaQuery(
@@ -99,49 +92,60 @@ void main() {
   }
 
   testWidgets(
-      'detail favorite toggle updates to remove favorite label and amber heart',
+      'detail favorite toggle updates to app bar filled amber heart',
       (WidgetTester tester) async {
-    final _FakeResortRepository repository =
+    final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));
 
     await tester.pumpWidget(_buildTestHost(repository: repository));
 
     await tester.pumpAndSettle();
 
-    await _scrollToLabel(tester, 'Add favorite');
-
-    expect(find.text('Add favorite'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+    expect(find.text('Add favorite'), findsNothing);
     expect(find.text('Remove favorite'), findsNothing);
 
-    await tester.tap(find.text('Add favorite'));
+    await tester.tap(find.byTooltip('Add favorite'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Remove favorite'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
 
-    final Icon icon = tester.widget<Icon>(find.byIcon(Icons.favorite));
+    final icon = tester.widget<Icon>(find.byIcon(Icons.favorite));
     expect(icon.color, Colors.amber);
   });
 
   testWidgets(
-      'detail favorite toggle updates back to add favorite label and border icon',
+      'detail favorite toggle updates back to app bar border heart',
       (WidgetTester tester) async {
-    final _FakeResortRepository repository =
+    final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));
 
     await tester.pumpWidget(_buildTestHost(repository: repository));
 
     await tester.pumpAndSettle();
 
-    await _scrollToLabel(tester, 'Add favorite');
-
-    await tester.tap(find.text('Add favorite'));
+    await tester.tap(find.byTooltip('Add favorite'));
     await tester.pumpAndSettle();
-    expect(find.text('Remove favorite'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
 
-    await tester.tap(find.text('Remove favorite'));
+    await tester.tap(find.byTooltip('Remove favorite'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Add favorite'), findsOneWidget);
     expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+  });
+
+  testWidgets('detail screen keeps info row and start recording action',
+      (WidgetTester tester) async {
+    final repository =
+        _FakeResortRepository(initialResort: _resort(isFavorite: false));
+
+    await tester.pumpWidget(_buildTestHost(repository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Location'), findsNothing);
+    expect(find.text('BC, Canada'), findsOneWidget);
+    expect(find.text('Whistler'), findsOneWidget);
+    expect(find.text('Elevation'), findsOneWidget);
+    expect(find.text('Start recording here'), findsOneWidget);
   });
 }

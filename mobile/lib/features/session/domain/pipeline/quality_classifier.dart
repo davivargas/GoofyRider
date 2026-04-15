@@ -8,26 +8,16 @@ import 'pipeline_types.dart';
 class QualityClassifier {
   DateTime? _lastObservedTimestampUtc;
   int? _lastObservedElapsedRealtimeNs;
-  int _stableFixSamples = 0;
-
-  /// The number of stable initial fix samples observed so far.
-  /// Used by the coordinator to pass to the motion-state detector.
-  int get stableFixSamples => _stableFixSamples;
 
   void reset() {
     _lastObservedTimestampUtc = null;
     _lastObservedElapsedRealtimeNs = null;
-    _stableFixSamples = 0;
   }
 
   void seedFromPersistedPoints({required List<LocalSessionPoint> points}) {
-    for (final LocalSessionPoint point in points) {
+    for (final point in points) {
       _lastObservedTimestampUtc = point.recordedAt.toUtc();
       _lastObservedElapsedRealtimeNs = point.elapsedRealtimeNs;
-      if (point.acceptedForAnalytics &&
-          _stableFixSamples < SessionConstants.initialFixStableSamples) {
-        _stableFixSamples += 1;
-      }
     }
   }
 
@@ -45,7 +35,7 @@ class QualityClassifier {
     required DateTime? lastAcceptedTimestampUtc,
     required MotionState motionState,
   }) {
-    final QualityDecision decision = _classifyCore(
+    final decision = _classifyCore(
       sample: sample,
       lastAcceptedLatitude: lastAcceptedLatitude,
       lastAcceptedLongitude: lastAcceptedLongitude,
@@ -58,15 +48,6 @@ class QualityClassifier {
     _lastObservedElapsedRealtimeNs = sample.elapsedRealtimeNs;
 
     return decision;
-  }
-
-  /// Increment stable-fix counter when a sample is accepted with full
-  /// confidence. Called by the coordinator after classification.
-  void recordAccepted(TrackingQualityClass qualityClass) {
-    if (_stableFixSamples < SessionConstants.initialFixStableSamples &&
-        qualityClass == TrackingQualityClass.accept) {
-      _stableFixSamples += 1;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -132,31 +113,21 @@ class QualityClassifier {
       );
     }
 
-    final double score = _qualityScore(
+    final score = _qualityScore(
       horizontalAccuracyM: sample.accuracyM,
       speedAccuracyMps: sample.speedAccuracyMps,
       verticalAccuracyM: sample.verticalAccuracyM,
     );
-    final double acceptHorizontalAccuracyM =
+    final acceptHorizontalAccuracyM =
         _horizontalAcceptThresholdForSample(sample, motionState);
 
-    final double? horizontalAccuracyM = sample.accuracyM;
+    final horizontalAccuracyM = sample.accuracyM;
     if (horizontalAccuracyM != null &&
         horizontalAccuracyM >
             SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters) {
       return QualityDecision(
         qualityClass: TrackingQualityClass.reject,
         reason: TrackingQualityReason.poorHorizontalAccuracy,
-        score: score,
-      );
-    }
-
-    if (_stableFixSamples < SessionConstants.initialFixStableSamples &&
-        (horizontalAccuracyM == null ||
-            horizontalAccuracyM > acceptHorizontalAccuracyM)) {
-      return QualityDecision(
-        qualityClass: TrackingQualityClass.reject,
-        reason: TrackingQualityReason.unstableInitialFix,
         score: score,
       );
     }
@@ -192,7 +163,7 @@ class QualityClassifier {
   }
 
   bool _isTimestampMonotonic(LocationSample sample) {
-    final DateTime? previousTimestamp = _lastObservedTimestampUtc;
+    final previousTimestamp = _lastObservedTimestampUtc;
     if (previousTimestamp == null) {
       return true;
     }
@@ -203,7 +174,7 @@ class QualityClassifier {
     if (sample.elapsedRealtimeNs == null) {
       return true;
     }
-    final int? previousElapsedRealtimeNs = _lastObservedElapsedRealtimeNs;
+    final previousElapsedRealtimeNs = _lastObservedElapsedRealtimeNs;
     if (previousElapsedRealtimeNs == null) {
       return true;
     }
@@ -220,7 +191,7 @@ class QualityClassifier {
     if (lastAcceptedLatitude == null || lastAcceptedLongitude == null) {
       return false;
     }
-    final double deltaSeconds = _deltaSecondsFromLastAccepted(
+    final deltaSeconds = _deltaSecondsFromLastAccepted(
       sample,
       lastAcceptedTimestampUtc,
     );
@@ -228,13 +199,13 @@ class QualityClassifier {
       return false;
     }
 
-    final double distance = haversineDistanceMeters(
+    final distance = haversineDistanceMeters(
       lastAcceptedLatitude,
       lastAcceptedLongitude,
       sample.latitude,
       sample.longitude,
     );
-    final double speedFromGeometry = distance / deltaSeconds;
+    final speedFromGeometry = distance / deltaSeconds;
     if (speedFromGeometry <= SessionConstants.speedHardCapMetersPerSecond) {
       return false;
     }
@@ -264,7 +235,7 @@ class QualityClassifier {
       return false;
     }
 
-    final double deltaSeconds = _deltaSecondsFromLastAccepted(
+    final deltaSeconds = _deltaSecondsFromLastAccepted(
       sample,
       lastAcceptedTimestampUtc,
     );
@@ -272,13 +243,13 @@ class QualityClassifier {
       return false;
     }
 
-    final double distance = haversineDistanceMeters(
+    final distance = haversineDistanceMeters(
       lastAcceptedLatitude,
       lastAcceptedLongitude,
       sample.latitude,
       sample.longitude,
     );
-    final double speedFromGeometry = distance / deltaSeconds;
+    final speedFromGeometry = distance / deltaSeconds;
     if (speedFromGeometry <= SessionConstants.speedHardCapMetersPerSecond) {
       return false;
     }
@@ -304,7 +275,7 @@ class QualityClassifier {
     required double? speedAccuracyMps,
     required double? verticalAccuracyM,
   }) {
-    final double horizontalComponent = horizontalAccuracyM == null
+    final horizontalComponent = horizontalAccuracyM == null
         ? 0.6
         : (1 -
                 (horizontalAccuracyM /
@@ -312,10 +283,10 @@ class QualityClassifier {
                         .qualityLowConfidenceHorizontalAccuracyMeters))
             .clamp(0, 1)
             .toDouble();
-    final double speedComponent = speedAccuracyMps == null
+    final speedComponent = speedAccuracyMps == null
         ? 0.5
         : (1 - (speedAccuracyMps / 4)).clamp(0, 1).toDouble();
-    final double verticalComponent = verticalAccuracyM == null
+    final verticalComponent = verticalAccuracyM == null
         ? 0.5
         : (1 -
                 (verticalAccuracyM /
@@ -340,7 +311,7 @@ class QualityClassifier {
     required MotionState motionState,
     required DateTime? lastAcceptedTimestampUtc,
   }) {
-    final double? platformSpeed = sample.speedMps;
+    final platformSpeed = sample.speedMps;
     if (platformSpeed == null ||
         !platformSpeed.isFinite ||
         platformSpeed < 0 ||
@@ -348,37 +319,37 @@ class QualityClassifier {
       return PlatformSpeedTrust.untrusted;
     }
 
-    final double horizontalAccuracyM = sample.accuracyM ??
+    final horizontalAccuracyM = sample.accuracyM ??
         SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
-    final bool horizontalStrong = horizontalAccuracyM <=
+    final horizontalStrong = horizontalAccuracyM <=
         _horizontalAcceptThresholdForSample(sample, motionState);
-    final bool horizontalUsable = horizontalAccuracyM <=
+    final horizontalUsable = horizontalAccuracyM <=
         SessionConstants.qualityLowConfidenceHorizontalAccuracyMeters;
     if (!horizontalUsable) {
       return PlatformSpeedTrust.untrusted;
     }
 
-    final double? speedAccuracyMps = sample.speedAccuracyMps;
-    final bool speedStrong = speedAccuracyMps != null &&
+    final speedAccuracyMps = sample.speedAccuracyMps;
+    final speedStrong = speedAccuracyMps != null &&
         speedAccuracyMps <= SessionConstants.platformSpeedStrongAccuracyMps;
-    final bool speedUsable = speedAccuracyMps == null ||
+    final speedUsable = speedAccuracyMps == null ||
         speedAccuracyMps <= SessionConstants.platformSpeedUsableAccuracyMps;
     if (!speedUsable) {
       return PlatformSpeedTrust.untrusted;
     }
 
-    final bool geometryReliable = _isGeometrySpeedReliableForCoherence(
+    final geometryReliable = _isGeometrySpeedReliableForCoherence(
       sample: sample,
       geometrySpeedMps: geometrySpeedMps,
       motionState: motionState,
       lastAcceptedTimestampUtc: lastAcceptedTimestampUtc,
     );
-    final double mismatchMps = (platformSpeed - geometrySpeedMps).abs();
-    final double moderateMismatchToleranceMps = _max(
+    final mismatchMps = (platformSpeed - geometrySpeedMps).abs();
+    final moderateMismatchToleranceMps = _max(
       SessionConstants.platformSpeedModerateMismatchFloorMps,
       platformSpeed * SessionConstants.platformSpeedModerateMismatchRatio,
     );
-    final double severeMismatchToleranceMps = _max(
+    final severeMismatchToleranceMps = _max(
       SessionConstants.platformSpeedSevereMismatchFloorMps,
       platformSpeed * SessionConstants.platformSpeedSevereMismatchRatio,
     );
@@ -410,14 +381,14 @@ class QualityClassifier {
       return false;
     }
 
-    final double deltaSeconds =
+    final deltaSeconds =
         _deltaSecondsFromLastAccepted(sample, lastAcceptedTimestampUtc);
     if (deltaSeconds < SessionConstants.geometryCoherenceMinDeltaSeconds ||
         deltaSeconds > SessionConstants.maxDeltaSeconds) {
       return false;
     }
 
-    final double? horizontalAccuracyM = sample.accuracyM;
+    final horizontalAccuracyM = sample.accuracyM;
     if (horizontalAccuracyM == null) {
       return false;
     }
@@ -432,7 +403,7 @@ class QualityClassifier {
     if (lastAcceptedTimestampUtc == null) {
       return 0;
     }
-    final int milliseconds = sample.timestamp
+    final milliseconds = sample.timestamp
         .toUtc()
         .difference(lastAcceptedTimestampUtc)
         .inMilliseconds;

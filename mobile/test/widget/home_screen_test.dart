@@ -139,7 +139,7 @@ ResortWeather _buildWeather({
 void main() {
   testWidgets('home shows recent sessions above favorite resorts',
       (WidgetTester tester) async {
-    final DateTime startedAt = DateTime.utc(2026, 1, 1, 16, 30);
+    final startedAt = DateTime.utc(2026, 1, 1, 16, 30);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -162,19 +162,19 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final Finder recentTitle = find.text('Recent sessions');
-    final Finder favoritesTitle = find.text('Favorite resorts');
+    final recentTitle = find.text('Recent sessions');
+    final favoritesTitle = find.text('Favorite resorts');
     expect(recentTitle, findsOneWidget);
     expect(favoritesTitle, findsOneWidget);
 
-    final double recentTop = tester.getTopLeft(recentTitle).dy;
-    final double favoritesTop = tester.getTopLeft(favoritesTitle).dy;
+    final recentTop = tester.getTopLeft(recentTitle).dy;
+    final favoritesTop = tester.getTopLeft(favoritesTitle).dy;
     expect(recentTop, lessThan(favoritesTop));
   });
 
   testWidgets('home recent session row renders formatted timestamp',
       (WidgetTester tester) async {
-    final DateTime startedAt = DateTime.utc(2026, 1, 1, 16, 30);
+    final startedAt = DateTime.utc(2026, 1, 1, 16, 30);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -204,14 +204,14 @@ void main() {
   testWidgets(
       'home favorite cards update after favorites provider invalidation',
       (WidgetTester tester) async {
-    final StateProvider<List<ResortSummary>> favoritesStateProvider =
+    final favoritesStateProvider =
         StateProvider<List<ResortSummary>>(
       (Ref ref) => <ResortSummary>[
         _buildResort(id: 'resort-1', name: 'Whistler Blackcomb'),
       ],
     );
 
-    final ProviderContainer container = ProviderContainer(
+    final container = ProviderContainer(
       overrides: <Override>[
         authControllerProvider.overrideWith((_) => _FakeAuthController()),
         distanceUnitPreferenceProvider

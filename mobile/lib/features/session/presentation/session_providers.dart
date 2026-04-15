@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -6,11 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../../auth/presentation/auth_providers.dart';
 import '../data/geolocator_tracking_repository.dart';
+import '../data/gps_warmup_permission_preference.dart';
+import '../data/gps_warmup_service.dart';
 import '../data/native_android_tracking_repository.dart';
 import '../data/session_api.dart';
 import '../data/session_repository_impl.dart';
 import '../domain/location_tracking_repository.dart';
-import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import 'history_view_models.dart';
 import 'recording_controller.dart';
@@ -27,6 +29,29 @@ final locationTrackingRepositoryProvider = Provider<LocationTrackingRepository>(
     return GeolocatorTrackingRepository();
   },
 );
+
+final gpsWarmupPermissionPreferenceProvider =
+    Provider<GpsWarmupPermissionPreference>(
+  (ref) => GpsWarmupPermissionPreference(),
+);
+
+final gpsWarmupServiceProvider = Provider<GpsWarmupService>(
+  (ref) {
+    final service = GpsWarmupService(
+      locationTrackingRepository:
+          ref.watch(locationTrackingRepositoryProvider),
+      logger: ref.watch(loggerProvider),
+    );
+    ref.onDispose(() {
+      unawaited(service.dispose());
+    });
+    return service;
+  },
+);
+
+final gpsWarmupSampleStreamProvider = StreamProvider<LocationSample>((ref) {
+  return ref.watch(gpsWarmupServiceProvider).samples;
+});
 
 final sessionRepositoryProvider = Provider<SessionRepository>(
   (ref) {
@@ -45,6 +70,7 @@ final recordingControllerProvider =
     final controller = RecordingController(
       sessionRepository: ref.watch(sessionRepositoryProvider),
       locationTrackingRepository: ref.watch(locationTrackingRepositoryProvider),
+      gpsWarmupService: ref.watch(gpsWarmupServiceProvider),
     );
     controller.initialize();
     return controller;
@@ -66,14 +92,14 @@ final historyProvider = FutureProvider.autoDispose(
 
 final historySectionsProvider =
     FutureProvider.autoDispose<List<SessionHistorySeasonSection>>((ref) async {
-  final List<LocalRideSession> sessions =
+  final sessions =
       await ref.watch(historyProvider.future);
-  final SessionRepository repository = ref.watch(sessionRepositoryProvider);
+  final repository = ref.watch(sessionRepositoryProvider);
 
-  final List<SessionHistoryEntryViewModel> items =
+  final items =
       <SessionHistoryEntryViewModel>[];
-  for (final LocalRideSession session in sessions) {
-    final String resortLabel = await repository.resolveSessionResortLabel(
+  for (final session in sessions) {
+    final resortLabel = await repository.resolveSessionResortLabel(
       session,
     );
     items.add(

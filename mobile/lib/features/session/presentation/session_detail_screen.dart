@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../app/router/route_paths.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
@@ -16,6 +17,7 @@ import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
+import '../../../core/widgets/map_attribution.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import 'session_providers.dart';
@@ -30,13 +32,15 @@ class SessionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<SessionDetail> detail =
+    final detail =
         ref.watch(sessionDetailProvider(localSessionId));
-    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
-    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final bool showDebugDiagnostics =
+    final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final activeMapTileProviderConfig =
+        ref.watch(activeMapTileProviderConfigProvider);
+    final showDebugDiagnostics =
         kDebugMode && AppConstants.isDebugDiagnostics;
-    final String appBarTitle = detail.maybeWhen(
+    final appBarTitle = detail.maybeWhen(
       data: (SessionDetail data) => data.session.startedAt.toDayLabel(),
       orElse: () => 'Session detail',
     );
@@ -63,13 +67,13 @@ class SessionDetailScreen extends ConsumerWidget {
                   return;
                 }
 
-                final bool confirmed = await _confirmDelete(context);
+                final confirmed = await _confirmDelete(context);
                 if (!confirmed) {
                   return;
                 }
 
                 try {
-                  final DeleteSessionResult result = await ref
+                  final result = await ref
                       .read(sessionRepositoryProvider)
                       .deleteSession(data.session);
 
@@ -88,7 +92,7 @@ class SessionDetailScreen extends ConsumerWidget {
                         ),
                       );
                     }
-                    final GoRouter? router = GoRouter.maybeOf(context);
+                    final router = GoRouter.maybeOf(context);
                     if (router != null) {
                       router.go(RoutePaths.history);
                     } else {
@@ -96,7 +100,7 @@ class SessionDetailScreen extends ConsumerWidget {
                     }
                   }
                 } catch (error) {
-                  final String message = switch (error) {
+                  final message = switch (error) {
                     final AppFailure failure => failure.message,
                     _ => error.toString(),
                   };
@@ -122,25 +126,25 @@ class SessionDetailScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(sessionDetailProvider(localSessionId)),
         ),
         data: (SessionDetail data) {
-          final LocalRideSession session = data.session;
+          final session = data.session;
 
           return ListView(
             padding: const EdgeInsets.all(12),
             children: <Widget>[
-              Card(
-                child: ListTile(
-                  title: Text(
-                    session.startedAt.toDayLabel(),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle:
-                      Text('Started at ${session.startedAt.toTimeLabel()}'),
-                ),
-              ),
+              // Card(
+              //   child: ListTile(
+              //     title: Text(
+              //       session.startedAt.toDayLabel(),
+              //       style: const TextStyle(fontWeight: FontWeight.w700),
+              //     ),
+              //     subtitle:
+              //         Text('Started at ${session.startedAt.toTimeLabel()}'),
+              //   ),
+              // ),
               const SizedBox(height: 12),
               _summaryCards(data, speedUnit, distanceUnit),
               const SizedBox(height: 12),
-              _mapReplay(data),
+              _mapReplay(data, activeMapTileProviderConfig),
               const SizedBox(height: 12),
               _timelineCard(data, distanceUnit),
               const SizedBox(height: 12),
@@ -209,29 +213,29 @@ class SessionDetailScreen extends ConsumerWidget {
     SpeedUnit speedUnit,
     DistanceUnit distanceUnit,
   ) {
-    final SessionStats stats = detail.stats;
-    final bool hasSegmentBreakdown = detail.timeline.isNotEmpty ||
+    final stats = detail.stats;
+    final hasSegmentBreakdown = detail.timeline.isNotEmpty ||
         stats.descentDurationS > 0 ||
         stats.liftDurationS > 0 ||
         stats.idleDurationS > 0;
-    final int rideDurationS =
+    final rideDurationS =
         hasSegmentBreakdown ? stats.descentDurationS : stats.durationS;
-    final String liftDuration = hasSegmentBreakdown
+    final liftDuration = hasSegmentBreakdown
         ? formatSecondsAsDuration(stats.liftDurationS)
         : '--';
-    final String idleDuration = hasSegmentBreakdown
+    final idleDuration = hasSegmentBreakdown
         ? formatSecondsAsDuration(stats.idleDurationS)
         : '--';
-    final double rideDistanceM =
+    final rideDistanceM =
         hasSegmentBreakdown ? stats.descentDistanceM : stats.distanceM;
-    final double rideAvgSpeedMps =
+    final rideAvgSpeedMps =
         hasSegmentBreakdown ? stats.rideAvgSpeedMps : stats.avgSpeedMps;
 
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        _summaryCard('Session', formatSecondsAsDuration(stats.durationS)),
+        _summaryCard('Duration', formatSecondsAsDuration(stats.durationS)),
         _summaryCard('Ride time', formatSecondsAsDuration(rideDurationS)),
         _summaryCard('Lift', liftDuration),
         _summaryCard('Idle', idleDuration),
@@ -251,6 +255,15 @@ class SessionDetailScreen extends ConsumerWidget {
           'Ride avg',
           speedUnit.formatFromMetersPerSecond(rideAvgSpeedMps),
         ),
+        // Debug-only hint: recovered idle time reclassified as descent by
+        // the Layer-2 post-finish pass (§4.3 of the GPS overhaul plan).
+        // Uncomment to surface during tracking-pipeline investigations.
+        // if (detail.reclassifiedIdleDurationS > 0)
+        //   _summaryCard(
+        //     'Recovered',
+        //     '${formatSecondsAsDuration(detail.reclassifiedIdleDurationS)} '
+        //         'of descent from on-slope stops',
+        //   ),
       ],
     );
   }
@@ -277,8 +290,11 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _mapReplay(SessionDetail detail) {
-    final List<LocalSessionPoint> routePoints = detail.acceptedPoints.isNotEmpty
+  Widget _mapReplay(
+    SessionDetail detail,
+    MapTileProviderConfig activeMapTileProviderConfig,
+  ) {
+    final routePoints = detail.acceptedPoints.isNotEmpty
         ? detail.acceptedPoints
         : detail.points;
     if (routePoints.isEmpty) {
@@ -290,7 +306,7 @@ class SessionDetailScreen extends ConsumerWidget {
       );
     }
 
-    final List<LatLng> route = routePoints
+    final route = routePoints
         .map(
           (LocalSessionPoint point) => LatLng(
             point.filteredLatitude ?? point.latitude,
@@ -298,7 +314,7 @@ class SessionDetailScreen extends ConsumerWidget {
           ),
         )
         .toList(growable: false);
-    final List<Polyline> polylines = detail.timeline.isEmpty
+    final polylines = detail.timeline.isEmpty
         ? <Polyline>[
             Polyline(
               points: route,
@@ -326,15 +342,16 @@ class SessionDetailScreen extends ConsumerWidget {
             .toList(growable: false);
 
     return SizedBox(
-      height: 260,
+      height: 380,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: FlutterMap(
-          options: MapOptions(initialCenter: route.first, initialZoom: 12),
+          options: MapOptions(initialCenter: route.first, initialZoom: 14),
           children: <Widget>[
             TileLayer(
-              urlTemplate: MapTileProviderConfig.openStreetMap.urlTemplate,
-              subdomains: MapTileProviderConfig.openStreetMap.subdomains,
+              urlTemplate: activeMapTileProviderConfig.urlTemplate,
+              subdomains: activeMapTileProviderConfig.subdomains,
+              retinaMode: activeMapTileProviderConfig.retinaMode,
               userAgentPackageName: 'com.goofyrider.mobile',
             ),
             PolylineLayer(
@@ -346,10 +363,15 @@ class SessionDetailScreen extends ConsumerWidget {
                   point: route.last,
                   width: 30,
                   height: 30,
-                  child: const Icon(Icons.flag, size: 22),
+                  child: const Icon(
+                    Icons.flag,
+                    size: 22,
+                    color: Colors.black,
+                  ),
                 ),
               ],
             ),
+            MapAttribution(config: activeMapTileProviderConfig),
           ],
         ),
       ),
@@ -422,15 +444,15 @@ class SessionDetailScreen extends ConsumerWidget {
   }
 
   String _diagnosticLine(TrackingDiagnosticEvent event) {
-    final String stamp =
+    final stamp =
         event.occurredAt.toLocal().toIso8601String().substring(11, 19);
-    final String details = event.details.isEmpty ? '' : ' ${event.details}';
-    final String message = event.message == null ? '' : ' (${event.message})';
+    final details = event.details.isEmpty ? '' : ' ${event.details}';
+    final message = event.message == null ? '' : ' (${event.message})';
     return '[$stamp] ${event.eventType}$message$details';
   }
 
   Future<bool> _confirmDelete(BuildContext context) async {
-    final bool? confirmed = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(

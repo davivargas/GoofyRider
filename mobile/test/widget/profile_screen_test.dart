@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/constants/app_constants.dart';
+import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
@@ -55,7 +57,7 @@ class _FakeAuthController extends AuthController {
 void main() {
   testWidgets('export debug info shows success snackbar when export completes',
       (WidgetTester tester) async {
-    const AuthState authState = AuthState(
+    const authState = AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',
@@ -77,6 +79,8 @@ void main() {
               .overrideWith((_) => SpeedUnitPreferenceController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
             ({
               required String ownerUserId,
@@ -111,6 +115,8 @@ void main() {
               .overrideWith((_) => SpeedUnitPreferenceController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
             ({
               required String ownerUserId,
@@ -132,7 +138,7 @@ void main() {
 
   testWidgets('export debug info shows failure snackbar on export error',
       (WidgetTester tester) async {
-    const AuthState authState = AuthState(
+    const authState = AuthState(
       status: AuthStatus.authenticated,
       session: AuthSession(
         accessToken: 'access',
@@ -154,6 +160,8 @@ void main() {
               .overrideWith((_) => SpeedUnitPreferenceController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
             ({
               required String ownerUserId,

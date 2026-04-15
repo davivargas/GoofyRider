@@ -34,11 +34,16 @@ class ControlledLocationRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
-    final Completer<LocationPermissionState>? completer =
+    final completer =
         ensurePermissionsCompleter;
     if (completer != null) {
       return completer.future;
     }
+    return permissionState;
+  }
+
+  @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
     return permissionState;
   }
 
@@ -122,6 +127,11 @@ class HangingCancelLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
   Future<bool> isServiceEnabled() async {
     return true;
   }
@@ -193,8 +203,8 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
-    final int activeDescentIntervalS =
-        (TrackingModeProfiles.activeDescent.intervalMs / 1000).round();
+    final activeDescentIntervalS =
+        (TrackingModeProfiles.active.intervalMs / 1000).round();
     return SessionStats(
       durationS: _recoveryAcceptedPoints.length * activeDescentIntervalS,
       distanceM: 1200,
@@ -219,7 +229,7 @@ class FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
-    final LocalRideSession session = recoverySession!;
+    final session = recoverySession!;
     return SessionDetail(
       session: session,
       points: _recoveryAcceptedPoints,
@@ -301,7 +311,7 @@ class FakeSessionRepository implements SessionRepository {
   @override
   Future<LocalRideSession> startLocalSession({String? resortId}) async {
     startLocalSessionCalls += 1;
-    final Completer<void>? completer = startLocalSessionCompleter;
+    final completer = startLocalSessionCompleter;
     if (completer != null) {
       await completer.future;
     }
@@ -375,7 +385,7 @@ class FlakyPersistenceSessionRepository implements SessionRepository {
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
-    final List<NewSessionPoint> acceptedPoints = appendedPoints
+    final acceptedPoints = appendedPoints
         .where((NewSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     if (acceptedPoints.isEmpty) {
@@ -383,9 +393,9 @@ class FlakyPersistenceSessionRepository implements SessionRepository {
     }
 
     double distanceM = 0;
-    for (int index = 1; index < acceptedPoints.length; index += 1) {
-      final NewSessionPoint previous = acceptedPoints[index - 1];
-      final NewSessionPoint current = acceptedPoints[index];
+    for (var index = 1; index < acceptedPoints.length; index += 1) {
+      final previous = acceptedPoints[index - 1];
+      final current = acceptedPoints[index];
       distanceM += haversineDistanceMeters(
         previous.filteredLatitude ?? previous.latitude,
         previous.filteredLongitude ?? previous.longitude,
@@ -395,8 +405,8 @@ class FlakyPersistenceSessionRepository implements SessionRepository {
     }
 
     double maxSpeedMps = 0;
-    for (final NewSessionPoint point in acceptedPoints) {
-      final double speed =
+    for (final point in acceptedPoints) {
+      final speed =
           point.fusedSpeedMps ?? point.derivedSpeedMps ?? point.speedMps ?? 0;
       if (speed > maxSpeedMps) {
         maxSpeedMps = speed;
@@ -424,7 +434,7 @@ class FlakyPersistenceSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetail> getSessionDetail(int localSessionId) async {
-    final List<LocalSessionPoint> points = <LocalSessionPoint>[
+    final points = <LocalSessionPoint>[
       for (int index = 0; index < appendedPoints.length; index += 1)
         _buildLocalPoint(
           id: index + 1,
@@ -432,7 +442,7 @@ class FlakyPersistenceSessionRepository implements SessionRepository {
           point: appendedPoints[index],
         ),
     ];
-    final List<LocalSessionPoint> acceptedPoints = points
+    final acceptedPoints = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
     return SessionDetail(
@@ -565,7 +575,7 @@ LocalRideSession _buildSession({
   required LocalSessionState state,
   DateTime? startedAt,
 }) {
-  final DateTime now = DateTime.utc(2026, 1, 1);
+  final now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: id,
     ownerUserId: 'user-1',
@@ -610,56 +620,41 @@ LocalSessionPoint _buildAcceptedPoint({
 void main() {
   test('tracking mode profiles expose tuned watchdog thresholds', () {
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.initializingFix)
+      TrackingModeProfiles.forMode(TrackingMode.acquiring)
           .sampleWatchdogThreshold,
-      const Duration(seconds: 5),
+      const Duration(seconds: 8),
     );
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+      TrackingModeProfiles.forMode(TrackingMode.active)
           .sampleWatchdogThreshold,
-      const Duration(seconds: 9),
+      const Duration(seconds: 4),
     );
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
-          .sampleWatchdogThreshold,
-      const Duration(seconds: 10),
-    );
-    expect(
-      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .sampleWatchdogThreshold,
-      const Duration(seconds: 25),
-    );
-    expect(
-      TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
-          .sampleWatchdogThreshold,
-      const Duration(seconds: 11),
-    );
-    expect(
-      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
+      TrackingModeProfiles.forMode(TrackingMode.acquiring)
               .sampleWatchdogThreshold >
-          TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+          TrackingModeProfiles.forMode(TrackingMode.active)
               .sampleWatchdogThreshold,
       isTrue,
     );
   });
 
   test('recovers in-progress recording after interruption', () async {
-    final DateTime startedAt = DateTime.utc(2026, 1, 1, 8, 0, 0);
-    final LocalRideSession recoverySession = _buildSession(
+    final startedAt = DateTime.utc(2026, 1, 1, 8, 0, 0);
+    final recoverySession = _buildSession(
       id: 42,
       state: LocalSessionState.recording,
       startedAt: startedAt,
     );
-    final FakeSessionRepository repository = FakeSessionRepository(
+    final repository = FakeSessionRepository(
       recoverySession: recoverySession,
       recoveryAcceptedPoints: <LocalSessionPoint>[
         _buildAcceptedPoint(offsetMs: 0, sessionStart: startedAt),
         _buildAcceptedPoint(offsetMs: 3000, sessionStart: startedAt),
       ],
     );
-    final ControlledLocationRepository locationRepository =
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -677,10 +672,10 @@ void main() {
   });
 
   test('caps live route size during long recording sessions', () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -688,14 +683,14 @@ void main() {
     await controller.bootstrap();
     await controller.startRecording();
 
-    final DateTime start = DateTime.utc(2026, 1, 1, 0, 0, 0);
-    final int sampleCount = SessionConstants.maxLiveRoutePoints + 50;
-    for (int i = 0; i < sampleCount; i++) {
+    final start = DateTime.utc(2026, 1, 1, 0, 0, 0);
+    final sampleCount = SessionConstants.maxLiveRoutePoints + 50;
+    for (var i = 0; i < sampleCount; i++) {
       locationRepository.emit(
         LocationSample(
           timestamp: start.add(
             Duration(
-              milliseconds: i * TrackingModeProfiles.activeDescent.intervalMs,
+              milliseconds: i * TrackingModeProfiles.active.intervalMs,
             ),
           ),
           latitude: 49.0 + (i / 100000),
@@ -717,12 +712,12 @@ void main() {
   });
 
   test('blocks recording until all-time permission is granted', () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository(
       permissionState: LocationPermissionState.grantedForegroundOnly,
     );
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -742,21 +737,21 @@ void main() {
   });
 
   test('ignores overlapping start requests', () async {
-    final Completer<void> startGate = Completer<void>();
-    final FakeSessionRepository repository = FakeSessionRepository(
+    final startGate = Completer<void>();
+    final repository = FakeSessionRepository(
       startLocalSessionCompleter: startGate,
     );
-    final ControlledLocationRepository locationRepository =
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
 
     await controller.bootstrap();
 
-    final Future<void> firstStart = controller.startRecording();
-    final Future<void> secondStart = controller.startRecording();
+    final firstStart = controller.startRecording();
+    final secondStart = controller.startRecording();
     await Future<void>.delayed(const Duration(milliseconds: 10));
 
     expect(repository.startLocalSessionCalls, 1);
@@ -774,7 +769,7 @@ void main() {
   });
 
   test('surfaces a clear message when app settings cannot be opened', () async {
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: FakeSessionRepository(),
       locationTrackingRepository: ControlledLocationRepository(
         canOpenAppSettings: false,
@@ -789,10 +784,10 @@ void main() {
   });
 
   test('finish does not stay stuck when stream cancellation hangs', () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final HangingCancelLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         HangingCancelLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -826,10 +821,10 @@ void main() {
 
   test('pauses recording cleanly when permission is downgraded mid-session',
       () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -883,12 +878,12 @@ void main() {
 
   test('blocks recording when device location settings are not ready',
       () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository(
       readinessError: 'Enable high-accuracy location before recording.',
     );
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -908,10 +903,10 @@ void main() {
   });
 
   test('defers background sync while a ride is actively recording', () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -937,11 +932,11 @@ void main() {
 
   test('continues pending sync pass after one session throws unexpectedly',
       () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
+    final repository = FakeSessionRepository();
     repository.syncSessionThrowIds.add(12);
-    final ControlledLocationRepository locationRepository =
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -966,11 +961,11 @@ void main() {
 
   test('continues recording after a transient local point persistence failure',
       () async {
-    final FlakyPersistenceSessionRepository repository =
+    final repository =
         FlakyPersistenceSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -1021,7 +1016,7 @@ void main() {
     );
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    final SessionStats persistedStats = await repository.computeSessionStats(1);
+    final persistedStats = await repository.computeSessionStats(1);
 
     expect(controller.state.phase, RecordScreenPhase.recording);
     expect(controller.state.streamRestartCount, 0);
@@ -1037,10 +1032,10 @@ void main() {
   });
 
   test('watchdog waits for delayed initial sample before restarting', () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );
@@ -1060,13 +1055,6 @@ void main() {
     expect(
       repository.recordedDiagnostics.any(
         (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_no_initial_sample',
-      ),
-      isTrue,
-    );
-    expect(
-      repository.recordedDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
             event.eventType == 'sample_watchdog_waiting_initial_sample',
       ),
       isTrue,
@@ -1074,7 +1062,8 @@ void main() {
     expect(
       repository.recordedDiagnostics.any(
         (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_restart',
+            event.eventType == 'sample_watchdog_restart' ||
+            event.eventType == 'sample_watchdog_no_initial_sample',
       ),
       isFalse,
     );
@@ -1096,85 +1085,13 @@ void main() {
     expect(locationRepository.watchPositionCalls, 1);
   });
 
-  test('watchdog enters recovery before restarting a stalled live stream',
-      () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
-        ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
-      sessionRepository: repository,
-      locationTrackingRepository: locationRepository,
-    );
-    addTearDown(() async {
-      controller.dispose();
-      await locationRepository.close();
-    });
-
-    await controller.bootstrap();
-    await controller.startRecording();
-
-    locationRepository.emit(
-      LocationSample(
-        timestamp: DateTime.utc(2026, 1, 1, 0, 0, 0),
-        latitude: 49.0,
-        longitude: -123.0,
-        accuracyM: 5,
-        altitudeM: 100,
-        speedMps: 4,
-        headingDeg: 90,
-      ),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-
-    final int diagnosticBaseline = repository.recordedDiagnostics.length;
-    await Future<void>.delayed(const Duration(seconds: 22));
-
-    final List<TrackingDiagnosticEvent> watchdogDiagnostics =
-        repository.recordedDiagnostics
-            .skip(diagnosticBaseline)
-            .where(
-              (TrackingDiagnosticEvent event) =>
-                  event.eventType.startsWith('sample_watchdog_'),
-            )
-            .toList(growable: false);
-
-    expect(controller.state.phase, RecordScreenPhase.recording);
-    expect(controller.state.streamRestartCount, 0);
-    expect(locationRepository.watchPositionCalls, 1);
-    expect(
-      locationRepository.requestedTrackingModes,
-      contains(TrackingMode.lowConfidenceRecovery),
-    );
-    expect(
-      watchdogDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_recovery_mode',
-      ),
-      isTrue,
-    );
-    expect(
-      watchdogDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_recovery_wait',
-      ),
-      isTrue,
-    );
-    expect(
-      watchdogDiagnostics.any(
-        (TrackingDiagnosticEvent event) =>
-            event.eventType == 'sample_watchdog_restart',
-      ),
-      isFalse,
-    );
-  });
-
   test(
       'ignores a queued reconnect from a finished session after a new recording starts',
       () async {
-    final FakeSessionRepository repository = FakeSessionRepository();
-    final ControlledLocationRepository locationRepository =
+    final repository = FakeSessionRepository();
+    final locationRepository =
         ControlledLocationRepository();
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
     );

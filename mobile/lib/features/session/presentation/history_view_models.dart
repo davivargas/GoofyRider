@@ -23,18 +23,18 @@ class SessionHistorySeasonSection {
 List<SessionHistorySeasonSection> buildSessionHistorySections(
   List<SessionHistoryEntryViewModel> items,
 ) {
-  final Map<String, List<SessionHistoryEntryViewModel>> grouped =
+  final grouped =
       <String, List<SessionHistoryEntryViewModel>>{};
-  for (final SessionHistoryEntryViewModel item in items) {
-    final String label = seasonLabelForDate(item.session.startedAt);
+  for (final item in items) {
+    final label = seasonLabelForDate(item.session.startedAt);
     grouped
         .putIfAbsent(label, () => <SessionHistoryEntryViewModel>[])
         .add(item);
   }
 
-  final List<SessionHistorySeasonSection> sections = grouped.entries.map(
+  final sections = grouped.entries.map(
     (MapEntry<String, List<SessionHistoryEntryViewModel>> entry) {
-      final List<SessionHistoryEntryViewModel> sortedItems =
+      final sortedItems =
           List<SessionHistoryEntryViewModel>.from(entry.value)
             ..sort(
               (SessionHistoryEntryViewModel a,
@@ -55,7 +55,7 @@ List<SessionHistorySeasonSection> buildSessionHistorySections(
 }
 
 String seasonLabelForDate(DateTime date) {
-  final int startYear = date.month >= 7 ? date.year : date.year - 1;
-  final int endYear = startYear + 1;
+  final startYear = date.month >= 7 ? date.year : date.year - 1;
+  final endYear = startYear + 1;
   return '$startYear/$endYear';
 }

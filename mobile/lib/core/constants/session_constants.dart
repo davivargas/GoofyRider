@@ -30,7 +30,25 @@ class SessionConstants {
   static const double liftHeadingStabilityThreshold = 0.85;
   static const double headingAccuracyStrongThresholdDeg = 30;
   static const int recoveryPersistenceSeconds = 4;
-  static const int initialFixStableSamples = 3;
+
+  /// A `stoppedIdle` interval bracketed by prior descent stays bucketed as
+  /// descent only while the stop is shorter than this, so brief falls and
+  /// quick rests don't steal from descent time.
+  static const int fallMaxStopDurationSeconds = 90;
+
+  /// Maximum horizontal drift from the stop-start anchor tolerated while a
+  /// stop is still treated as an in-run fall/rest rather than true idle.
+  static const double fallMaxDriftMeters = 15;
+
+  /// Auto-pause fires after this many seconds of contiguous stillness.
+  /// §4.2 of the GPS overhaul plan: 5 min covers the restaurant-break case
+  /// without false-pausing slow lift-line shuffles.
+  static const int autoPauseStillnessThresholdSeconds = 300;
+
+  /// Maximum horizontal drift from the auto-pause anchor tolerated before
+  /// the stillness window resets. Wider than the fall-rule drift because
+  /// this governs lodge-scale stationarity, not mid-run falls.
+  static const double autoPauseMaxDriftMeters = 30;
 
   static const int maxSpeedWindowSeconds = 5;
   static const int maxSpeedPersistenceSamples = 3;

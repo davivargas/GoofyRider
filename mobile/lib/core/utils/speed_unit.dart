@@ -42,7 +42,7 @@ extension SpeedUnitFormatting on SpeedUnit {
     double valueMps, {
     int fractionDigits = 1,
   }) {
-    final double converted = convertFromMetersPerSecond(valueMps);
+    final converted = convertFromMetersPerSecond(valueMps);
     return '${converted.toStringAsFixed(fractionDigits)} $shortLabel';
   }
 }

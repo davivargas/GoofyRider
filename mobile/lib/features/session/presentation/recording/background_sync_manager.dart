@@ -63,7 +63,7 @@ class BackgroundSyncManager {
 
     if (_backgroundSyncInFlight) {
       _backgroundSyncQueued = true;
-      final Completer<void>? activeCycle = _backgroundSyncCycleCompleter;
+      final activeCycle = _backgroundSyncCycleCompleter;
       if (activeCycle != null) {
         await activeCycle.future;
       }
@@ -80,14 +80,14 @@ class BackgroundSyncManager {
     _backgroundSyncInFlight = true;
     _backgroundSyncCycleCompleter = Completer<void>();
     try {
-      final List<LocalRideSession> pending =
+      final pending =
           await _sessionRepository.listPendingSyncSessions();
 
-      int syncedCount = 0;
-      int failedCount = 0;
-      for (final LocalRideSession session in pending) {
+      var syncedCount = 0;
+      var failedCount = 0;
+      for (final session in pending) {
         try {
-          final LocalRideSession result =
+          final result =
               await _sessionRepository.syncSession(session.localId);
           if (result.state == LocalSessionState.synced) {
             syncedCount += 1;
@@ -130,7 +130,7 @@ class BackgroundSyncManager {
       }
     } finally {
       _backgroundSyncInFlight = false;
-      final Completer<void>? activeCycle = _backgroundSyncCycleCompleter;
+      final activeCycle = _backgroundSyncCycleCompleter;
       _backgroundSyncCycleCompleter = null;
       if (activeCycle != null && !activeCycle.isCompleted) {
         activeCycle.complete();

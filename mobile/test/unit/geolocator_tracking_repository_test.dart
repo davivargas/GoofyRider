@@ -28,11 +28,11 @@ void main() {
   });
 
   test('watchPosition drops stale pre-session samples', () async {
-    final DateTime streamStartUtc = DateTime.utc(2026, 1, 1, 10, 0, 0);
-    final GeolocatorTrackingRepository repository =
+    final streamStartUtc = DateTime.utc(2026, 1, 1, 10, 0, 0);
+    final repository =
         GeolocatorTrackingRepository(nowUtc: () => streamStartUtc);
 
-    final Future<List<LocationSample>> samplesFuture =
+    final samplesFuture =
         repository.watchPosition().take(2).toList();
 
     await Future<void>.delayed(Duration.zero);
@@ -54,7 +54,7 @@ void main() {
       longitude: -123.2,
     ));
 
-    final List<LocationSample> samples = await samplesFuture;
+    final samples = await samplesFuture;
     expect(samples, hasLength(2));
     expect(samples[0].latitude, 49.1);
     expect(samples[0].longitude, -123.1);
@@ -68,10 +68,10 @@ void main() {
     fakePlatform.nextRequestPermissions.addAll(<LocationPermission>[
       LocationPermission.always,
     ]);
-    final GeolocatorTrackingRepository repository =
+    final repository =
         GeolocatorTrackingRepository();
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.granted);
     expect(fakePlatform.requestPermissionCalls, 1);
@@ -85,10 +85,10 @@ void main() {
       LocationPermission.whileInUse,
       LocationPermission.always,
     ]);
-    final GeolocatorTrackingRepository repository =
+    final repository =
         GeolocatorTrackingRepository();
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.granted);
     expect(fakePlatform.requestPermissionCalls, 2);
@@ -97,10 +97,10 @@ void main() {
   test('checkRecordingReadiness fails when permission is foreground-only',
       () async {
     fakePlatform.permission = LocationPermission.whileInUse;
-    final GeolocatorTrackingRepository repository =
+    final repository =
         GeolocatorTrackingRepository();
 
-    final String? readiness = await repository.checkRecordingReadiness();
+    final readiness = await repository.checkRecordingReadiness();
 
     expect(readiness, isNotNull);
     expect(readiness, contains('Allow all the time'));

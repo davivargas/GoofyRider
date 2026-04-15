@@ -28,7 +28,7 @@ class RemoteSessionCacheDao {
     required String? resortId,
     DateTime? createdAt,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.customStatement(
       '''
       INSERT INTO local_ride_sessions (
@@ -86,7 +86,7 @@ class RemoteSessionCacheDao {
       ],
     );
 
-    final LocalRideSession? persisted =
+    final persisted =
         await _db.sessions.getSessionByRemoteId(
       ownerUserId: ownerUserId,
       remoteId: remoteId,
@@ -101,15 +101,15 @@ class RemoteSessionCacheDao {
     required String ownerUserId,
     required List<Map<String, dynamic>> sessions,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
+    final now = DateTime.now().toUtc();
     await _db.transaction(() async {
       await _db.customStatement(
         'DELETE FROM cached_remote_session_summaries WHERE owner_user_id = ?',
         <Object?>[ownerUserId],
       );
 
-      for (final Map<String, dynamic> session in sessions) {
-        final String? remoteId = session['id'] as String?;
+      for (final session in sessions) {
+        final remoteId = session['id'] as String?;
         if (remoteId == null || remoteId.isEmpty) {
           continue;
         }
@@ -158,7 +158,7 @@ class RemoteSessionCacheDao {
   Future<List<Map<String, dynamic>>> readCachedRemoteSessions({
     required String ownerUserId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT payload_json
       FROM cached_remote_session_summaries
@@ -182,7 +182,7 @@ class RemoteSessionCacheDao {
     required String ownerUserId,
     required String remoteId,
   }) async {
-    final List<QueryRow> rows = await _db.customSelect(
+    final rows = await _db.customSelect(
       '''
       SELECT payload_json
       FROM cached_remote_session_summaries

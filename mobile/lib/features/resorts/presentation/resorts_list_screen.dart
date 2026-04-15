@@ -30,7 +30,7 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<ResortListResult> state =
+    final state =
         ref.watch(resortsControllerProvider);
 
     return Scaffold(
@@ -79,7 +79,7 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: result.items.length,
                     itemBuilder: (BuildContext context, int index) {
-                      final ResortSummary resort = result.items[index];
+                      final resort = result.items[index];
                       return Card(
                         margin: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),

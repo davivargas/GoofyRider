@@ -67,12 +67,12 @@ LocalSessionPoint _persistedPoint({
 
 void main() {
   test('suppresses distance inflation for near-static jitter', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime sessionStart = DateTime.utc(2026, 1, 1, 10, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final sessionStart = DateTime.utc(2026, 1, 1, 10, 0, 0);
 
-    for (int index = 0; index < 30; index++) {
-      final double jitterLat = 50.0 + ((index.isEven ? 1 : -1) * 0.000005);
-      final double jitterLng = -122.0 + ((index % 3 == 0 ? 1 : -1) * 0.000005);
+    for (var index = 0; index < 30; index++) {
+      final jitterLat = 50.0 + ((index.isEven ? 1 : -1) * 0.000005);
+      final jitterLng = -122.0 + ((index % 3 == 0 ? 1 : -1) * 0.000005);
       engine.processSample(
         sample: _sample(
           timestamp: sessionStart.add(Duration(seconds: index)),
@@ -85,7 +85,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult last = engine.processSample(
+    final last = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 31)),
         latitude: 50.000004,
@@ -101,10 +101,10 @@ void main() {
   });
 
   test('rejects untrusted geometry spikes and avoids fake max speed', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime sessionStart = DateTime.utc(2026, 1, 1, 12, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final sessionStart = DateTime.utc(2026, 1, 1, 12, 0, 0);
 
-    for (int index = 0; index < 8; index++) {
+    for (var index = 0; index < 8; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: sessionStart.add(Duration(seconds: index)),
@@ -118,7 +118,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult spike = engine.processSample(
+    final spike = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 9)),
         latitude: 50.03,
@@ -133,7 +133,7 @@ void main() {
     expect(spike.point.acceptedForAnalytics, isFalse);
     expect(spike.point.qualityClass, 'reject');
 
-    final TrackingProcessResult afterRecovery = engine.processSample(
+    final afterRecovery = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 10)),
         latitude: 50.0009,
@@ -149,8 +149,8 @@ void main() {
   });
 
   test('rejected altitude spikes do not pollute the vertical filter', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime sessionStart = DateTime.utc(2026, 1, 2, 6, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final sessionStart = DateTime.utc(2026, 1, 2, 6, 0, 0);
 
     engine.processSample(
       sample: _sample(
@@ -178,7 +178,7 @@ void main() {
       activeDurationS: 1,
     );
 
-    final TrackingProcessResult rejected = engine.processSample(
+    final rejected = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 2)),
         latitude: 50.00016,
@@ -192,7 +192,7 @@ void main() {
       activeDurationS: 2,
     );
 
-    final TrackingProcessResult resumed = engine.processSample(
+    final resumed = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 3)),
         latitude: 50.00024,
@@ -213,10 +213,10 @@ void main() {
   test(
       'uses trusted platform speed over geometry fallback when confidence is high',
       () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime sessionStart = DateTime.utc(2026, 1, 2, 8, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final sessionStart = DateTime.utc(2026, 1, 2, 8, 0, 0);
 
-    for (int index = 0; index < 3; index++) {
+    for (var index = 0; index < 3; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: sessionStart.add(Duration(seconds: index)),
@@ -230,7 +230,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult result = engine.processSample(
+    final result = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 4)),
         latitude: 49.000332,
@@ -249,10 +249,10 @@ void main() {
   test(
       'classifies poor horizontal accuracy as low confidence once lock is stable',
       () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime sessionStart = DateTime.utc(2026, 1, 3, 9, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final sessionStart = DateTime.utc(2026, 1, 3, 9, 0, 0);
 
-    for (int index = 0; index < 4; index++) {
+    for (var index = 0; index < 4; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: sessionStart.add(Duration(seconds: index)),
@@ -266,7 +266,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult lowConfidence = engine.processSample(
+    final lowConfidence = engine.processSample(
       sample: _sample(
         timestamp: sessionStart.add(const Duration(seconds: 5)),
         latitude: 51.00032,
@@ -285,11 +285,11 @@ void main() {
 
   test('time-aware live smoothing responds to actual sample gaps', () {
     TrackingProcessResult runScenario({required int gapSeconds}) {
-      final TrackingPipelineEngine engine = TrackingPipelineEngine();
-      final DateTime start = DateTime.utc(2026, 1, 4, 10, 0, 0);
-      double latitude = 48.5;
+      final engine = TrackingPipelineEngine();
+      final start = DateTime.utc(2026, 1, 4, 10, 0, 0);
+      var latitude = 48.5;
 
-      for (int index = 0; index < 8; index++) {
+      for (var index = 0; index < 8; index++) {
         latitude += 0.00007;
         engine.processSample(
           sample: _sample(
@@ -321,8 +321,8 @@ void main() {
       );
     }
 
-    final TrackingProcessResult shortGap = runScenario(gapSeconds: 1);
-    final TrackingProcessResult longGap = runScenario(gapSeconds: 5);
+    final shortGap = runScenario(gapSeconds: 1);
+    final longGap = runScenario(gapSeconds: 5);
 
     expect(longGap.liveSpeedMps, greaterThan(shortGap.liveSpeedMps + 1.0));
     expect(shortGap.point.qualityClass, isNot('reject'));
@@ -330,15 +330,15 @@ void main() {
   });
 
   test('tracks steady downhill acceleration with believable live speed', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 5, 11, 0, 0);
-    double latitude = 49.2;
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 5, 11, 0, 0);
+    var latitude = 49.2;
     TrackingProcessResult? last;
     double previousLive = 0;
 
-    for (int index = 0; index < 16; index++) {
+    for (var index = 0; index < 16; index++) {
       latitude += 0.0001;
-      final TrackingProcessResult current = engine.processSample(
+      final current = engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
           latitude: latitude,
@@ -365,10 +365,10 @@ void main() {
   });
 
   test('drops live speed quickly after sharp deceleration to stop', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 6, 9, 0, 0);
-    double latitude = 47.8;
-    TrackingProcessResult last = engine.processSample(
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 6, 9, 0, 0);
+    var latitude = 47.8;
+    var last = engine.processSample(
       sample: _sample(
         timestamp: start,
         latitude: latitude,
@@ -381,7 +381,7 @@ void main() {
       activeDurationS: 0,
     );
 
-    for (int index = 1; index < 14; index++) {
+    for (var index = 1; index < 14; index++) {
       latitude += 0.00011;
       last = engine.processSample(
         sample: _sample(
@@ -397,8 +397,8 @@ void main() {
       );
     }
 
-    final double beforeDrop = last.liveSpeedMps;
-    final TrackingProcessResult drop1 = engine.processSample(
+    final beforeDrop = last.liveSpeedMps;
+    final drop1 = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 14)),
         latitude: latitude + 0.000001,
@@ -410,7 +410,7 @@ void main() {
       sessionStartedAtUtc: start,
       activeDurationS: 14,
     );
-    final TrackingProcessResult drop2 = engine.processSample(
+    final drop2 = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 15)),
         latitude: latitude + 0.0000012,
@@ -422,7 +422,7 @@ void main() {
       sessionStartedAtUtc: start,
       activeDurationS: 15,
     );
-    final TrackingProcessResult drop3 = engine.processSample(
+    final drop3 = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 16)),
         latitude: latitude + 0.0000013,
@@ -441,10 +441,10 @@ void main() {
   });
 
   test('keeps fused speed near platform when geometry is noisy', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 7, 8, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 7, 8, 0, 0);
 
-    for (int index = 0; index < 5; index++) {
+    for (var index = 0; index < 5; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
@@ -460,7 +460,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult noisyGeometry = engine.processSample(
+    final noisyGeometry = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 6)),
         latitude: 50.400455,
@@ -479,10 +479,10 @@ void main() {
   });
 
   test('falls back toward geometry when platform speed accuracy is poor', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 8, 10, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 8, 10, 0, 0);
 
-    for (int index = 0; index < 5; index++) {
+    for (var index = 0; index < 5; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
@@ -497,7 +497,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult poorPlatform = engine.processSample(
+    final poorPlatform = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 6)),
         latitude: 49.60062,
@@ -511,18 +511,18 @@ void main() {
       activeDurationS: 6,
     );
 
-    final double fused = poorPlatform.point.fusedSpeedMps!;
-    final double derived = poorPlatform.point.derivedSpeedMps!;
+    final fused = poorPlatform.point.fusedSpeedMps!;
+    final derived = poorPlatform.point.derivedSpeedMps!;
 
     expect((fused - derived).abs(), lessThan((fused - 18).abs()));
     expect(fused, lessThan(18));
   });
 
   test('handles mixed trusted and untrusted platform-speed samples', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 9, 10, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 9, 10, 0, 0);
 
-    for (int index = 0; index < 5; index++) {
+    for (var index = 0; index < 5; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
@@ -538,7 +538,7 @@ void main() {
       );
     }
 
-    final TrackingProcessResult trusted = engine.processSample(
+    final trusted = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 6)),
         latitude: 48.900405,
@@ -552,7 +552,7 @@ void main() {
       activeDurationS: 6,
     );
 
-    final TrackingProcessResult untrusted = engine.processSample(
+    final untrusted = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 7)),
         latitude: 48.90052,
@@ -566,10 +566,10 @@ void main() {
       activeDurationS: 7,
     );
 
-    final double trustedFused = trusted.point.fusedSpeedMps!;
-    final double trustedDerived = trusted.point.derivedSpeedMps!;
-    final double untrustedFused = untrusted.point.fusedSpeedMps!;
-    final double untrustedDerived = untrusted.point.derivedSpeedMps!;
+    final trustedFused = trusted.point.fusedSpeedMps!;
+    final trustedDerived = trusted.point.derivedSpeedMps!;
+    final untrustedFused = untrusted.point.fusedSpeedMps!;
+    final untrustedDerived = untrusted.point.derivedSpeedMps!;
 
     expect(trustedFused, greaterThan(12));
     expect(
@@ -583,10 +583,10 @@ void main() {
   });
 
   test('max-speed window resists single-sample spikes', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 10, 8, 0, 0);
-    double latitude = 50.1;
-    TrackingProcessResult last = engine.processSample(
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 10, 8, 0, 0);
+    var latitude = 50.1;
+    var last = engine.processSample(
       sample: _sample(
         timestamp: start,
         latitude: latitude,
@@ -599,7 +599,7 @@ void main() {
       activeDurationS: 0,
     );
 
-    for (int index = 1; index < 10; index++) {
+    for (var index = 1; index < 10; index++) {
       latitude += 0.00011;
       last = engine.processSample(
         sample: _sample(
@@ -616,7 +616,7 @@ void main() {
     }
 
     latitude += 0.00029;
-    final TrackingProcessResult spike = engine.processSample(
+    final spike = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 10)),
         latitude: latitude,
@@ -629,7 +629,7 @@ void main() {
       activeDurationS: 10,
     );
 
-    for (int index = 11; index < 16; index++) {
+    for (var index = 11; index < 16; index++) {
       latitude += 0.00011;
       last = engine.processSample(
         sample: _sample(
@@ -650,11 +650,11 @@ void main() {
   });
 
   test('applies heavier smoothing after transition to stopped mode', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 11, 7, 0, 0);
-    double latitude = 49.9;
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 11, 7, 0, 0);
+    var latitude = 49.9;
 
-    TrackingProcessResult last = engine.processSample(
+    var last = engine.processSample(
       sample: _sample(
         timestamp: start,
         latitude: latitude,
@@ -667,7 +667,7 @@ void main() {
       activeDurationS: 0,
     );
 
-    for (int index = 1; index < 16; index++) {
+    for (var index = 1; index < 16; index++) {
       latitude += 0.00011;
       last = engine.processSample(
         sample: _sample(
@@ -684,8 +684,8 @@ void main() {
       );
     }
 
-    final double activeBaseline = last.liveSpeedMps;
-    final TrackingProcessResult activeSpike = engine.processSample(
+    final activeBaseline = last.liveSpeedMps;
+    final activeSpike = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 16)),
         latitude: latitude + 0.00002,
@@ -697,12 +697,12 @@ void main() {
       sessionStartedAtUtc: start,
       activeDurationS: 16,
     );
-    final double activeDelta = activeSpike.liveSpeedMps - activeBaseline;
+    final activeDelta = activeSpike.liveSpeedMps - activeBaseline;
     expect(activeDelta, greaterThan(1));
 
-    double stopLatitude = latitude + 0.000021;
-    TrackingProcessResult stopped = activeSpike;
-    for (int index = 17; index < 33; index++) {
+    var stopLatitude = latitude + 0.000021;
+    var stopped = activeSpike;
+    for (var index = 17; index < 33; index++) {
       stopLatitude += 0.000001;
       stopped = engine.processSample(
         sample: _sample(
@@ -720,8 +720,8 @@ void main() {
     }
 
     expect(stopped.motionState, MotionState.stoppedIdle);
-    final double stoppedBaseline = stopped.liveSpeedMps;
-    final TrackingProcessResult stoppedSpike = engine.processSample(
+    final stoppedBaseline = stopped.liveSpeedMps;
+    final stoppedSpike = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 33)),
         latitude: stopLatitude + 0.000002,
@@ -735,17 +735,17 @@ void main() {
       activeDurationS: 33,
     );
 
-    final double stoppedDelta = stoppedSpike.liveSpeedMps - stoppedBaseline;
+    final stoppedDelta = stoppedSpike.liveSpeedMps - stoppedBaseline;
     expect(stoppedDelta, lessThan(activeDelta * 0.7));
   });
 
   test('uses the previous stable state on the sample that flips into descent',
       () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 12, 7, 0, 0);
-    double latitude = 49.7;
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 12, 7, 0, 0);
+    var latitude = 49.7;
 
-    TrackingProcessResult settled = engine.processSample(
+    var settled = engine.processSample(
       sample: _sample(
         timestamp: start,
         latitude: latitude,
@@ -759,7 +759,7 @@ void main() {
       activeDurationS: 0,
     );
 
-    for (int index = 1; index < 20; index++) {
+    for (var index = 1; index < 20; index++) {
       latitude += 0.000001;
       settled = engine.processSample(
         sample: _sample(
@@ -778,8 +778,8 @@ void main() {
 
     expect(settled.motionState, MotionState.stoppedIdle);
 
-    TrackingProcessResult transition = settled;
-    for (int index = 20; index < 26; index++) {
+    var transition = settled;
+    for (var index = 20; index < 26; index++) {
       latitude += 0.00012;
       transition = engine.processSample(
         sample: _sample(
@@ -800,7 +800,7 @@ void main() {
     expect(transition.liveSpeedMps, lessThan(5));
 
     latitude += 0.00012;
-    final TrackingProcessResult followUp = engine.processSample(
+    final followUp = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 26)),
         latitude: latitude,
@@ -827,10 +827,10 @@ void main() {
     }) runScenario({
       required bool insertRejectedGap,
     }) {
-      final TrackingPipelineEngine engine = TrackingPipelineEngine();
-      final DateTime start = DateTime.utc(2026, 1, 13, 8, 0, 0);
-      double latitude = 48.8;
-      TrackingProcessResult baseline = engine.processSample(
+      final engine = TrackingPipelineEngine();
+      final start = DateTime.utc(2026, 1, 13, 8, 0, 0);
+      var latitude = 48.8;
+      var baseline = engine.processSample(
         sample: _sample(
           timestamp: start,
           latitude: latitude,
@@ -844,7 +844,7 @@ void main() {
         activeDurationS: 0,
       );
 
-      for (int index = 1; index < 8; index++) {
+      for (var index = 1; index < 8; index++) {
         latitude += 0.00009;
         baseline = engine.processSample(
           sample: _sample(
@@ -880,7 +880,7 @@ void main() {
       }
 
       latitude += 0.00018;
-      final TrackingProcessResult recovery = engine.processSample(
+      final recovery = engine.processSample(
         sample: _sample(
           timestamp: start.add(const Duration(seconds: 9)),
           latitude: latitude,
@@ -901,16 +901,8 @@ void main() {
       );
     }
 
-    final ({
-      TrackingProcessResult baseline,
-      TrackingProcessResult? rejected,
-      TrackingProcessResult recovery,
-    }) withRejected = runScenario(insertRejectedGap: true);
-    final ({
-      TrackingProcessResult baseline,
-      TrackingProcessResult? rejected,
-      TrackingProcessResult recovery,
-    }) withoutRejected = runScenario(insertRejectedGap: false);
+    final withRejected = runScenario(insertRejectedGap: true);
+    final withoutRejected = runScenario(insertRejectedGap: false);
 
     expect(withRejected.rejected, isNotNull);
     expect(withRejected.rejected!.point.qualityClass, 'reject');
@@ -925,11 +917,11 @@ void main() {
   });
 
   test('holds the previous stopped state through ambiguous movement', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 14, 8, 0, 0);
-    double latitude = 49.4;
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 14, 8, 0, 0);
+    var latitude = 49.4;
 
-    TrackingProcessResult settled = engine.processSample(
+    var settled = engine.processSample(
       sample: _sample(
         timestamp: start,
         latitude: latitude,
@@ -943,7 +935,7 @@ void main() {
       activeDurationS: 0,
     );
 
-    for (int index = 1; index < 20; index++) {
+    for (var index = 1; index < 20; index++) {
       latitude += 0.000001;
       settled = engine.processSample(
         sample: _sample(
@@ -962,8 +954,8 @@ void main() {
 
     expect(settled.motionState, MotionState.stoppedIdle);
 
-    TrackingProcessResult ambiguous = settled;
-    for (int index = 20; index < 29; index++) {
+    var ambiguous = settled;
+    for (var index = 20; index < 29; index++) {
       latitude += 0.000025;
       ambiguous = engine.processSample(
         sample: _sample(
@@ -986,11 +978,11 @@ void main() {
   });
 
   test('ambiguous samples do not keep low-confidence recovery sticky', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 15, 8, 0, 0);
-    double latitude = 49.6;
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 15, 8, 0, 0);
+    var latitude = 49.6;
 
-    TrackingProcessResult settled = engine.processSample(
+    var settled = engine.processSample(
       sample: _sample(
         timestamp: start,
         latitude: latitude,
@@ -1004,7 +996,7 @@ void main() {
       activeDurationS: 0,
     );
 
-    for (int index = 1; index < 20; index++) {
+    for (var index = 1; index < 20; index++) {
       latitude += 0.000001;
       settled = engine.processSample(
         sample: _sample(
@@ -1023,8 +1015,8 @@ void main() {
 
     expect(settled.motionState, MotionState.stoppedIdle);
 
-    TrackingProcessResult recovery = settled;
-    for (int index = 20; index < 23; index++) {
+    var recovery = settled;
+    for (var index = 20; index < 23; index++) {
       latitude += 0.00002;
       recovery = engine.processSample(
         sample: _sample(
@@ -1043,8 +1035,8 @@ void main() {
 
     expect(recovery.motionState, MotionState.lowConfidenceRecovery);
 
-    TrackingProcessResult ambiguous = recovery;
-    for (int index = 23; index < 33; index++) {
+    var ambiguous = recovery;
+    for (var index = 23; index < 33; index++) {
       latitude += 0.000025;
       ambiguous = engine.processSample(
         sample: _sample(
@@ -1066,11 +1058,11 @@ void main() {
   });
 
   test('live stats keep ride average tied to descent time only', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 16, 7, 0, 0);
-    double latitude = 49.5;
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 16, 7, 0, 0);
+    var latitude = 49.5;
 
-    for (int index = 0; index < 3; index++) {
+    for (var index = 0; index < 3; index++) {
       engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
@@ -1087,7 +1079,7 @@ void main() {
       latitude += 0.000001;
     }
 
-    TrackingProcessResult last = engine.processSample(
+    var last = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 3)),
         latitude: latitude,
@@ -1102,7 +1094,7 @@ void main() {
     );
     latitude += 0.00012;
 
-    for (int index = 4; index < 13; index++) {
+    for (var index = 4; index < 13; index++) {
       last = engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
@@ -1119,7 +1111,7 @@ void main() {
       latitude += 0.00012;
     }
 
-    for (int index = 13; index < 45; index++) {
+    for (var index = 13; index < 45; index++) {
       last = engine.processSample(
         sample: _sample(
           timestamp: start.add(Duration(seconds: index)),
@@ -1145,8 +1137,8 @@ void main() {
   });
 
   test('seedFromPersistedPoints restores the last stable motion fallback', () {
-    final TrackingPipelineEngine engine = TrackingPipelineEngine();
-    final DateTime start = DateTime.utc(2026, 1, 17, 8, 0, 0);
+    final engine = TrackingPipelineEngine();
+    final start = DateTime.utc(2026, 1, 17, 8, 0, 0);
 
     engine.seedFromPersistedPoints(
       points: <LocalSessionPoint>[
@@ -1202,7 +1194,7 @@ void main() {
       stats: SessionStats.zero,
     );
 
-    final TrackingProcessResult result = engine.processSample(
+    final result = engine.processSample(
       sample: _sample(
         timestamp: start.add(const Duration(seconds: 12)),
         latitude: 50.00045,
@@ -1221,8 +1213,8 @@ void main() {
   });
 
   test('timeline analysis honors stored zero distance deltas', () {
-    final DateTime start = DateTime.utc(2026, 1, 18, 8, 0, 0);
-    final SessionTimelineAnalysis analysis = analyzeSessionTimeline(
+    final start = DateTime.utc(2026, 1, 18, 8, 0, 0);
+    final analysis = analyzeSessionTimeline(
       points: <LocalSessionPoint>[
         LocalSessionPoint(
           id: 1,

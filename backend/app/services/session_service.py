@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.session_point import SessionPoint
+from app.models.session_point_analytics import SessionPointAnalytics
 from app.repositories.protocols import ResortRepositoryProtocol
 from app.repositories.protocols import RideSessionRepositoryProtocol
 from app.repositories.protocols import SessionPointRepositoryProtocol
@@ -215,35 +216,56 @@ class SessionService:
         session_id: uuid.UUID,
         points: Sequence[SessionPointInput],
     ) -> list[SessionPoint]:
-        return [
-            SessionPoint(
-                session_id=session_id,
-                t_offset_ms=point.elapsed_offset_ms,
-                recorded_at=point.recorded_at
-                or ride_session.started_at + timedelta(milliseconds=point.elapsed_offset_ms),
-                latitude=point.latitude,
-                longitude=point.longitude,
-                accuracy_m=point.accuracy_m,
-                elapsed_realtime_ns=point.elapsed_realtime_ns,
-                altitude_m=point.altitude_m,
-                vertical_accuracy_m=point.vertical_accuracy_m,
-                speed_mps=point.speed_mps,
-                speed_accuracy_mps=point.speed_accuracy_mps,
-                heading_deg=point.heading_deg,
-                bearing_accuracy_deg=point.bearing_accuracy_deg,
-                provider=point.provider,
-                is_mocked=point.is_mocked,
-                quality_class=point.quality_class,
-                quality_score=point.quality_score,
-                quality_reason=point.quality_reason,
-                filtered_latitude=point.filtered_latitude,
-                filtered_longitude=point.filtered_longitude,
-                filtered_altitude_m=point.filtered_altitude_m,
-                fused_speed_mps=point.fused_speed_mps,
-                derived_speed_mps=point.derived_speed_mps,
-                distance_delta_m=point.distance_delta_m,
-                motion_state=point.motion_state,
-                accepted_for_analytics=point.accepted_for_analytics,
-            )
-            for point in points
-        ]
+        return [self._build_point_with_analytics(ride_session, session_id, p) for p in points]
+
+    def _build_point_with_analytics(
+        self,
+        ride_session: RideSession,
+        session_id: uuid.UUID,
+        point: SessionPointInput,
+    ) -> SessionPoint:
+        session_point = SessionPoint(
+            session_id=session_id,
+            t_offset_ms=point.elapsed_offset_ms,
+            recorded_at=point.recorded_at
+            or ride_session.started_at + timedelta(milliseconds=point.elapsed_offset_ms),
+            latitude=point.latitude,
+            longitude=point.longitude,
+            accuracy_m=point.accuracy_m,
+            elapsed_realtime_ns=point.elapsed_realtime_ns,
+            altitude_m=point.altitude_m,
+            vertical_accuracy_m=point.vertical_accuracy_m,
+            speed_mps=point.speed_mps,
+            speed_accuracy_mps=point.speed_accuracy_mps,
+            heading_deg=point.heading_deg,
+            bearing_accuracy_deg=point.bearing_accuracy_deg,
+            provider=point.provider,
+            is_mocked=point.is_mocked,
+            # Legacy analytics columns stay populated during dual-write so
+            # the read fallback works for clients still hitting this path.
+            quality_class=point.quality_class,
+            quality_score=point.quality_score,
+            quality_reason=point.quality_reason,
+            filtered_latitude=point.filtered_latitude,
+            filtered_longitude=point.filtered_longitude,
+            filtered_altitude_m=point.filtered_altitude_m,
+            fused_speed_mps=point.fused_speed_mps,
+            derived_speed_mps=point.derived_speed_mps,
+            distance_delta_m=point.distance_delta_m,
+            motion_state=point.motion_state,
+            accepted_for_analytics=point.accepted_for_analytics,
+        )
+        session_point.analytics = SessionPointAnalytics(
+            quality_class=point.quality_class,
+            quality_score=point.quality_score,
+            quality_reason=point.quality_reason,
+            filtered_latitude=point.filtered_latitude,
+            filtered_longitude=point.filtered_longitude,
+            filtered_altitude_m=point.filtered_altitude_m,
+            fused_speed_mps=point.fused_speed_mps,
+            derived_speed_mps=point.derived_speed_mps,
+            distance_delta_m=point.distance_delta_m,
+            motion_state=point.motion_state,
+            accepted_for_analytics=point.accepted_for_analytics,
+        )
+        return session_point

@@ -60,7 +60,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _recordIcon(BuildContext context, {required bool selected}) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 34,
       height: 34,

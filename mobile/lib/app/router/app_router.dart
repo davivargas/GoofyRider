@@ -17,7 +17,7 @@ import '../shell/home_screen.dart';
 import 'route_paths.dart';
 
 final appRouterProvider = Provider<GoRouter>((Ref ref) {
-  final ValueNotifier<int> refresh = ValueNotifier<int>(0);
+  final refresh = ValueNotifier<int>(0);
   ref.listen<AuthState>(
     authControllerProvider,
     (_, __) => refresh.value++,
@@ -28,8 +28,8 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
     initialLocation: RoutePaths.home,
     refreshListenable: refresh,
     redirect: (BuildContext context, GoRouterState state) {
-      final AuthState authState = ref.read(authControllerProvider);
-      final bool isAuthRoute =
+      final authState = ref.read(authControllerProvider);
+      final isAuthRoute =
           state.matchedLocation == RoutePaths.login || state.matchedLocation == RoutePaths.register;
 
       if (authState.status == AuthStatus.unknown) {
@@ -81,7 +81,7 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
                   GoRoute(
                     path: 'detail/:resortId',
                     builder: (BuildContext context, GoRouterState state) {
-                      final String resortId = state.pathParameters['resortId']!;
+                      final resortId = state.pathParameters['resortId']!;
                       return ResortDetailScreen(resortId: resortId);
                     },
                   ),
@@ -94,7 +94,7 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
               GoRoute(
                 path: RoutePaths.record,
                 builder: (BuildContext context, GoRouterState state) {
-                  final String? resortId = state.uri.queryParameters['resortId'];
+                  final resortId = state.uri.queryParameters['resortId'];
                   return RecordScreen(preselectedResortId: resortId);
                 },
               ),
@@ -109,7 +109,7 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
                   GoRoute(
                     path: 'detail/:sessionId',
                     builder: (BuildContext context, GoRouterState state) {
-                      final int localSessionId =
+                      final localSessionId =
                           int.parse(state.pathParameters['sessionId']!);
                       return SessionDetailScreen(localSessionId: localSessionId);
                     },

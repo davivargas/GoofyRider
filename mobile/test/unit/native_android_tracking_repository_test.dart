@@ -10,12 +10,12 @@ import 'package:goofyrider_mobile/features/session/domain/tracking_mode_profiles
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const MethodChannel controlChannel =
+  const controlChannel =
       MethodChannel('goofyrider/test/location_control');
-  const EventChannel eventChannel =
+  const eventChannel =
       EventChannel('goofyrider/test/location_events');
 
-  final List<MethodCall> methodCalls = <MethodCall>[];
+  final methodCalls = <MethodCall>[];
 
   setUp(() {
     methodCalls.clear();
@@ -35,98 +35,67 @@ void main() {
 
   test('setTrackingMode sends expected native payload on mode switches',
       () async {
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
     );
 
-    await repository.setTrackingMode(TrackingMode.initializingFix);
-    await repository.setTrackingMode(TrackingMode.activeDescent);
-    await repository.setTrackingMode(TrackingMode.liftUphill);
-    await repository.setTrackingMode(TrackingMode.stoppedIdle);
-    await repository.setTrackingMode(TrackingMode.lowConfidenceRecovery);
+    await repository.setTrackingMode(TrackingMode.acquiring);
+    await repository.setTrackingMode(TrackingMode.active);
 
-    expect(methodCalls, hasLength(5));
+    expect(methodCalls, hasLength(2));
     expect(
       methodCalls.map((MethodCall call) => call.method),
       everyElement('setTrackingMode'),
     );
 
-    final List<Map<String, dynamic>> payloads = methodCalls
+    final payloads = methodCalls
         .map((MethodCall call) =>
             Map<String, dynamic>.from(call.arguments as Map))
         .toList(growable: false);
 
-    final Map<String, dynamic> byMode = <String, dynamic>{
+    final byMode = <String, dynamic>{
       for (final Map<String, dynamic> payload in payloads)
         payload['mode'] as String: payload,
     };
 
-    final Map<String, dynamic> activeDescentPayload =
-        Map<String, dynamic>.from(byMode['active_descent'] as Map);
-    final Map<String, dynamic> activeDescentConfig =
-        Map<String, dynamic>.from(activeDescentPayload['config'] as Map);
-    expect(activeDescentConfig['priority'], 'high_accuracy');
-    expect(activeDescentConfig['intervalMs'], 900);
-    expect(activeDescentConfig['minIntervalMs'], 250);
-    expect(activeDescentConfig['maxDelayMs'], 900);
-    expect(activeDescentConfig['minDistanceM'], 5.0);
-    expect(activeDescentConfig['waitForAccurate'], isFalse);
+    final acquiringPayload =
+        Map<String, dynamic>.from(byMode['acquiring'] as Map);
+    final acquiringConfig =
+        Map<String, dynamic>.from(acquiringPayload['config'] as Map);
+    expect(acquiringConfig['priority'], 'high_accuracy');
+    expect(acquiringConfig['intervalMs'], 1000);
+    expect(acquiringConfig['minIntervalMs'], 500);
+    expect(acquiringConfig['maxDelayMs'], 0);
+    expect(acquiringConfig['minDistanceM'], 0.0);
+    expect(acquiringConfig['waitForAccurate'], isFalse);
     expect(
-      activeDescentPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.activeDescent)
+      acquiringPayload['staleSampleThresholdSeconds'],
+      TrackingModeProfiles.forMode(TrackingMode.acquiring)
           .staleSampleThresholdSeconds,
     );
 
-    final Map<String, dynamic> liftPayload =
-        Map<String, dynamic>.from(byMode['lift_uphill'] as Map);
-    final Map<String, dynamic> liftConfig =
-        Map<String, dynamic>.from(liftPayload['config'] as Map);
-    expect(liftConfig['priority'], 'high_accuracy');
-    expect(liftConfig['intervalMs'], 2500);
-    expect(liftConfig['minIntervalMs'], 1500);
-    expect(liftConfig['maxDelayMs'], 2500);
-    expect(liftConfig['minDistanceM'], 10.0);
+    final activePayload =
+        Map<String, dynamic>.from(byMode['active'] as Map);
+    final activeConfig =
+        Map<String, dynamic>.from(activePayload['config'] as Map);
+    expect(activeConfig['priority'], 'high_accuracy');
+    expect(activeConfig['intervalMs'], 1000);
+    expect(activeConfig['minIntervalMs'], 500);
+    expect(activeConfig['maxDelayMs'], 0);
+    expect(activeConfig['minDistanceM'], 0.0);
+    expect(activeConfig['waitForAccurate'], isFalse);
     expect(
-      liftPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.liftUphill)
-          .staleSampleThresholdSeconds,
-    );
-
-    final Map<String, dynamic> stoppedPayload =
-        Map<String, dynamic>.from(byMode['stopped_idle'] as Map);
-    final Map<String, dynamic> stoppedConfig =
-        Map<String, dynamic>.from(stoppedPayload['config'] as Map);
-    expect(stoppedConfig['intervalMs'], 15000);
-    expect(stoppedConfig['minIntervalMs'], 10000);
-    expect(stoppedConfig['maxDelayMs'], 15000);
-    expect(stoppedConfig['waitForAccurate'], isFalse);
-    expect(
-      stoppedPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.stoppedIdle)
-          .staleSampleThresholdSeconds,
-    );
-
-    final Map<String, dynamic> recoveryPayload =
-        Map<String, dynamic>.from(byMode['low_confidence_recovery'] as Map);
-    final Map<String, dynamic> recoveryConfig =
-        Map<String, dynamic>.from(recoveryPayload['config'] as Map);
-    expect(recoveryConfig['priority'], 'high_accuracy');
-    expect(recoveryConfig['intervalMs'], 1000);
-    expect(recoveryConfig['minIntervalMs'], 500);
-    expect(recoveryConfig['maxDelayMs'], 0);
-    expect(recoveryConfig['waitForAccurate'], isTrue);
-    expect(
-      recoveryPayload['staleSampleThresholdSeconds'],
-      TrackingModeProfiles.forMode(TrackingMode.lowConfidenceRecovery)
+      activePayload['staleSampleThresholdSeconds'],
+      TrackingModeProfiles.forMode(TrackingMode.active)
           .staleSampleThresholdSeconds,
     );
   });
 
   test('setTrackingMode falls back to geolocator delegate when bridge fails',
       () async {
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.granted,
       checkResult: LocationPermissionState.granted,
@@ -141,14 +110,14 @@ void main() {
       return null;
     });
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
     );
 
-    await repository.setTrackingMode(TrackingMode.activeDescent);
+    await repository.setTrackingMode(TrackingMode.active);
 
     expect(methodCalls.map((MethodCall call) => call.method), <String>[
       'setTrackingMode',
@@ -156,7 +125,7 @@ void main() {
     expect(permissionsDelegate.setTrackingModeCallCount, 1);
     expect(
       permissionsDelegate.lastTrackingMode,
-      TrackingMode.activeDescent,
+      TrackingMode.active,
     );
   });
 
@@ -205,13 +174,13 @@ void main() {
       ),
     );
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
     );
 
-    final List<LocationSample> samples =
+    final samples =
         await repository.watchPosition().toList();
 
     expect(samples, hasLength(2));
@@ -235,7 +204,7 @@ void main() {
   test(
       'watchPosition keeps waiting for native startup when first sample is slow',
       () async {
-    final LocationSample fallbackSample = LocationSample(
+    final fallbackSample = LocationSample(
       timestamp: DateTime.fromMillisecondsSinceEpoch(5000, isUtc: true),
       latitude: 49.50,
       longitude: -123.50,
@@ -244,14 +213,14 @@ void main() {
       speedMps: null,
       headingDeg: null,
     );
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.granted,
       checkResult: LocationPermissionState.granted,
       watchSamples: <LocationSample>[fallbackSample],
     );
-    final List<String> fallbackReasons = <String>[];
-    final LocationSample nativeSample = LocationSample(
+    final fallbackReasons = <String>[];
+    final nativeSample = LocationSample(
       timestamp: DateTime.fromMillisecondsSinceEpoch(1234, isUtc: true),
       latitude: 49.12,
       longitude: -123.12,
@@ -279,7 +248,7 @@ void main() {
       ),
     );
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
@@ -290,7 +259,7 @@ void main() {
       },
     );
 
-    final List<LocationSample> samples =
+    final samples =
         await repository.watchPosition().toList();
 
     expect(permissionsDelegate.watchPositionCallCount, 0);
@@ -304,7 +273,7 @@ void main() {
   test(
       'watchPosition reports fallback reason when native stream closes before first event',
       () async {
-    final LocationSample fallbackSample = LocationSample(
+    final fallbackSample = LocationSample(
       timestamp: DateTime.fromMillisecondsSinceEpoch(5000, isUtc: true),
       latitude: 49.50,
       longitude: -123.50,
@@ -313,13 +282,13 @@ void main() {
       speedMps: null,
       headingDeg: null,
     );
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.granted,
       checkResult: LocationPermissionState.granted,
       watchSamples: <LocationSample>[fallbackSample],
     );
-    final List<String> fallbackReasons = <String>[];
+    final fallbackReasons = <String>[];
     Object? fallbackError;
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -332,7 +301,7 @@ void main() {
       ),
     );
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
@@ -343,7 +312,7 @@ void main() {
       },
     );
 
-    final List<LocationSample> samples =
+    final samples =
         await repository.watchPosition().take(1).toList();
 
     expect(permissionsDelegate.watchPositionCallCount, 1);
@@ -368,13 +337,13 @@ void main() {
       return null;
     });
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
     );
 
-    final String? readiness = await repository.checkRecordingReadiness();
+    final readiness = await repository.checkRecordingReadiness();
 
     expect(readiness, isNotNull);
     expect(readiness, contains('Allow all the time'));
@@ -386,7 +355,7 @@ void main() {
   test(
       'ensurePermissions escalates foreground-only permission through native handoff',
       () async {
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.granted,
@@ -404,14 +373,14 @@ void main() {
       return null;
     });
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
     );
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.granted);
     expect(permissionsDelegate.ensureCallCount, 1);
@@ -423,7 +392,7 @@ void main() {
 
   test('ensurePermissions keeps foreground-only state if native handoff fails',
       () async {
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.granted,
@@ -438,14 +407,14 @@ void main() {
       return null;
     });
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
     );
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.grantedForegroundOnly);
     expect(permissionsDelegate.ensureCallCount, 1);
@@ -458,7 +427,7 @@ void main() {
   test(
       'ensurePermissions re-checks permission state after native settings handoff remains incomplete',
       () async {
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.grantedForegroundOnly,
@@ -476,14 +445,14 @@ void main() {
       return null;
     });
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
     );
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.grantedForegroundOnly);
     expect(permissionsDelegate.ensureCallCount, 1);
@@ -497,7 +466,7 @@ void main() {
   test(
       'ensurePermissions opens app settings fallback when native settings deep-link is unavailable',
       () async {
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.grantedForegroundOnly,
@@ -516,14 +485,14 @@ void main() {
       return null;
     });
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
     );
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.grantedForegroundOnly);
     expect(permissionsDelegate.ensureCallCount, 1);
@@ -537,20 +506,20 @@ void main() {
   test(
       'ensurePermissions skips native handoff when delegate does not return foreground-only',
       () async {
-    final _FakeGeolocatorTrackingRepository permissionsDelegate =
+    final permissionsDelegate =
         _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.denied,
       checkResult: LocationPermissionState.granted,
     );
 
-    final NativeAndroidTrackingRepository repository =
+    final repository =
         NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
     );
 
-    final LocationPermissionState state = await repository.ensurePermissions();
+    final state = await repository.ensurePermissions();
 
     expect(state, LocationPermissionState.denied);
     expect(permissionsDelegate.ensureCallCount, 1);

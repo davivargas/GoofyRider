@@ -17,8 +17,18 @@ class MotionStateDetector {
   final Queue<HeadingWindowSample> _headingWindow =
       Queue<HeadingWindowSample>();
 
+  // Layer-1 fall-rule state: track the last DESCENT/LIFT activity (not the
+  // last stable motion state, which includes stops) plus stop-window anchor.
+  SessionActivityType? _lastStableActivityType;
+  DateTime? _stoppedSinceUtc;
+  double? _stopAnchorLatitude;
+  double? _stopAnchorLongitude;
+  double _stopMaxDriftM = 0;
+
   MotionState get motionState => _motionState;
   MotionState get lastStableMotionState => _lastStableMotionState;
+  SessionActivityType? get lastStableActivityType => _lastStableActivityType;
+  DateTime? get stoppedSinceUtc => _stoppedSinceUtc;
 
   void reset() {
     _motionState = MotionState.initializingFix;
@@ -26,20 +36,27 @@ class MotionStateDetector {
     _pendingMotionState = null;
     _pendingMotionSeconds = 0;
     _headingWindow.clear();
+    _lastStableActivityType = null;
+    _clearStopTracking();
   }
 
   void seedFromPersistedPoints({required List<LocalSessionPoint> points}) {
-    for (final LocalSessionPoint point in points) {
-      final MotionState? pointMotionState = point.motionState == null
+    for (final point in points) {
+      final pointMotionState = point.motionState == null
           ? null
           : parseMotionState(point.motionState!);
       if (pointMotionState != null && isStableMotionState(pointMotionState)) {
         _lastStableMotionState = pointMotionState;
       }
+      if (pointMotionState == MotionState.activeDescent) {
+        _lastStableActivityType = SessionActivityType.descent;
+      } else if (pointMotionState == MotionState.liftUphill) {
+        _lastStableActivityType = SessionActivityType.lift;
+      }
     }
 
     if (points.isNotEmpty) {
-      final LocalSessionPoint last = points.last;
+      final last = points.last;
       if (last.motionState != null) {
         _motionState = parseMotionState(last.motionState!);
       }
@@ -52,7 +69,7 @@ class MotionStateDetector {
     required LocationSample sample,
     required QualityDecision quality,
   }) {
-    final DateTime sampleTime = sample.timestamp.toUtc();
+    final sampleTime = sample.timestamp.toUtc();
     while (_headingWindow.isNotEmpty &&
         sampleTime.difference(_headingWindow.first.time).inSeconds >
             SessionConstants.liftPersistenceSeconds) {
@@ -61,7 +78,7 @@ class MotionStateDetector {
 
     if (quality.qualityClass != TrackingQualityClass.reject &&
         _isHeadingReliable(sample)) {
-      final double headingRad =
+      final headingRad =
           (_normalizeHeading(sample.headingDeg!) * math.pi) / 180;
       _headingWindow.add(
         HeadingWindowSample(
@@ -81,7 +98,7 @@ class MotionStateDetector {
 
     double sumSin = 0;
     double sumCos = 0;
-    for (final HeadingWindowSample sample in _headingWindow) {
+    for (final sample in _headingWindow) {
       sumSin += math.sin(sample.headingRad);
       sumCos += math.cos(sample.headingRad);
     }
@@ -97,14 +114,12 @@ class MotionStateDetector {
     required double verticalDeltaM,
     required double headingStability,
     required double deltaSeconds,
-    required int stableFixSamples,
   }) {
-    final MotionState candidate = candidateMotionState(
+    final candidate = candidateMotionState(
       quality: quality,
       speedMps: speedMps,
       verticalDeltaM: verticalDeltaM,
       headingStability: headingStability,
-      stableFixSamples: stableFixSamples,
     );
     if (candidate == _motionState) {
       _pendingMotionState = null;
@@ -118,7 +133,7 @@ class MotionStateDetector {
     }
     _pendingMotionSeconds += math.max(0, deltaSeconds);
 
-    final int requiredSeconds = _requiredPersistenceSeconds(candidate);
+    final requiredSeconds = _requiredPersistenceSeconds(candidate);
     if (_pendingMotionSeconds >= requiredSeconds) {
       _motionState = candidate;
       if (isStableMotionState(candidate)) {
@@ -135,12 +150,7 @@ class MotionStateDetector {
     required double speedMps,
     required double verticalDeltaM,
     required double headingStability,
-    required int stableFixSamples,
   }) {
-    if (stableFixSamples < SessionConstants.initialFixStableSamples) {
-      return MotionState.initializingFix;
-    }
-
     if (quality.qualityClass == TrackingQualityClass.reject) {
       return MotionState.lowConfidenceRecovery;
     }
@@ -149,7 +159,7 @@ class MotionStateDetector {
       return MotionState.stoppedIdle;
     }
 
-    final bool inLiftSpeedBand =
+    final inLiftSpeedBand =
         speedMps >= SessionConstants.liftMinSpeedThresholdMetersPerSecond &&
             speedMps <= SessionConstants.liftMaxSpeedThresholdMetersPerSecond;
     if (inLiftSpeedBand &&
@@ -179,20 +189,84 @@ class MotionStateDetector {
         state == MotionState.stoppedIdle;
   }
 
-  /// Map a motion state to its activity type, falling back to the last stable
-  /// state for transient states.
-  SessionActivityType activityTypeForMotionState(MotionState motionState) {
+  /// Map a motion state to its activity bucket. Applies the live Layer-1
+  /// fall-rule (§4.3 of the GPS overhaul plan): a `stoppedIdle` interval
+  /// bracketed by prior descent stays bucketed as descent as long as the
+  /// stop is shorter than [SessionConstants.fallMaxStopDurationSeconds] and
+  /// drifts less than [SessionConstants.fallMaxDriftMeters] from its start.
+  ///
+  /// [sampleTimeUtc]/[latitude]/[longitude] describe the sample driving this
+  /// classification so the detector can track stop-window anchor and drift.
+  SessionActivityType activityTypeForMotionState(
+    MotionState motionState, {
+    required DateTime sampleTimeUtc,
+    required double latitude,
+    required double longitude,
+  }) {
     switch (motionState) {
       case MotionState.activeDescent:
+        _lastStableActivityType = SessionActivityType.descent;
+        _clearStopTracking();
         return SessionActivityType.descent;
       case MotionState.liftUphill:
+        _lastStableActivityType = SessionActivityType.lift;
+        _clearStopTracking();
         return SessionActivityType.lift;
       case MotionState.stoppedIdle:
-        return SessionActivityType.idle;
+        return _stoppedIdleBucket(
+          sampleTimeUtc: sampleTimeUtc,
+          latitude: latitude,
+          longitude: longitude,
+        );
       case MotionState.initializingFix:
       case MotionState.lowConfidenceRecovery:
         return _activityTypeForStableMotionState(_lastStableMotionState);
     }
+  }
+
+  SessionActivityType _stoppedIdleBucket({
+    required DateTime sampleTimeUtc,
+    required double latitude,
+    required double longitude,
+  }) {
+    if (_stoppedSinceUtc == null ||
+        _stopAnchorLatitude == null ||
+        _stopAnchorLongitude == null) {
+      _stoppedSinceUtc = sampleTimeUtc;
+      _stopAnchorLatitude = latitude;
+      _stopAnchorLongitude = longitude;
+      _stopMaxDriftM = 0;
+    } else {
+      final drift = haversineDistanceMeters(
+        _stopAnchorLatitude!,
+        _stopAnchorLongitude!,
+        latitude,
+        longitude,
+      );
+      if (drift > _stopMaxDriftM) {
+        _stopMaxDriftM = drift;
+      }
+    }
+
+    if (_lastStableActivityType != SessionActivityType.descent) {
+      return SessionActivityType.idle;
+    }
+    final stopDurationS =
+        sampleTimeUtc.difference(_stoppedSinceUtc!).inSeconds;
+    if (stopDurationS >= SessionConstants.fallMaxStopDurationSeconds) {
+      return SessionActivityType.idle;
+    }
+    if (_stopMaxDriftM >= SessionConstants.fallMaxDriftMeters) {
+      return SessionActivityType.idle;
+    }
+    return SessionActivityType.descent;
+  }
+
+  void _clearStopTracking() {
+    _stoppedSinceUtc = null;
+    _stopAnchorLatitude = null;
+    _stopAnchorLongitude = null;
+    _stopMaxDriftM = 0;
   }
 
   /// Parse a wire-format motion state string.
@@ -237,11 +311,11 @@ class MotionStateDetector {
   }
 
   bool _isHeadingReliable(LocationSample sample) {
-    final double? heading = sample.headingDeg;
+    final heading = sample.headingDeg;
     if (heading == null || !heading.isFinite) {
       return false;
     }
-    final double? bearingAccuracyDeg = sample.bearingAccuracyDeg;
+    final bearingAccuracyDeg = sample.bearingAccuracyDeg;
     if (bearingAccuracyDeg != null &&
         bearingAccuracyDeg >
             SessionConstants.headingAccuracyStrongThresholdDeg) {
@@ -251,7 +325,7 @@ class MotionStateDetector {
   }
 
   double _normalizeHeading(double headingDeg) {
-    final double normalized = headingDeg % 360;
+    final normalized = headingDeg % 360;
     if (normalized < 0) {
       return normalized + 360;
     }

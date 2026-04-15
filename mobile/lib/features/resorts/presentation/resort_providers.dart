@@ -34,7 +34,7 @@ final resortsControllerProvider =
 final resortDetailControllerProvider = StateNotifierProvider.family<
     ResortDetailController, AsyncValue<ResortSummary>, String>(
   (Ref ref, String resortId) {
-    final ResortDetailController controller = ResortDetailController(
+    final controller = ResortDetailController(
       ref: ref,
       repository: ref.watch(resortRepositoryProvider),
       resortId: resortId,
@@ -80,13 +80,13 @@ class ResortsController extends StateNotifier<AsyncValue<ResortListResult>> {
   }
 
   void applyFavoriteUpdate(ResortSummary updated) {
-    final ResortListResult? current = state.value;
+    final current = state.value;
     if (current == null) {
       return;
     }
 
-    bool hasMatch = false;
-    final List<ResortSummary> replaced =
+    var hasMatch = false;
+    final replaced =
         current.items.map((ResortSummary item) {
       if (item.id != updated.id) {
         return item;
@@ -111,10 +111,10 @@ class ResortsController extends StateNotifier<AsyncValue<ResortListResult>> {
   }
 
   Future<void> toggleFavorite(ResortSummary resort) async {
-    final AsyncValue<ResortListResult> previous = state;
+    final previous = state;
 
     try {
-      final ResortSummary updated =
+      final updated =
           await _repository.toggleFavoriteResort(resort);
       applyFavoriteUpdate(updated);
       _ref.invalidate(favoriteResortsProvider);
@@ -147,19 +147,19 @@ class ResortDetailController extends StateNotifier<AsyncValue<ResortSummary>> {
       return Future<void>.value();
     }
 
-    final Future<void>? inFlight = _loadFuture;
+    final inFlight = _loadFuture;
     if (inFlight != null) {
       return inFlight;
     }
 
-    final Future<void> started = _load();
+    final started = _load();
     _loadFuture = started;
     return started;
   }
 
   Future<void> _load() async {
     state = const AsyncValue.loading();
-    final AsyncValue<ResortSummary> loaded = await AsyncValue.guard(
+    final loaded = await AsyncValue.guard(
       () => _repository.getResortDetail(_resortId),
     );
     state = loaded;
@@ -168,7 +168,7 @@ class ResortDetailController extends StateNotifier<AsyncValue<ResortSummary>> {
   }
 
   Future<void> toggleFavorite() async {
-    final ResortSummary? current = state.value;
+    final current = state.value;
     if (current == null) {
       return;
     }
@@ -176,7 +176,7 @@ class ResortDetailController extends StateNotifier<AsyncValue<ResortSummary>> {
     _ref.read(resortDetailToggleInFlightProvider(_resortId).notifier).state =
         true;
     try {
-      final ResortSummary updated =
+      final updated =
           await _repository.toggleFavoriteResort(current);
       state = AsyncValue.data(updated);
       _ref

@@ -23,7 +23,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
   }) async {
     try {
-      final TokenPairResponse tokenPayload = await _authApi.login(
+      final tokenPayload = await _authApi.login(
         email: email.trim().toLowerCase(),
         password: password,
       );
@@ -40,7 +40,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String displayName,
   }) async {
     try {
-      final TokenPairResponse tokenPayload = await _authApi.register(
+      final tokenPayload = await _authApi.register(
         email: email.trim().toLowerCase(),
         password: password,
         displayName: displayName.trim(),
@@ -53,7 +53,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AuthSession?> restoreSession() async {
-    final StoredTokens? storedTokens = await _tokenStorage.read();
+    final storedTokens = await _tokenStorage.read();
     if (storedTokens == null || !storedTokens.isValid) {
       return null;
     }
@@ -64,12 +64,12 @@ class AuthRepositoryImpl implements AuthRepository {
         refreshToken: storedTokens.refreshToken,
       );
     } on DioException catch (exception) {
-      final bool allowOfflineFallback = _isConnectivityIssue(exception);
+      final allowOfflineFallback = _isConnectivityIssue(exception);
       if (allowOfflineFallback && storedTokens.hasCachedUserProfile) {
         return _sessionFromStoredTokens(storedTokens);
       }
 
-      final String? newAccessToken =
+      final newAccessToken =
           await refreshAccessToken(storedTokens.refreshToken);
       if (newAccessToken == null) {
         if (allowOfflineFallback) {
@@ -105,7 +105,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    final StoredTokens? tokens = await _tokenStorage.read();
+    final tokens = await _tokenStorage.read();
     if (tokens != null) {
       try {
         await _authApi.logout(refreshToken: tokens.refreshToken);
@@ -119,10 +119,10 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String?> refreshAccessToken(String refreshToken) async {
     try {
-      final TokenPairResponse payload =
+      final payload =
           await _authApi.refresh(refreshToken: refreshToken);
-      final String accessToken = payload.accessToken;
-      final StoredTokens? existing = await _tokenStorage.read();
+      final accessToken = payload.accessToken;
+      final existing = await _tokenStorage.read();
       if (existing != null) {
         await _tokenStorage.write(
           StoredTokens(
@@ -153,8 +153,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthSession> _hydrateAndPersistSession(
     TokenPairResponse tokenPayload,
   ) async {
-    final String accessToken = tokenPayload.accessToken;
-    final String refreshToken = tokenPayload.refreshToken;
+    final accessToken = tokenPayload.accessToken;
+    final refreshToken = tokenPayload.refreshToken;
 
     await _tokenStorage.write(
       StoredTokens(
@@ -163,9 +163,9 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    final UserProfileResponse mePayload =
+    final mePayload =
         await _authApi.me(accessToken: accessToken);
-    final AuthSession session = AuthSession(
+    final session = AuthSession(
       accessToken: accessToken,
       refreshToken: refreshToken,
       user: UserProfile(
@@ -191,10 +191,10 @@ class AuthRepositoryImpl implements AuthRepository {
     required String accessToken,
     required String refreshToken,
   }) async {
-    final UserProfileResponse mePayload = await _authApi.me(
+    final mePayload = await _authApi.me(
       accessToken: accessToken,
     );
-    final AuthSession session = AuthSession(
+    final session = AuthSession(
       accessToken: accessToken,
       refreshToken: refreshToken,
       user: UserProfile(

@@ -40,7 +40,7 @@ class _FakeResortRepository implements ResortRepository {
     String? region,
   }) async {
     searchCalls++;
-    final List<ResortSummary> items =
+    final items =
         _resortsById.values.toList(growable: false);
     return ResortListResult(
       items: items,
@@ -53,11 +53,11 @@ class _FakeResortRepository implements ResortRepository {
   @override
   Future<ResortSummary> toggleFavoriteResort(ResortSummary resort) async {
     toggleCalls++;
-    final Completer<void>? completer = toggleCompleter;
+    final completer = toggleCompleter;
     if (completer != null) {
       await completer.future;
     }
-    final ResortSummary updated =
+    final updated =
         resort.copyWith(isFavorite: !resort.isFavorite);
     _resortsById[resort.id] = updated;
     return updated;
@@ -91,26 +91,26 @@ void main() {
   test(
       'ResortsController.toggleFavorite patches list and invalidates favorites and detail providers',
       () async {
-    final ResortSummary initial = _buildResort(isFavorite: false);
-    final _FakeResortRepository repository =
+    final initial = _buildResort(isFavorite: false);
+    final repository =
         _FakeResortRepository(resorts: <ResortSummary>[initial]);
-    final ProviderContainer container = ProviderContainer(
+    final container = ProviderContainer(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),
       ],
     );
     addTearDown(container.dispose);
 
-    final ResortsController resortsController =
+    final resortsController =
         container.read(resortsControllerProvider.notifier);
     await resortsController.search('');
 
-    final ResortDetailController previousDetailController =
+    final previousDetailController =
         container.read(resortDetailControllerProvider(initial.id).notifier);
     await previousDetailController.load();
     await _flush();
 
-    final List<ResortSummary> previousFavorites =
+    final previousFavorites =
         await container.read(favoriteResortsProvider.future);
     expect(previousFavorites, isEmpty);
     expect(repository.favoriteListCalls, 1);
@@ -122,12 +122,12 @@ void main() {
     await resortsController.toggleFavorite(initial);
     await _flush();
 
-    final List<ResortSummary> refreshedFavorites =
+    final refreshedFavorites =
         await container.read(favoriteResortsProvider.future);
     expect(refreshedFavorites, hasLength(1));
     expect(refreshedFavorites.single.isFavorite, isTrue);
 
-    final ResortDetailController refreshedDetailController =
+    final refreshedDetailController =
         container.read(resortDetailControllerProvider(initial.id).notifier);
     expect(refreshedDetailController, isNot(same(previousDetailController)));
 
@@ -140,22 +140,22 @@ void main() {
   test(
       'ResortDetailController.toggleFavorite updates detail state, list state, and invalidates favorites',
       () async {
-    final ResortSummary initial = _buildResort(isFavorite: false);
-    final _FakeResortRepository repository =
+    final initial = _buildResort(isFavorite: false);
+    final repository =
         _FakeResortRepository(resorts: <ResortSummary>[initial]);
-    final ProviderContainer container = ProviderContainer(
+    final container = ProviderContainer(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),
       ],
     );
     addTearDown(container.dispose);
 
-    final List<ResortSummary> beforeFavorites =
+    final beforeFavorites =
         await container.read(favoriteResortsProvider.future);
     expect(beforeFavorites, isEmpty);
     expect(repository.favoriteListCalls, 1);
 
-    final ResortsController resortsController =
+    final resortsController =
         container.read(resortsControllerProvider.notifier);
     await resortsController.search('');
 
@@ -174,7 +174,7 @@ void main() {
         .toggleFavorite();
     await _flush();
 
-    final List<ResortSummary> afterFavorites =
+    final afterFavorites =
         await container.read(favoriteResortsProvider.future);
 
     expect(
@@ -197,11 +197,11 @@ void main() {
   test(
       'ResortDetailController exposes in-flight toggle state while request runs',
       () async {
-    final ResortSummary initial = _buildResort(isFavorite: false);
-    final _FakeResortRepository repository =
+    final initial = _buildResort(isFavorite: false);
+    final repository =
         _FakeResortRepository(resorts: <ResortSummary>[initial])
           ..toggleCompleter = Completer<void>();
-    final ProviderContainer container = ProviderContainer(
+    final container = ProviderContainer(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),
       ],
@@ -211,7 +211,7 @@ void main() {
     container.read(resortDetailControllerProvider(initial.id));
     await _flush();
 
-    final Future<void> pendingToggle = container
+    final pendingToggle = container
         .read(resortDetailControllerProvider(initial.id).notifier)
         .toggleFavorite();
 

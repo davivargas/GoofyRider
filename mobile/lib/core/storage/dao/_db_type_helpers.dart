@@ -51,7 +51,7 @@ int? asNullableInt(Object? value) {
 }
 
 bool? asNullableBool(Object? value) {
-  final int? integerValue = asNullableInt(value);
+  final integerValue = asNullableInt(value);
   if (integerValue == null) {
     return null;
   }

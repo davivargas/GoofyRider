@@ -171,6 +171,7 @@ class RecordingViewState {
     this.recoveryCandidate,
     this.preselectedResortId,
     required this.streamRestartCount,
+    this.autoPaused = false,
   });
 
   factory RecordingViewState.initial() => const RecordingViewState(
@@ -189,6 +190,11 @@ class RecordingViewState {
   final LocalRideSession? recoveryCandidate;
   final String? preselectedResortId;
   final int streamRestartCount;
+
+  /// True when the most recent transition into [RecordScreenPhase.paused]
+  /// was triggered by sustained stillness (not an explicit user tap). The
+  /// record screen uses this to render a "Paused while stopped" banner.
+  final bool autoPaused;
 
   bool get canStart =>
       permission.hasConfirmedBackgroundTracking &&
@@ -210,6 +216,7 @@ class RecordingViewState {
     bool clearRecovery = false,
     String? preselectedResortId,
     int? streamRestartCount,
+    bool? autoPaused,
   }) {
     return RecordingViewState(
       phase: phase ?? this.phase,
@@ -221,6 +228,7 @@ class RecordingViewState {
           clearRecovery ? null : (recoveryCandidate ?? this.recoveryCandidate),
       preselectedResortId: preselectedResortId ?? this.preselectedResortId,
       streamRestartCount: streamRestartCount ?? this.streamRestartCount,
+      autoPaused: autoPaused ?? this.autoPaused,
     );
   }
 }

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
@@ -20,7 +19,7 @@ typedef DebugExportAction = Future<String> Function({
 });
 
 final debugExportActionProvider = Provider<DebugExportAction>((ref) {
-  final DebugExportService service = DebugExportService(
+  final service = DebugExportService(
     localDatabase: ref.watch(driftLocalDatabaseProvider),
   );
   return ({
@@ -45,8 +44,10 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
-    final SpeedUnit speedUnit = ref.watch(speedUnitPreferenceProvider);
-    final DistanceUnit distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final activeMapTileProviderConfig =
+        ref.watch(activeMapTileProviderConfigProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -118,73 +119,73 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
-          Card(
-            child: ListTile(
-              title: const Text('Map attribution'),
-              subtitle: Text(MapTileProviderConfig.openStreetMap.attribution),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              title: const Text('Clear local cache'),
-              subtitle: const Text('Clears cached weather and resort data.'),
-              trailing: const Icon(Icons.delete_outline),
-              onTap: () async {
-                await ref.read(driftLocalDatabaseProvider).clearCaches();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Local cache cleared.')),
-                  );
-                }
-              },
-            ),
-          ),
-          Card(
-            child: ListTile(
-              title: const Text('Export debug info'),
-              subtitle: const Text(
-                'Writes a JSON troubleshooting snapshot to the app documents folder.',
-              ),
-              trailing: const Icon(Icons.download_outlined),
-              onTap: () async {
-                final String? ownerUserId = authState.session?.user.id;
-                if (ownerUserId == null || ownerUserId.isEmpty) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sign in to export debug info.'),
-                      ),
-                    );
-                  }
-                  return;
-                }
+          // Card(
+          //   child: ListTile(
+          //     title: const Text('Map attribution'),
+          //     subtitle: Text(activeMapTileProviderConfig.attribution),
+          //   ),
+          // ),
+          // Card(
+          //   child: ListTile(
+          //     title: const Text('Clear local cache'),
+          //     subtitle: const Text('Clears cached weather and resort data.'),
+          //     trailing: const Icon(Icons.delete_outline),
+          //     onTap: () async {
+          //       await ref.read(driftLocalDatabaseProvider).clearCaches();
+          //       if (context.mounted) {
+          //         ScaffoldMessenger.of(context).showSnackBar(
+          //           const SnackBar(content: Text('Local cache cleared.')),
+          //         );
+          //       }
+          //     },
+          //   ),
+          // ),
+          // Card(
+          //   child: ListTile(
+          //     title: const Text('Export debug info'),
+          //     subtitle: const Text(
+          //       'Writes a JSON troubleshooting snapshot to the app documents folder.',
+          //     ),
+          //     trailing: const Icon(Icons.download_outlined),
+          //     onTap: () async {
+          //       final ownerUserId = authState.session?.user.id;
+          //       if (ownerUserId == null || ownerUserId.isEmpty) {
+          //         if (context.mounted) {
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             const SnackBar(
+          //               content: Text('Sign in to export debug info.'),
+          //             ),
+          //           );
+          //         }
+          //         return;
+          //       }
 
-                try {
-                  final DebugExportAction exportAction =
-                      ref.read(debugExportActionProvider);
-                  final String filePath = await exportAction(
-                    ownerUserId: ownerUserId,
-                    userEmail: authState.session?.user.email,
-                    speedUnit: speedUnit,
-                    distanceUnit: distanceUnit,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Debug info exported to $filePath'),
-                      ),
-                    );
-                  }
-                } catch (error) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Debug export failed: $error')),
-                    );
-                  }
-                }
-              },
-            ),
-          ),
+          //       try {
+          //         final exportAction =
+          //             ref.read(debugExportActionProvider);
+          //         final filePath = await exportAction(
+          //           ownerUserId: ownerUserId,
+          //           userEmail: authState.session?.user.email,
+          //           speedUnit: speedUnit,
+          //           distanceUnit: distanceUnit,
+          //         );
+          //         if (context.mounted) {
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             SnackBar(
+          //               content: Text('Debug info exported to $filePath'),
+          //             ),
+          //           );
+          //         }
+          //       } catch (error) {
+          //         if (context.mounted) {
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             SnackBar(content: Text('Debug export failed: $error')),
+          //           );
+          //         }
+          //       }
+          //     },
+          //   ),
+          // ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: () async {

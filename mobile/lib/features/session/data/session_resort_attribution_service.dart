@@ -28,14 +28,14 @@ class SessionResortAttributionService {
   final String? Function()? _currentUserIdGetter;
 
   Future<ResolvedSessionResort> resolve(LocalRideSession session) async {
-    final List<ResortSummary> resorts = await _readCachedResorts();
-    final Map<String, ResortSummary> resortsById = <String, ResortSummary>{
+    final resorts = await _readCachedResorts();
+    final resortsById = <String, ResortSummary>{
       for (final ResortSummary resort in resorts) resort.id: resort,
     };
 
-    final String? explicitResortId = session.resortId;
+    final explicitResortId = session.resortId;
     if (explicitResortId != null && explicitResortId.isNotEmpty) {
-      final ResortSummary? explicit = resortsById[explicitResortId];
+      final explicit = resortsById[explicitResortId];
       if (explicit != null) {
         return ResolvedSessionResort(
           label: explicit.name,
@@ -47,7 +47,7 @@ class SessionResortAttributionService {
       }
     }
 
-    final String? inferredResortId = await inferResortIdForSession(
+    final inferredResortId = await inferResortIdForSession(
       session,
       cachedResorts: resorts,
     );
@@ -55,7 +55,7 @@ class SessionResortAttributionService {
       return const ResolvedSessionResort(label: unknownSessionResortLabel);
     }
 
-    final ResortSummary? inferred = resortsById[inferredResortId];
+    final inferred = resortsById[inferredResortId];
     return ResolvedSessionResort(
       label: inferred?.name ?? unknownSessionResortLabel,
       resortId: inferredResortId,
@@ -70,7 +70,7 @@ class SessionResortAttributionService {
     if (session.localId <= 0) {
       return null;
     }
-    final LocalSessionPoint? point =
+    final point =
         await _localDatabase.latestAcceptedPoint(session.localId);
     if (point == null) {
       return null;
@@ -85,27 +85,27 @@ class SessionResortAttributionService {
     List<LocalSessionPoint> points, {
     List<ResortSummary>? cachedResorts,
   }) async {
-    final List<ResortSummary> resorts =
+    final resorts =
         cachedResorts ?? await _readCachedResorts();
     if (resorts.isEmpty) {
       return null;
     }
 
-    final LocalSessionPoint? point = _latestResolvablePoint(points);
+    final point = _latestResolvablePoint(points);
     if (point == null) {
       return null;
     }
 
-    final double latitude = point.filteredLatitude ?? point.latitude;
-    final double longitude = point.filteredLongitude ?? point.longitude;
+    final latitude = point.filteredLatitude ?? point.latitude;
+    final longitude = point.filteredLongitude ?? point.longitude;
 
     ResortSummary? bestResort;
     double? bestDistanceMeters;
-    for (final ResortSummary resort in resorts) {
+    for (final resort in resorts) {
       if (resort.latitude == null || resort.longitude == null) {
         continue;
       }
-      final double distanceMeters = haversineDistanceMeters(
+      final distanceMeters = haversineDistanceMeters(
         latitude,
         longitude,
         resort.latitude!,
@@ -126,13 +126,13 @@ class SessionResortAttributionService {
   }
 
   Future<List<ResortSummary>> _readCachedResorts() async {
-    final List<Map<String, dynamic>> cached =
+    final cached =
         await _localDatabase.readCachedResorts(ownerUserId: _currentUserIdOrNull);
     return cached.map(_mapCachedResort).toList(growable: false);
   }
 
   String? get _currentUserIdOrNull {
-    final String? currentUserId = _currentUserIdGetter?.call();
+    final currentUserId = _currentUserIdGetter?.call();
     if (currentUserId == null || currentUserId.isEmpty) {
       return null;
     }
@@ -159,10 +159,10 @@ class SessionResortAttributionService {
   }
 
   LocalSessionPoint? _latestResolvablePoint(List<LocalSessionPoint> points) {
-    for (int index = points.length - 1; index >= 0; index -= 1) {
-      final LocalSessionPoint point = points[index];
-      final double latitude = point.filteredLatitude ?? point.latitude;
-      final double longitude = point.filteredLongitude ?? point.longitude;
+    for (var index = points.length - 1; index >= 0; index -= 1) {
+      final point = points[index];
+      final latitude = point.filteredLatitude ?? point.latitude;
+      final longitude = point.filteredLongitude ?? point.longitude;
       if (latitude.isFinite && longitude.isFinite) {
         return point;
       }

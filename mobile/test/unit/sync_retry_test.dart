@@ -18,6 +18,11 @@ class FakeLocationRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
+    return LocationPermissionState.granted;
+  }
+
+  @override
   Future<LocationSample?> getCurrentLocationSample() async {
     return null;
   }
@@ -168,7 +173,7 @@ LocalRideSession buildSession({
   required int id,
   required LocalSessionState state,
 }) {
-  final DateTime now = DateTime.utc(2026, 1, 1);
+  final now = DateTime.utc(2026, 1, 1);
   return LocalRideSession(
     localId: id,
     ownerUserId: 'user-1',
@@ -193,7 +198,7 @@ LocalRideSession buildSession({
 
 void main() {
   test('retryPendingSyncs retries pending and failed sessions', () async {
-    final FakeSessionRepository repository = FakeSessionRepository(
+    final repository = FakeSessionRepository(
       <LocalRideSession>[
         buildSession(id: 1, state: LocalSessionState.syncPending),
         buildSession(id: 2, state: LocalSessionState.syncFailed),
@@ -201,7 +206,7 @@ void main() {
       ],
     );
 
-    final RecordingController controller = RecordingController(
+    final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: FakeLocationRepository(),
     );

@@ -4,11 +4,11 @@ import '../errors/failures.dart';
 
 AppFailure mapDioException(DioException exception) {
   final Object? payload = exception.response?.data;
-  final String? machineMessage = _extractMessage(payload);
-  final String fallback = exception.message ?? 'Network request failed.';
-  final int? statusCode = exception.response?.statusCode;
-  final String? timeoutMessage = _timeoutFriendlyMessage(exception);
-  final String? connectionMessage = _connectionFriendlyMessage(exception);
+  final machineMessage = _extractMessage(payload);
+  final fallback = exception.message ?? 'Network request failed.';
+  final statusCode = exception.response?.statusCode;
+  final timeoutMessage = _timeoutFriendlyMessage(exception);
+  final connectionMessage = _connectionFriendlyMessage(exception);
 
   if (statusCode == 401) {
     return AuthFailure(machineMessage ?? 'Authentication required.',
@@ -59,8 +59,8 @@ String? _timeoutFriendlyMessage(DioException exception) {
     return null;
   }
 
-  final String host = exception.requestOptions.uri.host;
-  final int port = exception.requestOptions.uri.port;
+  final host = exception.requestOptions.uri.host;
+  final port = exception.requestOptions.uri.port;
   return 'Cannot reach the server at $host:$port. '
       'Make sure the backend and database are running and API_BASE_URL is correct.';
 }
@@ -70,8 +70,8 @@ String? _connectionFriendlyMessage(DioException exception) {
     return null;
   }
 
-  final String host = exception.requestOptions.uri.host;
-  final int port = exception.requestOptions.uri.port;
+  final host = exception.requestOptions.uri.host;
+  final port = exception.requestOptions.uri.port;
   return 'Could not connect to $host:$port. '
       'Check that the API is running and reachable from this device.';
 }

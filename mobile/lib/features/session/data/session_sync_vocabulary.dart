@@ -21,7 +21,7 @@ const Set<String> canonicalProviders = <String>{
 };
 
 String? canonicalizeMotionStateForSync(String? value) {
-  final String? normalized = _normalizeVocabularyValue(value);
+  final normalized = _normalizeVocabularyValue(value);
   if (normalized == null) {
     return null;
   }
@@ -32,7 +32,7 @@ String? canonicalizeMotionStateForSync(String? value) {
 }
 
 String? canonicalizeQualityClassForSync(String? value) {
-  final String? normalized = _normalizeVocabularyValue(value);
+  final normalized = _normalizeVocabularyValue(value);
   if (normalized == null) {
     return null;
   }
@@ -43,7 +43,7 @@ String? canonicalizeQualityClassForSync(String? value) {
 }
 
 String? canonicalizeProviderForSync(String? value) {
-  final String? normalized = _normalizeVocabularyValue(value);
+  final normalized = _normalizeVocabularyValue(value);
   if (normalized == null) {
     return null;
   }
@@ -65,7 +65,7 @@ String? _normalizeVocabularyValue(String? value) {
   if (value == null) {
     return null;
   }
-  final String normalized =
+  final normalized =
       value.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
   if (normalized.isEmpty) {
     return null;

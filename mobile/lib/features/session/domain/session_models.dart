@@ -427,17 +427,17 @@ double haversineDistanceMeters(
 ) {
   const double earthRadiusMeters = 6371000;
 
-  final double dLat = _toRadians(endLat - startLat);
-  final double dLng = _toRadians(endLng - startLng);
-  final double radStartLat = _toRadians(startLat);
-  final double radEndLat = _toRadians(endLat);
+  final dLat = _toRadians(endLat - startLat);
+  final dLng = _toRadians(endLng - startLng);
+  final radStartLat = _toRadians(startLat);
+  final radEndLat = _toRadians(endLat);
 
-  final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
       math.cos(radStartLat) *
           math.cos(radEndLat) *
           math.sin(dLng / 2) *
           math.sin(dLng / 2);
-  final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   return earthRadiusMeters * c;
 }
 

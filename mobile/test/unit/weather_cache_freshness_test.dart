@@ -4,8 +4,8 @@ import 'package:goofyrider_mobile/features/weather/data/weather_cache_freshness.
 void main() {
   group('isCachedWeatherStale', () {
     test('returns false when cached weather is still within the ttl', () {
-      final DateTime now = DateTime.utc(2026, 4, 10, 12, 0);
-      final Map<String, dynamic> payload = <String, dynamic>{
+      final now = DateTime.utc(2026, 4, 10, 12, 0);
+      final payload = <String, dynamic>{
         'cached_fetched_at':
             now.subtract(const Duration(minutes: 59)).toIso8601String(),
       };
@@ -14,8 +14,8 @@ void main() {
     });
 
     test('returns false exactly at the ttl boundary', () {
-      final DateTime now = DateTime.utc(2026, 4, 10, 12, 0);
-      final Map<String, dynamic> payload = <String, dynamic>{
+      final now = DateTime.utc(2026, 4, 10, 12, 0);
+      final payload = <String, dynamic>{
         'cached_fetched_at':
             now.subtract(const Duration(minutes: 60)).toIso8601String(),
       };
@@ -24,8 +24,8 @@ void main() {
     });
 
     test('returns true when cached weather is older than the ttl', () {
-      final DateTime now = DateTime.utc(2026, 4, 10, 12, 0);
-      final Map<String, dynamic> payload = <String, dynamic>{
+      final now = DateTime.utc(2026, 4, 10, 12, 0);
+      final payload = <String, dynamic>{
         'cached_fetched_at': now
             .subtract(const Duration(minutes: 60, seconds: 1))
             .toIso8601String(),

@@ -30,12 +30,12 @@ class SpeedUnitPreferenceController extends StateNotifier<SpeedUnit> {
   }
 
   Future<void> _restorePreference() async {
-    final String? rawValue = await _readSafe();
+    final rawValue = await _readSafe();
     if (rawValue == null) {
       return;
     }
 
-    final SpeedUnit? parsed = _decode(rawValue);
+    final parsed = _decode(rawValue);
     if (parsed != null) {
       state = parsed;
     }

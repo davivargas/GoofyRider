@@ -61,6 +61,10 @@ class FakeLocationRepository implements LocationTrackingRepository {
       LocationPermissionState.granted;
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async =>
+      LocationPermissionState.granted;
+
+  @override
   Future<bool> isServiceEnabled() async => true;
 
   @override
@@ -205,7 +209,7 @@ class FakeSessionRepository implements SessionRepository {
   Future<int> unsyncedCount() async => 0;
 
   LocalRideSession _session(LocalSessionState state) {
-    final DateTime now = DateTime.utc(2026, 1, 1);
+    final now = DateTime.utc(2026, 1, 1);
     return LocalRideSession(
       localId: 1,
       ownerUserId: 'user-1',
@@ -234,9 +238,9 @@ void main() {
 
   testWidgets('login -> record -> finish -> sync flow',
       (WidgetTester tester) async {
-    final FakeSessionRepository fakeSessionRepository = FakeSessionRepository();
+    final fakeSessionRepository = FakeSessionRepository();
 
-    final ProviderContainer container = ProviderContainer(
+    final container = ProviderContainer(
       overrides: <Override>[
         authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
         sessionRepositoryProvider.overrideWithValue(fakeSessionRepository),

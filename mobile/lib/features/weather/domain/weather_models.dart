@@ -19,9 +19,9 @@ class ResortWeather {
     bool fromCache = false,
     bool stale = false,
   }) {
-    final Map<String, dynamic> current =
+    final current =
         (json['current'] as Map<String, dynamic>? ?? <String, dynamic>{});
-    final Map<String, dynamic> forecast =
+    final forecast =
         (json['forecast_summary'] as Map<String, dynamic>? ??
             <String, dynamic>{});
 

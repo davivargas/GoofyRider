@@ -22,7 +22,7 @@ void main() {
 
     test('duplicate point offsets are ignored and point count stays consistent',
         () async {
-      final int localSessionId = await database.insertLocalSession(
+      final localSessionId = await database.insertLocalSession(
         startedAt: DateTime.utc(2026, 1, 1, 8),
         ownerUserId: 'user-1',
       );
@@ -46,10 +46,10 @@ void main() {
         ),
       );
 
-      final List<LocalSessionPoint> points = await database.listPoints(
+      final points = await database.listPoints(
         localSessionId,
       );
-      final LocalRideSession? session =
+      final session =
           await database.getSessionById(localSessionId, ownerUserId: 'user-1');
 
       expect(points, hasLength(1));
@@ -61,7 +61,7 @@ void main() {
     test(
         'remote session summary upsert reuses the same local row and preserves points',
         () async {
-      final int firstLocalId = await database.upsertRemoteSessionSummary(
+      final firstLocalId = await database.upsertRemoteSessionSummary(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
         startedAt: DateTime.utc(2026, 1, 1, 9),
@@ -85,7 +85,7 @@ void main() {
         ),
       );
 
-      final int secondLocalId = await database.upsertRemoteSessionSummary(
+      final secondLocalId = await database.upsertRemoteSessionSummary(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
         startedAt: DateTime.utc(2026, 1, 1, 9),
@@ -99,13 +99,13 @@ void main() {
         resortId: 'resort-2',
       );
 
-      final List<LocalRideSession> sessions =
+      final sessions =
           await database.listSessions(ownerUserId: 'user-1');
-      final LocalRideSession? session = await database.getSessionByRemoteId(
+      final session = await database.getSessionByRemoteId(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
       );
-      final List<LocalSessionPoint> points = await database.listPoints(
+      final points = await database.listPoints(
         firstLocalId,
       );
 
@@ -130,11 +130,11 @@ void main() {
         nextAttemptAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
       );
 
-      final Set<String> hiddenIds =
+      final hiddenIds =
           await database.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final List<String> retryableIds =
+      final retryableIds =
           await database.listPendingRemoteDeleteIds(
         ownerUserId: 'user-1',
       );
@@ -155,11 +155,11 @@ void main() {
         lastError: 'Authentication required.',
       );
 
-      final Set<String> hiddenIds =
+      final hiddenIds =
           await database.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final List<PendingRemoteSessionDeleteEntry> retryableDeletes =
+      final retryableDeletes =
           await database.listRetryablePendingRemoteDeletes(
         ownerUserId: 'user-1',
       );
@@ -171,15 +171,15 @@ void main() {
     test(
         'legacy pending delete schema upgrades before creating retry indexes',
         () async {
-      final bool previousDontWarn =
+      final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
-      final Directory tempDirectory =
+      final tempDirectory =
           await Directory.systemTemp.createTemp('goofyrider_legacy_db_');
       DriftLocalDatabase? fileDatabase;
       addTearDown(() async {
         driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousDontWarn;
-        final DriftLocalDatabase? databaseToClose = fileDatabase;
+        final databaseToClose = fileDatabase;
         fileDatabase = null;
         if (databaseToClose != null) {
           await databaseToClose.close();
@@ -189,7 +189,7 @@ void main() {
         }
       });
 
-      final String dbPath =
+      final dbPath =
           '${tempDirectory.path}${Platform.pathSeparator}legacy.sqlite';
       fileDatabase = DriftLocalDatabase.connectForTesting(
         DatabaseConnection(NativeDatabase(File(dbPath))),
@@ -231,17 +231,17 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final List<QueryRow> columns = await fileDatabase!.customSelect(
+      final columns = await fileDatabase!.customSelect(
         'PRAGMA table_info(pending_remote_session_deletes)',
       ).get();
-      final Set<String> columnNames = columns
+      final columnNames = columns
           .map((QueryRow row) => row.data['name'] as String)
           .toSet();
-      final Set<String> pendingIds =
+      final pendingIds =
           await fileDatabase!.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final List<QueryRow> migratedRows = await fileDatabase!.customSelect(
+      final migratedRows = await fileDatabase!.customSelect(
         '''
         SELECT state, next_attempt_at
         FROM pending_remote_session_deletes
@@ -262,15 +262,15 @@ void main() {
 
     test('legacy deleted remote tombstones migrate into pending deletes',
         () async {
-      final bool previousDontWarn =
+      final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
-      final Directory tempDirectory =
+      final tempDirectory =
           await Directory.systemTemp.createTemp('goofyrider_legacy_db_');
       DriftLocalDatabase? fileDatabase;
       addTearDown(() async {
         driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousDontWarn;
-        final DriftLocalDatabase? databaseToClose = fileDatabase;
+        final databaseToClose = fileDatabase;
         fileDatabase = null;
         if (databaseToClose != null) {
           await databaseToClose.close();
@@ -280,7 +280,7 @@ void main() {
         }
       });
 
-      final String dbPath =
+      final dbPath =
           '${tempDirectory.path}${Platform.pathSeparator}legacy_tombstones.sqlite';
       fileDatabase = DriftLocalDatabase.connectForTesting(
         DatabaseConnection(NativeDatabase(File(dbPath))),
@@ -316,7 +316,7 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final List<QueryRow> migratedRows = await fileDatabase!.customSelect(
+      final migratedRows = await fileDatabase!.customSelect(
         '''
         SELECT requested_at, last_attempt_at, attempt_count, last_error, state
         FROM pending_remote_session_deletes
@@ -328,7 +328,7 @@ void main() {
           const Variable<String>('remote-legacy-delete'),
         ],
       ).get();
-      final List<QueryRow> legacyTableRows = await fileDatabase!.customSelect(
+      final legacyTableRows = await fileDatabase!.customSelect(
         '''
         SELECT name
         FROM sqlite_master
@@ -350,15 +350,15 @@ void main() {
     test(
         'legacy ride session schema adds owner column before owner indexes',
         () async {
-      final bool previousDontWarn =
+      final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
-      final Directory tempDirectory =
+      final tempDirectory =
           await Directory.systemTemp.createTemp('goofyrider_legacy_db_');
       DriftLocalDatabase? fileDatabase;
       addTearDown(() async {
         driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousDontWarn;
-        final DriftLocalDatabase? databaseToClose = fileDatabase;
+        final databaseToClose = fileDatabase;
         fileDatabase = null;
         if (databaseToClose != null) {
           await databaseToClose.close();
@@ -368,7 +368,7 @@ void main() {
         }
       });
 
-      final String dbPath =
+      final dbPath =
           '${tempDirectory.path}${Platform.pathSeparator}legacy_sessions.sqlite';
       fileDatabase = DriftLocalDatabase.connectForTesting(
         DatabaseConnection(NativeDatabase(File(dbPath))),
@@ -440,16 +440,16 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final List<QueryRow> columns = await fileDatabase!.customSelect(
+      final columns = await fileDatabase!.customSelect(
         'PRAGMA table_info(local_ride_sessions)',
       ).get();
-      final Set<String> columnNames = columns
+      final columnNames = columns
           .map((QueryRow row) => row.data['name'] as String)
           .toSet();
-      final List<QueryRow> indexes = await fileDatabase!.customSelect(
+      final indexes = await fileDatabase!.customSelect(
         'PRAGMA index_list(local_ride_sessions)',
       ).get();
-      final Set<String> indexNames = indexes
+      final indexNames = indexes
           .map((QueryRow row) => row.data['name'] as String)
           .toSet();
 
@@ -486,15 +486,15 @@ void main() {
         ownerUserId: 'user-1',
       );
 
-      final Map<String, dynamic>? userOneResort = await database.readCachedResort(
+      final userOneResort = await database.readCachedResort(
         'resort-1',
         ownerUserId: 'user-1',
       );
-      final Map<String, dynamic>? userTwoResort = await database.readCachedResort(
+      final userTwoResort = await database.readCachedResort(
         'resort-1',
         ownerUserId: 'user-2',
       );
-      final List<Map<String, dynamic>> userTwoResorts =
+      final userTwoResorts =
           await database.readCachedResorts(ownerUserId: 'user-2');
 
       expect(userOneResort?['is_favorite'], isTrue);
@@ -504,15 +504,15 @@ void main() {
 
     test('legacy cached resorts migrate to owner-aware schema without shared favorites',
         () async {
-      final bool previousDontWarn =
+      final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
-      final Directory tempDirectory =
+      final tempDirectory =
           await Directory.systemTemp.createTemp('goofyrider_legacy_cache_db_');
       DriftLocalDatabase? fileDatabase;
       addTearDown(() async {
         driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousDontWarn;
-        final DriftLocalDatabase? databaseToClose = fileDatabase;
+        final databaseToClose = fileDatabase;
         fileDatabase = null;
         if (databaseToClose != null) {
           await databaseToClose.close();
@@ -522,7 +522,7 @@ void main() {
         }
       });
 
-      final String dbPath =
+      final dbPath =
           '${tempDirectory.path}${Platform.pathSeparator}legacy_cached_resorts.sqlite';
       fileDatabase = DriftLocalDatabase.connectForTesting(
         DatabaseConnection(NativeDatabase(File(dbPath))),
@@ -560,13 +560,13 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final List<QueryRow> columns = await fileDatabase!.customSelect(
+      final columns = await fileDatabase!.customSelect(
         'PRAGMA table_info(cached_resorts)',
       ).get();
-      final Set<String> columnNames = columns
+      final columnNames = columns
           .map((QueryRow row) => row.data['name'] as String)
           .toSet();
-      final Map<String, dynamic>? migratedResort =
+      final migratedResort =
           await fileDatabase!.readCachedResort(
         'resort-legacy',
         ownerUserId: 'user-2',

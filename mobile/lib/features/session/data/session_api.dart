@@ -26,7 +26,7 @@ class SessionApi {
     required String? resortId,
     required DateTime startedAt,
   }) async {
-    final Response<dynamic> response = await _dio.post<dynamic>(
+    final response = await _dio.post<dynamic>(
       '/sessions',
       data: <String, dynamic>{
         'resort_id': resortId,
@@ -58,7 +58,7 @@ class SessionApi {
     required int? elevationGainM,
     required int? elevationLossM,
   }) async {
-    final Response<dynamic> response = await _dio.post<dynamic>(
+    final response = await _dio.post<dynamic>(
       '/sessions/$remoteSessionId/complete',
       data: <String, dynamic>{
         'ended_at': endedAt.toUtc().toIso8601String(),
@@ -75,13 +75,13 @@ class SessionApi {
   }
 
   Future<List<Map<String, dynamic>>> listRemoteSessions() async {
-    const int pageSize = 100;
-    final List<Map<String, dynamic>> sessions = <Map<String, dynamic>>[];
-    int page = 1;
+    const pageSize = 100;
+    final sessions = <Map<String, dynamic>>[];
+    var page = 1;
     int? total;
 
     while (true) {
-      final Response<dynamic> response = await _dio.get<dynamic>(
+      final response = await _dio.get<dynamic>(
         '/users/me/sessions',
         queryParameters: <String, dynamic>{
           'page': page,
@@ -89,9 +89,9 @@ class SessionApi {
         },
         options: Options(extra: _preserveAuthOnFailureExtra),
       );
-      final Map<String, dynamic> payload =
+      final payload =
           response.data as Map<String, dynamic>;
-      final List<dynamic> items =
+      final items =
           payload['items'] as List<dynamic>? ?? <dynamic>[];
       sessions.addAll(items.cast<Map<String, dynamic>>());
       total ??= (payload['total'] as num?)?.toInt();
@@ -109,7 +109,7 @@ class SessionApi {
   }
 
   Future<Map<String, dynamic>> getRemoteSession(String sessionId) async {
-    final Response<dynamic> response = await _dio.get<dynamic>(
+    final response = await _dio.get<dynamic>(
       '/sessions/$sessionId',
       options: Options(extra: _preserveAuthOnFailureExtra),
     );
@@ -125,12 +125,12 @@ class SessionApi {
 
   Future<List<Map<String, dynamic>>> getRemoteSessionPoints(
       String sessionId) async {
-    final Response<dynamic> response = await _dio.get<dynamic>(
+    final response = await _dio.get<dynamic>(
       '/sessions/$sessionId/points',
       options: Options(extra: _preserveAuthOnFailureExtra),
     );
-    final Map<String, dynamic> payload = response.data as Map<String, dynamic>;
-    final List<dynamic> items =
+    final payload = response.data as Map<String, dynamic>;
+    final items =
         payload['items'] as List<dynamic>? ?? <dynamic>[];
     return items.cast<Map<String, dynamic>>();
   }

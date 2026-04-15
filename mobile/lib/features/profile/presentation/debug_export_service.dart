@@ -31,26 +31,26 @@ class DebugExportService {
     required SpeedUnit speedUnit,
     required DistanceUnit distanceUnit,
   }) async {
-    final DateTime now = DateTime.now().toUtc();
-    final List<LocalRideSession> sessions =
+    final now = DateTime.now().toUtc();
+    final sessions =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final List<LocalRideSession> orderedSessions = List<LocalRideSession>.from(
+    final orderedSessions = List<LocalRideSession>.from(
       sessions,
     )..sort((LocalRideSession a, LocalRideSession b) {
         return b.startedAt.compareTo(a.startedAt);
       });
-    final List<LocalRideSession> pendingSync =
+    final pendingSync =
         await _localDatabase.listPendingSyncSessions(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> cachedRemote =
+    final cachedRemote =
         await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> cachedResorts =
+    final cachedResorts =
         await _localDatabase.readCachedResorts(ownerUserId: ownerUserId);
-    final List<Map<String, dynamic>> cachedWeatherMetadata =
+    final cachedWeatherMetadata =
         await _localDatabase.readCachedWeatherMetadata();
-    final Map<String, Map<String, dynamic>> cachedResortById =
+    final cachedResortById =
         _buildCachedResortIndex(cachedResorts);
 
-    final Map<String, dynamic> payload = <String, dynamic>{
+    final payload = <String, dynamic>{
       'schema_version': _debugExportSchemaVersion,
       'generated_at_utc': now.toIso8601String(),
       'user_context': <String, dynamic>{
@@ -79,31 +79,31 @@ class DebugExportService {
       'sessions': <Map<String, dynamic>>[],
     };
 
-    final List<Map<String, dynamic>> sessionMaps =
+    final sessionMaps =
         payload['sessions'] as List<Map<String, dynamic>>;
-    for (int index = 0; index < orderedSessions.length; index++) {
-      final LocalRideSession session = orderedSessions[index];
-      final List<TrackingDiagnosticEvent> diagnostics =
+    for (var index = 0; index < orderedSessions.length; index++) {
+      final session = orderedSessions[index];
+      final diagnostics =
           await _localDatabase.listTrackingDiagnostics(
         session.localId,
         limit: _trackingDiagnosticsLimit,
       );
-      final List<LocalSessionPoint> pointCandidates = await _readPointCandidates(
+      final pointCandidates = await _readPointCandidates(
         session.localId,
       );
-      final List<LocalSessionPoint> pointSample =
+      final pointSample =
           _sampleSessionPoints(pointCandidates);
-      final bool includePointSample =
+      final includePointSample =
           session.isUnsynced || index < _pointSampleRecentSyncedSessionCount;
 
-      final Map<String, dynamic>? cachedRemoteSummary =
+      final cachedRemoteSummary =
           session.remoteId == null || session.remoteId!.trim().isEmpty
               ? null
               : await _localDatabase.readCachedRemoteSessionSummary(
                   ownerUserId: ownerUserId,
                   remoteId: session.remoteId!,
                 );
-      final Map<String, dynamic>? cachedResortPayload =
+      final cachedResortPayload =
           session.resortId == null || session.resortId!.trim().isEmpty
               ? null
               : cachedResortById[session.resortId!.trim()];
@@ -132,10 +132,10 @@ class DebugExportService {
       );
     }
 
-    final Directory directory = await _documentsDirectoryProvider();
-    final String fileName =
+    final directory = await _documentsDirectoryProvider();
+    final fileName =
         'goofyrider_debug_${now.toIso8601String().replaceAll(':', '-')}.json';
-    final File file = File(path.join(directory.path, fileName));
+    final file = File(path.join(directory.path, fileName));
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
     );
@@ -211,14 +211,14 @@ class DebugExportService {
     if (email == null || email.trim().isEmpty) {
       return null;
     }
-    final String value = email.trim();
-    final int atIndex = value.indexOf('@');
+    final value = email.trim();
+    final atIndex = value.indexOf('@');
     if (atIndex <= 0 || atIndex == value.length - 1) {
       return '***';
     }
-    final String localPart = value.substring(0, atIndex);
-    final String domainPart = value.substring(atIndex + 1);
-    final String localMasked = localPart.length <= 2
+    final localPart = value.substring(0, atIndex);
+    final domainPart = value.substring(atIndex + 1);
+    final localMasked = localPart.length <= 2
         ? '${localPart[0]}*'
         : '${localPart.substring(0, 2)}***';
     return '$localMasked@$domainPart';
@@ -227,10 +227,10 @@ class DebugExportService {
   Map<String, Map<String, dynamic>> _buildCachedResortIndex(
     List<Map<String, dynamic>> cachedResorts,
   ) {
-    final Map<String, Map<String, dynamic>> index =
+    final index =
         <String, Map<String, dynamic>>{};
-    for (final Map<String, dynamic> resort in cachedResorts) {
-      final String? id = _extractResortId(resort);
+    for (final resort in cachedResorts) {
+      final id = _extractResortId(resort);
       if (id == null || id.isEmpty) {
         continue;
       }
@@ -255,7 +255,7 @@ class DebugExportService {
   }
 
   Future<List<LocalSessionPoint>> _readPointCandidates(int localSessionId) async {
-    final List<LocalSessionPoint> accepted = await _localDatabase.listPoints(
+    final accepted = await _localDatabase.listPoints(
       localSessionId,
       onlyAccepted: true,
     );
@@ -266,17 +266,17 @@ class DebugExportService {
   }
 
   List<LocalSessionPoint> _sampleSessionPoints(List<LocalSessionPoint> points) {
-    final int cap = _pointSamplePerSide * 2;
+    final cap = _pointSamplePerSide * 2;
     if (points.length <= cap) {
       return points;
     }
 
-    final List<LocalSessionPoint> sampled = <LocalSessionPoint>[
+    final sampled = <LocalSessionPoint>[
       ...points.take(_pointSamplePerSide),
     ];
-    final Set<int> seen =
+    final seen =
         sampled.map((LocalSessionPoint point) => point.id).toSet();
-    for (final LocalSessionPoint point
+    for (final point
         in points.skip(points.length - _pointSamplePerSide)) {
       if (seen.add(point.id)) {
         sampled.add(point);
@@ -287,8 +287,8 @@ class DebugExportService {
 
   dynamic _sanitizeDynamic(dynamic value) {
     if (value is Map<String, dynamic>) {
-      final Map<String, dynamic> sanitized = <String, dynamic>{};
-      for (final MapEntry<String, dynamic> entry in value.entries) {
+      final sanitized = <String, dynamic>{};
+      for (final entry in value.entries) {
         if (_isSensitiveKey(entry.key)) {
           continue;
         }
@@ -303,7 +303,7 @@ class DebugExportService {
   }
 
   bool _isSensitiveKey(String key) {
-    final String normalized = key.toLowerCase();
+    final normalized = key.toLowerCase();
     return normalized.contains('token') ||
         normalized.contains('password') ||
         normalized.contains('secret') ||
