@@ -3,6 +3,99 @@
 GoofyRider is an Android-first, offline-first snowboarding tracker built for portfolio-quality engineering.
 It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 
+## Quickstart for reviewers
+
+This project bundles a pre-populated `goofyrider/.env` and
+`goofyrider/mobile/mapbox.json` so no keys need to be obtained.
+Follow the steps in order on a single machine.
+
+### 1. Install prerequisites
+
+- **Docker Desktop** (Windows / macOS) or `docker` + `docker compose` (Linux).
+  Start Docker Desktop and confirm `docker compose version` prints a version.
+- **Flutter SDK ≥ 3.4.0** (Dart SDK comes bundled). Verify with
+  `flutter --version`, then run `flutter doctor` and resolve anything it
+  flags as blocking for the Android toolchain.
+- **Android Studio** with the **Android SDK**, **Android SDK Platform-Tools**,
+  and **Android Emulator** components installed (installed by default with
+  Android Studio). Accept Android licenses once with
+  `flutter doctor --android-licenses`.
+- **Android Virtual Device (AVD)**: in Android Studio, open
+  *Device Manager → Create Device* and create an emulator (a Pixel image
+  with Google Play, API 33+ is fine). Boot it once to confirm it works.
+  Alternatively, connect a physical Android device with USB debugging
+  enabled — but the default `API_BASE_URL` below assumes an emulator.
+
+### 2. Start the backend
+
+From the `goofyrider/` directory:
+
+```bash
+docker compose up --build -d
+```
+
+This builds the backend image, starts PostgreSQL, runs Alembic migrations,
+and imports the resort catalog from SkiAPI on first boot. The first start
+can take 1–2 minutes while the resort import finishes — tail the logs to
+watch progress:
+
+```bash
+docker compose logs -f backend
+```
+
+When you see `Uvicorn running on http://0.0.0.0:8000`, open
+<http://127.0.0.1:8000/docs> in a browser. If the interactive API docs
+load, the backend is healthy.
+
+### 3. Run the mobile app
+
+In a second terminal, still from `goofyrider/`:
+
+```bash
+cd mobile
+flutter pub get
+```
+
+Make sure the Android emulator from step 1 is booted (open Android
+Studio → Device Manager → hit the play arrow, or run
+`flutter emulators --launch <emulator_id>`). Then:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1 --dart-define-from-file=mapbox.json
+```
+
+- `10.0.2.2` is the special address Android emulators use to reach the
+  host machine's `localhost`, which is where the backend is now listening.
+- `--dart-define-from-file=mapbox.json` passes the pre-populated Mapbox
+  tile credentials. Omit it and map tiles fall back to OpenStreetMap.
+- The first build can take several minutes while Gradle downloads the
+  Android build tooling.
+
+Once the app is on the emulator:
+
+1. Register a new account on the login screen.
+2. On the Resorts tab, pick a resort and add it to favorites — this
+  confirms the backend resort catalog imported correctly.
+3. On the Record tab, grant location permission when prompted and start
+  a recording. On an emulator you can simulate GPS motion through
+  *Extended Controls → Location → Routes* in the emulator toolbar.
+
+### Troubleshooting
+
+- **`flutter run` fails with a network error**: make sure the backend is
+  still running (`docker compose ps`) and that you are on an emulator —
+  `10.0.2.2` only works inside Android emulators. On a physical device,
+  substitute your host's LAN IP for `10.0.2.2`.
+- **Resort list is empty**: the initial SkiAPI import may still be
+  running. Re-check `docker compose logs -f backend` for
+  `Resort import complete`. Pull-to-refresh the Resorts tab once it
+  finishes.
+- **Map tiles are blank or show a watermark**: the `--dart-define-from-file`
+  flag was not passed, or `mobile/mapbox.json` was edited. Re-check the
+  file and re-run.
+- **"No devices found"**: the emulator is not booted. Run
+  `flutter devices` to confirm a device is listed before `flutter run`.
+
 ## What is implemented
 
 ### Backend (Phases 1-3 + weather/session extensions)
