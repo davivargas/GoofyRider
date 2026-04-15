@@ -49,6 +49,21 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
   }
 
   @override
+  Future<LocationPermissionState> ensureForegroundPermission() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return LocationPermissionState.serviceDisabled;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    return _toPermissionState(permission);
+  }
+
+  @override
   Future<bool> isServiceEnabled() {
     return Geolocator.isLocationServiceEnabled();
   }

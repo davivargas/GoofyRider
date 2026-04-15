@@ -158,20 +158,20 @@ class _HistorySessionCard extends ConsumerWidget {
           'Duration ${formatSecondsAsDuration(session.activeDurationS)} | Distance ${distanceUnit.formatFromMeters(session.distanceM)}\n'
           'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _SyncBadge(label: syncLabel, state: session.state),
-            if (canSync) ...<Widget>[
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Sync now',
-                onPressed: () => _syncNow(ref, session),
-                icon: const Icon(Icons.sync),
-              ),
-            ],
-          ],
-        ),
+        // trailing: Row(
+        //   mainAxisSize: MainAxisSize.min,
+        //   children: <Widget>[
+        //     _SyncBadge(label: syncLabel, state: session.state),
+        //     if (canSync) ...<Widget>[
+        //       const SizedBox(width: 8),
+        //       IconButton(
+        //         tooltip: 'Sync now',
+        //         onPressed: () => _syncNow(ref, session),
+        //         icon: const Icon(Icons.sync),
+        //       ),
+        //     ],
+        //   ],
+        // ),
       ),
     );
   }

@@ -325,7 +325,7 @@ class SessionRepositoryImpl implements SessionRepository {
     var points = await _localDatabase.listPoints(
       localSessionId,
     );
-    if (points.isEmpty && _canRestoreRemotePoints(session)) {
+    if (_shouldRefreshRemotePoints(session: session, points: points)) {
       points = await _restoreRemotePoints(session);
       session = await _requireSession(localSessionId);
     }
@@ -356,6 +356,27 @@ class SessionRepositoryImpl implements SessionRepository {
       timeline: analysis.segments,
       reclassifiedIdleDurationS: analysis.reclassifiedIdleDurationS,
     );
+  }
+
+  bool _shouldRefreshRemotePoints({
+    required LocalRideSession session,
+    required List<LocalSessionPoint> points,
+  }) {
+    if (!_canRestoreRemotePoints(session)) {
+      return false;
+    }
+    if (points.isEmpty) {
+      return true;
+    }
+
+    final allHaveMotionStates = points.every((LocalSessionPoint point) {
+      final motionState = point.motionState;
+      return motionState != null && motionState.isNotEmpty;
+    });
+    final anyDistanceDelta = points.any(
+      (LocalSessionPoint point) => point.distanceDeltaM != null,
+    );
+    return !allHaveMotionStates && !anyDistanceDelta;
   }
 
   @override

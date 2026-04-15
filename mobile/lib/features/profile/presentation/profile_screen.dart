@@ -119,73 +119,73 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
-          Card(
-            child: ListTile(
-              title: const Text('Map attribution'),
-              subtitle: Text(activeMapTileProviderConfig.attribution),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              title: const Text('Clear local cache'),
-              subtitle: const Text('Clears cached weather and resort data.'),
-              trailing: const Icon(Icons.delete_outline),
-              onTap: () async {
-                await ref.read(driftLocalDatabaseProvider).clearCaches();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Local cache cleared.')),
-                  );
-                }
-              },
-            ),
-          ),
-          Card(
-            child: ListTile(
-              title: const Text('Export debug info'),
-              subtitle: const Text(
-                'Writes a JSON troubleshooting snapshot to the app documents folder.',
-              ),
-              trailing: const Icon(Icons.download_outlined),
-              onTap: () async {
-                final ownerUserId = authState.session?.user.id;
-                if (ownerUserId == null || ownerUserId.isEmpty) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sign in to export debug info.'),
-                      ),
-                    );
-                  }
-                  return;
-                }
+          // Card(
+          //   child: ListTile(
+          //     title: const Text('Map attribution'),
+          //     subtitle: Text(activeMapTileProviderConfig.attribution),
+          //   ),
+          // ),
+          // Card(
+          //   child: ListTile(
+          //     title: const Text('Clear local cache'),
+          //     subtitle: const Text('Clears cached weather and resort data.'),
+          //     trailing: const Icon(Icons.delete_outline),
+          //     onTap: () async {
+          //       await ref.read(driftLocalDatabaseProvider).clearCaches();
+          //       if (context.mounted) {
+          //         ScaffoldMessenger.of(context).showSnackBar(
+          //           const SnackBar(content: Text('Local cache cleared.')),
+          //         );
+          //       }
+          //     },
+          //   ),
+          // ),
+          // Card(
+          //   child: ListTile(
+          //     title: const Text('Export debug info'),
+          //     subtitle: const Text(
+          //       'Writes a JSON troubleshooting snapshot to the app documents folder.',
+          //     ),
+          //     trailing: const Icon(Icons.download_outlined),
+          //     onTap: () async {
+          //       final ownerUserId = authState.session?.user.id;
+          //       if (ownerUserId == null || ownerUserId.isEmpty) {
+          //         if (context.mounted) {
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             const SnackBar(
+          //               content: Text('Sign in to export debug info.'),
+          //             ),
+          //           );
+          //         }
+          //         return;
+          //       }
 
-                try {
-                  final exportAction =
-                      ref.read(debugExportActionProvider);
-                  final filePath = await exportAction(
-                    ownerUserId: ownerUserId,
-                    userEmail: authState.session?.user.email,
-                    speedUnit: speedUnit,
-                    distanceUnit: distanceUnit,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Debug info exported to $filePath'),
-                      ),
-                    );
-                  }
-                } catch (error) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Debug export failed: $error')),
-                    );
-                  }
-                }
-              },
-            ),
-          ),
+          //       try {
+          //         final exportAction =
+          //             ref.read(debugExportActionProvider);
+          //         final filePath = await exportAction(
+          //           ownerUserId: ownerUserId,
+          //           userEmail: authState.session?.user.email,
+          //           speedUnit: speedUnit,
+          //           distanceUnit: distanceUnit,
+          //         );
+          //         if (context.mounted) {
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             SnackBar(
+          //               content: Text('Debug info exported to $filePath'),
+          //             ),
+          //           );
+          //         }
+          //       } catch (error) {
+          //         if (context.mounted) {
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             SnackBar(content: Text('Debug export failed: $error')),
+          //           );
+          //         }
+          //       }
+          //     },
+          //   ),
+          // ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: () async {

@@ -128,9 +128,9 @@ class HomeScreen extends ConsumerWidget {
                         subtitle: Text(
                           '${session.startedAt.toDayLabel()} at ${session.startedAt.toTimeLabel()} • ${distanceUnit.formatFromMeters(session.distanceM)} • ${formatSecondsAsDuration(session.activeDurationS)}',
                         ),
-                        trailing: showDebugDiagnostics
-                            ? Text(session.state.wireValue)
-                            : null,
+                        // trailing: showDebugDiagnostics
+                        //     ? Text(session.state.wireValue)
+                        //     : null,
                         onTap: session.localId > 0
                             ? () => context.go(
                                   RoutePaths.sessionDetail.replaceAll(

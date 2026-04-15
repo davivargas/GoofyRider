@@ -61,6 +61,7 @@ extension TrackingModeWire on TrackingMode {
 abstract class LocationTrackingRepository {
   Future<LocationPermissionState> checkPermissions();
   Future<LocationPermissionState> ensurePermissions();
+  Future<LocationPermissionState> ensureForegroundPermission();
   Future<bool> isServiceEnabled();
   Future<bool> openAppSettings();
   Future<bool> openLocationSettings();
