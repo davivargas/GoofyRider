@@ -1,10 +1,19 @@
+from collections.abc import Mapping
+from collections.abc import Sequence
+from datetime import UTC
+from datetime import datetime
+from typing import Any
 import uuid
 
+from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from app.models.ride_session import RideSession
+from app.models.ride_session_action import RideSessionAction
+from app.models.ride_session_override import RideSessionOverride
 from app.repositories.base import SqlAlchemyRepository
 
 
@@ -59,3 +68,66 @@ class RideSessionRepository(SqlAlchemyRepository):
         )
         sessions = list(self._db.scalars(list_stmt).all())
         return sessions, total
+
+    def update_analysis_result(
+        self,
+        session_id: uuid.UUID,
+        summary_fields: Mapping[str, Any],
+        actions: Sequence[RideSessionAction],
+        overrides: Sequence[RideSessionOverride],
+        *,
+        version: str,
+    ) -> RideSession | None:
+        session = self._db.get(RideSession, session_id)
+        if session is None:
+            return None
+
+        for field_name, value in summary_fields.items():
+            setattr(session, field_name, value)
+
+        session.processed_by_version = version
+        session.processed_at = datetime.now(UTC)
+
+        self._db.execute(
+            delete(RideSessionAction).where(RideSessionAction.session_id == session_id)
+        )
+        self._db.execute(
+            delete(RideSessionOverride).where(RideSessionOverride.session_id == session_id)
+        )
+
+        for action in actions:
+            action.session_id = session_id
+            self._db.add(action)
+        for override in overrides:
+            override.session_id = session_id
+            self._db.add(override)
+
+        return session
+
+    def clear_analysis(self, session_id: uuid.UUID) -> RideSession | None:
+        session = self._db.get(RideSession, session_id)
+        if session is None:
+            return None
+
+        self._db.execute(
+            delete(RideSessionAction).where(RideSessionAction.session_id == session_id)
+        )
+        self._db.execute(
+            delete(RideSessionOverride).where(RideSessionOverride.session_id == session_id)
+        )
+
+        session.processed_by_version = None
+        session.processed_at = None
+        return session
+
+    def get_detail_with_actions(self, session_id: uuid.UUID) -> RideSession | None:
+        stmt = (
+            select(RideSession)
+            .options(
+                joinedload(RideSession.resort),
+                selectinload(RideSession.actions),
+                selectinload(RideSession.overrides),
+            )
+            .where(RideSession.id == session_id)
+        )
+        return self._db.scalar(stmt)

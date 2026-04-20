@@ -6,12 +6,17 @@ defining its own inline Protocol class.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from collections.abc import Sequence
+from typing import Any
 from typing import Protocol
 import uuid
 
 from app.models.resort import Resort
+from app.models.resort_lift import ResortLift
 from app.models.ride_session import RideSession
+from app.models.ride_session_action import RideSessionAction
+from app.models.ride_session_override import RideSessionOverride
 from app.models.session_point import SessionPoint
 from app.models.user import User
 from app.models.weather_cache import WeatherCache
@@ -90,6 +95,22 @@ class RideSessionRepositoryProtocol(Protocol):
         self, user_id: uuid.UUID, page: int, page_size: int
     ) -> tuple[list[RideSession], int]: ...
 
+    def update_analysis_result(
+        self,
+        session_id: uuid.UUID,
+        summary_fields: Mapping[str, Any],
+        actions: Sequence[RideSessionAction],
+        overrides: Sequence[RideSessionOverride],
+        *,
+        version: str,
+    ) -> RideSession | None: ...
+
+    def clear_analysis(self, session_id: uuid.UUID) -> RideSession | None: ...
+
+    def get_detail_with_actions(
+        self, session_id: uuid.UUID
+    ) -> RideSession | None: ...
+
     def commit(self) -> None: ...
 
     def refresh(self, instance: object) -> None: ...
@@ -109,6 +130,40 @@ class SessionPointRepositoryProtocol(Protocol):
     def commit(self) -> None: ...
 
     def rollback(self) -> None: ...
+
+
+class SessionActionRepositoryProtocol(Protocol):
+    def add(self, action: RideSessionAction) -> None: ...
+
+    def add_batch(self, actions: Sequence[RideSessionAction]) -> None: ...
+
+    def list_by_session(self, session_id: uuid.UUID) -> list[RideSessionAction]: ...
+
+    def delete_by_session(self, session_id: uuid.UUID) -> int: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
+class SessionOverrideRepositoryProtocol(Protocol):
+    def add(self, override: RideSessionOverride) -> None: ...
+
+    def add_batch(self, overrides: Sequence[RideSessionOverride]) -> None: ...
+
+    def list_by_session(self, session_id: uuid.UUID) -> list[RideSessionOverride]: ...
+
+    def delete_by_session(self, session_id: uuid.UUID) -> int: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
+class ResortLiftRepositoryProtocol(Protocol):
+    def list_by_resort(self, resort_id: uuid.UUID) -> list[ResortLift]: ...
+
+    def match_track_id(self, track_id: str) -> ResortLift | None: ...
 
 
 class FavoriteResortRepositoryProtocol(Protocol):
@@ -139,8 +194,11 @@ class WeatherCacheRepositoryProtocol(Protocol):
 
 __all__ = [
     "FavoriteResortRepositoryProtocol",
+    "ResortLiftRepositoryProtocol",
     "ResortRepositoryProtocol",
     "RideSessionRepositoryProtocol",
+    "SessionActionRepositoryProtocol",
+    "SessionOverrideRepositoryProtocol",
     "SessionPointRepositoryProtocol",
     "UserRepositoryProtocol",
     "WeatherCacheRepositoryProtocol",
