@@ -1,7 +1,7 @@
 """session analyzer schema
 
-Revision ID: 0011
-Revises: 0010
+Revision ID: 0011_session_analyzer_schema
+Revises: 0010_session_point_analytics
 Create Date: 2026-04-16 14:30:00
 """
 
@@ -271,8 +271,6 @@ def downgrade() -> None:
     op.drop_table('resort_lifts')
 
     op.drop_index('ix_ride_sessions_external_identifier_unique', table_name='ride_sessions')
-    op.drop_constraint('ck_ride_sessions_source', 'ride_sessions', type_='check')
-    op.drop_constraint('ck_ride_sessions_sport', 'ride_sessions', type_='check')
 
     op.drop_column('ride_sessions', 'processed_at')
     op.drop_column('ride_sessions', 'processed_by_version')

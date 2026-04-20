@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.session_point import SessionPoint
-from app.models.session_point_analytics import SessionPointAnalytics
 from app.repositories.protocols import ResortRepositoryProtocol
 from app.repositories.protocols import RideSessionRepositoryProtocol
 from app.repositories.protocols import SessionPointRepositoryProtocol
@@ -98,17 +97,8 @@ class SessionService:
         if ended_at < ride_session.started_at:
             raise ValidationError("ended_at cannot be earlier than started_at.")
 
-        duration_s = completion.duration_s
-        if duration_s is None:
-            duration_s = int((ended_at - ride_session.started_at).total_seconds())
-
         ride_session.ended_at = ended_at
-        ride_session.duration_s = duration_s
-        ride_session.distance_m = completion.distance_m
-        ride_session.max_speed_mps = completion.max_speed_mps
-        ride_session.avg_speed_mps = completion.avg_speed_mps
-        ride_session.elevation_gain_m = completion.elevation_gain_m
-        ride_session.elevation_loss_m = completion.elevation_loss_m
+        ride_session.total_duration_s = (ended_at - ride_session.started_at).total_seconds()
         ride_session.status = RideSessionStatus.COMPLETED
 
         self._ride_session_repository.commit()
@@ -241,31 +231,5 @@ class SessionService:
             bearing_accuracy_deg=point.bearing_accuracy_deg,
             provider=point.provider,
             is_mocked=point.is_mocked,
-            # Legacy analytics columns stay populated during dual-write so
-            # the read fallback works for clients still hitting this path.
-            quality_class=point.quality_class,
-            quality_score=point.quality_score,
-            quality_reason=point.quality_reason,
-            filtered_latitude=point.filtered_latitude,
-            filtered_longitude=point.filtered_longitude,
-            filtered_altitude_m=point.filtered_altitude_m,
-            fused_speed_mps=point.fused_speed_mps,
-            derived_speed_mps=point.derived_speed_mps,
-            distance_delta_m=point.distance_delta_m,
-            motion_state=point.motion_state,
-            accepted_for_analytics=point.accepted_for_analytics,
-        )
-        session_point.analytics = SessionPointAnalytics(
-            quality_class=point.quality_class,
-            quality_score=point.quality_score,
-            quality_reason=point.quality_reason,
-            filtered_latitude=point.filtered_latitude,
-            filtered_longitude=point.filtered_longitude,
-            filtered_altitude_m=point.filtered_altitude_m,
-            fused_speed_mps=point.fused_speed_mps,
-            derived_speed_mps=point.derived_speed_mps,
-            distance_delta_m=point.distance_delta_m,
-            motion_state=point.motion_state,
-            accepted_for_analytics=point.accepted_for_analytics,
         )
         return session_point

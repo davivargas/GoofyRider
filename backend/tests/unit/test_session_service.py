@@ -174,7 +174,7 @@ def test_complete_session_sets_computed_duration_when_missing() -> None:
     )
 
     assert completed.status == RideSessionStatus.COMPLETED
-    assert completed.duration_s == 30
+    assert completed.total_duration_s == 30
 
 
 def test_complete_session_allows_omitted_optional_metrics() -> None:
@@ -188,23 +188,11 @@ def test_complete_session_allows_omitted_optional_metrics() -> None:
     completed = service.complete_session(
         session_id=draft_session.id,
         user_id=user_id,
-        completion=SessionCompleteRequest(
-            ended_at=ended_at,
-            distance_m=None,
-            max_speed_mps=None,
-            avg_speed_mps=None,
-            elevation_gain_m=None,
-            elevation_loss_m=None,
-        ),
+        completion=SessionCompleteRequest(ended_at=ended_at),
     )
 
     assert completed.status == RideSessionStatus.COMPLETED
-    assert completed.duration_s == 45
-    assert completed.distance_m is None
-    assert completed.max_speed_mps is None
-    assert completed.avg_speed_mps is None
-    assert completed.elevation_gain_m is None
-    assert completed.elevation_loss_m is None
+    assert completed.total_duration_s == 45
 
 
 def test_complete_session_persists_valid_metrics() -> None:
@@ -218,21 +206,10 @@ def test_complete_session_persists_valid_metrics() -> None:
     completed = service.complete_session(
         session_id=draft_session.id,
         user_id=user_id,
-        completion=SessionCompleteRequest(
-            ended_at=ended_at,
-            max_speed_mps=10.0,
-            avg_speed_mps=8.0,
-            distance_m=420.5,
-            elevation_gain_m=22,
-            elevation_loss_m=180,
-        ),
+        completion=SessionCompleteRequest(ended_at=ended_at),
     )
 
-    assert completed.max_speed_mps == 10.0
-    assert completed.avg_speed_mps == 8.0
-    assert completed.distance_m == 420.5
-    assert completed.elevation_gain_m == 22
-    assert completed.elevation_loss_m == 180
+    assert completed.total_duration_s == 60
 
 
 def test_upload_points_batch_skips_existing_offsets() -> None:
@@ -288,7 +265,7 @@ def test_upload_points_batch_dedupes_duplicate_offsets_in_single_request() -> No
     assert inserted_offsets == {0, 1000}
 
 
-def test_upload_points_batch_populates_legacy_defaults_when_fields_omitted() -> None:
+def test_upload_points_batch_populates_restore_contract_defaults_when_fields_omitted() -> None:
     user_id = uuid4()
     ride_sessions = FakeRideSessionRepository()
     point_repo = FakeSessionPointRepository()
@@ -316,14 +293,9 @@ def test_upload_points_batch_populates_legacy_defaults_when_fields_omitted() -> 
     assert inserted == 1
     stored_point = point_repo.batches[0][0]
     assert stored_point.recorded_at == datetime(2026, 1, 1, 0, 0, 1, 500000, tzinfo=UTC)
-    assert stored_point.accepted_for_analytics is True
-    assert stored_point.analytics is not None
-    assert stored_point.analytics.accepted_for_analytics is True
-    assert stored_point.analytics.quality_class is None
-    assert stored_point.analytics.motion_state is None
 
 
-def test_upload_points_batch_preserves_enriched_point_fields() -> None:
+def test_upload_points_batch_preserves_raw_point_fields() -> None:
     user_id = uuid4()
     ride_sessions = FakeRideSessionRepository()
     point_repo = FakeSessionPointRepository()
@@ -354,17 +326,6 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
                 bearing_accuracy_deg=7.5,
                 provider=" GPS ",
                 is_mocked=False,
-                quality_class="ACCEPT",
-                quality_score=0.91,
-                quality_reason="stable_fix",
-                filtered_latitude=50.9501,
-                filtered_longitude=-118.1601,
-                filtered_altitude_m=1449.8,
-                fused_speed_mps=6.1,
-                derived_speed_mps=6.2,
-                distance_delta_m=4.7,
-                motion_state="ACTIVE DESCENT",
-                accepted_for_analytics=True,
             )
         ],
     )
@@ -378,31 +339,6 @@ def test_upload_points_batch_preserves_enriched_point_fields() -> None:
     assert stored_point.bearing_accuracy_deg == 7.5
     assert stored_point.provider == "gps"
     assert stored_point.is_mocked is False
-    assert stored_point.quality_class == "accept"
-    assert stored_point.quality_score == 0.91
-    assert stored_point.quality_reason == "stable_fix"
-    assert stored_point.filtered_latitude == 50.9501
-    assert stored_point.filtered_longitude == -118.1601
-    assert stored_point.filtered_altitude_m == 1449.8
-    assert stored_point.fused_speed_mps == 6.1
-    assert stored_point.derived_speed_mps == 6.2
-    assert stored_point.distance_delta_m == 4.7
-    assert stored_point.motion_state == "active_descent"
-    assert stored_point.accepted_for_analytics is True
-
-    analytics = stored_point.analytics
-    assert analytics is not None
-    assert analytics.quality_class == "accept"
-    assert analytics.quality_score == 0.91
-    assert analytics.quality_reason == "stable_fix"
-    assert analytics.filtered_latitude == 50.9501
-    assert analytics.filtered_longitude == -118.1601
-    assert analytics.filtered_altitude_m == 1449.8
-    assert analytics.fused_speed_mps == 6.1
-    assert analytics.derived_speed_mps == 6.2
-    assert analytics.distance_delta_m == 4.7
-    assert analytics.motion_state == "active_descent"
-    assert analytics.accepted_for_analytics is True
 
 
 def test_upload_points_batch_preserves_richer_point_fields() -> None:
@@ -436,17 +372,6 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
                 bearing_accuracy_deg=6.0,
                 provider="FusedLocationProvider",
                 is_mocked=False,
-                quality_class="accept_low_confidence",
-                quality_score=0.9,
-                quality_reason="strong_fix",
-                filtered_latitude=50.0001,
-                filtered_longitude=-122.0001,
-                filtered_altitude_m=1499.5,
-                fused_speed_mps=7.4,
-                derived_speed_mps=7.3,
-                distance_delta_m=1.2,
-                motion_state="Lift Uphill",
-                accepted_for_analytics=False,
             )
         ],
     )
@@ -460,17 +385,6 @@ def test_upload_points_batch_preserves_richer_point_fields() -> None:
     assert saved_point.bearing_accuracy_deg == 6.0
     assert saved_point.provider == "fused"
     assert saved_point.is_mocked is False
-    assert saved_point.quality_class == "accept_low_confidence"
-    assert saved_point.quality_score == 0.9
-    assert saved_point.quality_reason == "strong_fix"
-    assert saved_point.filtered_latitude == 50.0001
-    assert saved_point.filtered_longitude == -122.0001
-    assert saved_point.filtered_altitude_m == 1499.5
-    assert saved_point.fused_speed_mps == 7.4
-    assert saved_point.derived_speed_mps == 7.3
-    assert saved_point.distance_delta_m == 1.2
-    assert saved_point.motion_state == "lift_uphill"
-    assert saved_point.accepted_for_analytics is False
 
 
 def test_delete_session_removes_owned_session() -> None:

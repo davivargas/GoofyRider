@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
+from sqlalchemy import Index
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
@@ -13,6 +14,9 @@ from app.models.base import Base
 
 class FavoriteResort(Base):
     __tablename__ = "favorite_resorts"
+    __table_args__ = (
+        Index("ix_favorite_resorts_resort_id", "resort_id"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

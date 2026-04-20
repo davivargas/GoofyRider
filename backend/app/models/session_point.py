@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 import uuid
 
 from sqlalchemy import BigInteger
@@ -12,47 +11,19 @@ from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
-from sqlalchemy import Text
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
-from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
 
 from app.models.base import Base
 
-if TYPE_CHECKING:
-    from app.models.session_point_analytics import SessionPointAnalytics
-
 PROVIDER_ENUM_VALUES = ("gps", "fused", "network", "passive", "unknown")
-MOTION_STATE_ENUM_VALUES = (
-    "initializing_fix",
-    "active_descent",
-    "lift_uphill",
-    "stopped_idle",
-    "low_confidence_recovery",
-)
-QUALITY_CLASS_ENUM_VALUES = ("accept", "accept_low_confidence", "reject")
 
 _provider_type = Enum(
     *PROVIDER_ENUM_VALUES,
     name="provider_type",
-    native_enum=True,
-    create_type=False,
-    validate_strings=True,
-)
-_motion_state_type = Enum(
-    *MOTION_STATE_ENUM_VALUES,
-    name="motion_state",
-    native_enum=True,
-    create_type=False,
-    validate_strings=True,
-)
-_quality_class_type = Enum(
-    *QUALITY_CLASS_ENUM_VALUES,
-    name="quality_class",
     native_enum=True,
     create_type=False,
     validate_strings=True,
@@ -104,6 +75,7 @@ class SessionPoint(Base):
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        server_default=func.now(),
     )
     altitude_m: Mapped[float | None] = mapped_column(
         Float,
@@ -137,63 +109,8 @@ class SessionPoint(Base):
         Boolean,
         nullable=True,
     )
-    quality_class: Mapped[str | None] = mapped_column(
-        _quality_class_type,
-        nullable=True,
-    )
-    quality_score: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    quality_reason: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-    filtered_latitude: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    filtered_longitude: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    filtered_altitude_m: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    fused_speed_mps: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    derived_speed_mps: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    distance_delta_m: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-    motion_state: Mapped[str | None] = mapped_column(
-        _motion_state_type,
-        nullable=True,
-    )
-    accepted_for_analytics: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-        server_default=text("true"),
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-    )
-
-    analytics: Mapped[SessionPointAnalytics | None] = relationship(
-        "SessionPointAnalytics",
-        back_populates="session_point",
-        uselist=False,
-        lazy="joined",
-        cascade="all, delete-orphan",
-        single_parent=True,
     )

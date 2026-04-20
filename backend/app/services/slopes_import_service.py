@@ -21,7 +21,6 @@ from app.models.resort import Resort
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.session_point import SessionPoint
-from app.models.session_point_analytics import SessionPointAnalytics
 from app.models.user import User
 
 _GPS_ENTRY_NAME = "GPS.csv"
@@ -37,7 +36,6 @@ _MOTION_STATE_BY_ACTION_TYPE = {
     "lift": "lift_uphill",
     "run": "active_descent",
 }
-_QUALITY_CLASS_IMPORTED = "accept"
 _PROVIDER_GPS = "gps"
 _OVERRIDE_SEGMENT_PRIORITY = 20
 _ACTION_SEGMENT_PRIORITY = 10
@@ -534,26 +532,6 @@ def build_session_points(
             speed_mps=parsed_point.speed_mps,
             heading_deg=parsed_point.heading_deg,
             provider=_PROVIDER_GPS,
-            quality_class=_QUALITY_CLASS_IMPORTED,
-            filtered_latitude=parsed_point.latitude,
-            filtered_longitude=parsed_point.longitude,
-            filtered_altitude_m=parsed_point.altitude_m,
-            fused_speed_mps=parsed_point.speed_mps,
-            derived_speed_mps=parsed_point.speed_mps,
-            distance_delta_m=parsed_point.distance_delta_m,
-            motion_state=parsed_point.motion_state,
-            accepted_for_analytics=True,
-        )
-        model.analytics = SessionPointAnalytics(
-            quality_class=_QUALITY_CLASS_IMPORTED,
-            filtered_latitude=parsed_point.latitude,
-            filtered_longitude=parsed_point.longitude,
-            filtered_altitude_m=parsed_point.altitude_m,
-            fused_speed_mps=parsed_point.speed_mps,
-            derived_speed_mps=parsed_point.speed_mps,
-            distance_delta_m=parsed_point.distance_delta_m,
-            motion_state=parsed_point.motion_state,
-            accepted_for_analytics=True,
         )
         models.append(model)
     return models

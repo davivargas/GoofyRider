@@ -11,6 +11,8 @@ from app.services.slopes_import_service import parse_override_segments
 from app.services.slopes_import_service import parse_slopes_archive
 from app.services.slopes_import_service import parse_slopes_payload
 
+_FIXTURE_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "slopes"
+
 
 def test_parse_override_segments_maps_known_states() -> None:
     segments = parse_override_segments("10-20:ignore;21-30:lift;31-40:run")
@@ -51,7 +53,7 @@ def test_parse_gps_points_filters_to_record_window_and_maps_motion_states() -> N
     assert points[1].distance_delta_m is not None
 
 
-def test_build_session_points_sets_gps_provider_and_dual_write_analytics() -> None:
+def test_build_session_points_sets_gps_provider_and_raw_fields() -> None:
     parsed_points = [
         ParsedSlopesPoint(
             t_offset_ms=0,
@@ -73,13 +75,12 @@ def test_build_session_points_sets_gps_provider_and_dual_write_analytics() -> No
 
     assert len(models) == 1
     assert models[0].provider == "gps"
-    assert models[0].quality_class == "accept"
-    assert models[0].accepted_for_analytics is True
-    assert models[0].motion_state == "active_descent"
-    assert models[0].distance_delta_m == 0.0
-    assert models[0].analytics is not None
-    assert models[0].analytics.motion_state == "active_descent"
-    assert models[0].analytics.quality_class == "accept"
+    assert models[0].recorded_at == datetime(2025, 1, 3, 12, 0, 0, tzinfo=UTC)
+    assert models[0].latitude == 49.0
+    assert models[0].longitude == -123.0
+    assert models[0].altitude_m == 1000.0
+    assert models[0].speed_mps == 4.0
+    assert models[0].heading_deg == 200.0
 
 
 def test_parse_slopes_payload_uses_record_window_and_action_verticals() -> None:
@@ -127,9 +128,7 @@ def test_parse_slopes_payload_uses_record_window_and_action_verticals() -> None:
 
 
 def test_parse_slopes_archive_reads_zip_entries() -> None:
-    archive_path = Path(
-        r"c:\Users\daviv\Downloads\attachments\January 18 2026 - Grouse Mountain.slopes"
-    )
+    archive_path = _FIXTURE_DIR / "grouse_2026-01-18.slopes"
 
     parsed = parse_slopes_archive(archive_path)
 
@@ -139,9 +138,7 @@ def test_parse_slopes_archive_reads_zip_entries() -> None:
 
 
 def test_parse_slopes_archive_falls_back_to_actions_when_overrides_are_sparse() -> None:
-    archive_path = Path(
-        r"c:\Users\daviv\Downloads\attachments\January 3 2025 - Cypress Mountain.slopes"
-    )
+    archive_path = _FIXTURE_DIR / "cypress_2026-03-21.slopes"
 
     parsed = parse_slopes_archive(archive_path)
 
