@@ -39,6 +39,8 @@ class AppSettings(BaseSettings):
     resort_sync_enabled: bool = True
     resort_sync_interval_days: PositiveInt = 7
 
+    session_analyzer_version: str = "analyzer@1"
+
     @field_validator("jwt_secret_key")
     @classmethod
     def _validate_jwt_secret_key(cls, value: str | None) -> str | None:
