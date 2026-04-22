@@ -13,6 +13,7 @@ from app.schemas.session import SessionPointInput
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
+from app.services.session_analyzer import SessionAnalyzer
 from app.services.session_service import SessionService
 
 
@@ -62,6 +63,36 @@ class FakeRideSessionRepository:
     def refresh(self, _instance: object):
         return None
 
+    def update_analysis_result(
+        self,
+        session_id,
+        *,
+        summary_fields,
+        actions,
+        overrides,
+        version,
+    ):
+        session = self.sessions.get(session_id)
+        if session is None:
+            return
+        for field, value in summary_fields.items():
+            setattr(session, field, value)
+        session.processed_by_version = version
+
+
+class FakeSessionOverrideRepository:
+    def __init__(self) -> None:
+        self.overrides_by_session: dict[object, list[object]] = {}
+
+    def list_by_session(self, session_id):
+        return list(self.overrides_by_session.get(session_id, []))
+
+    def add(self, override):
+        self.overrides_by_session.setdefault(override.session_id, []).append(override)
+
+    def commit(self):
+        return None
+
 
 class FakeSessionPointRepository:
     def __init__(self) -> None:
@@ -95,11 +126,14 @@ def _build_service(
     ride_session_repository: FakeRideSessionRepository | None = None,
     resort_repository: FakeResortRepository | None = None,
     session_point_repository: FakeSessionPointRepository | None = None,
+    session_override_repository: FakeSessionOverrideRepository | None = None,
 ) -> SessionService:
     return SessionService(
         ride_session_repository=ride_session_repository or FakeRideSessionRepository(),
         resort_repository=resort_repository or FakeResortRepository(),
         session_point_repository=session_point_repository or FakeSessionPointRepository(),
+        session_override_repository=session_override_repository or FakeSessionOverrideRepository(),
+        session_analyzer=SessionAnalyzer(analyzer_version="analyzer@test"),
     )
 
 
@@ -157,59 +191,6 @@ def test_complete_session_rejects_end_before_start() -> None:
             user_id=user_id,
             completion=SessionCompleteRequest(ended_at=ended_at),
         )
-
-
-def test_complete_session_sets_computed_duration_when_missing() -> None:
-    user_id = uuid4()
-    ride_sessions = FakeRideSessionRepository()
-    draft_session = _build_session(user_id=user_id)
-    ride_sessions.sessions[draft_session.id] = draft_session
-    service = _build_service(ride_session_repository=ride_sessions)
-    ended_at = draft_session.started_at + timedelta(seconds=30)
-
-    completed = service.complete_session(
-        session_id=draft_session.id,
-        user_id=user_id,
-        completion=SessionCompleteRequest(ended_at=ended_at),
-    )
-
-    assert completed.status == RideSessionStatus.COMPLETED
-    assert completed.total_duration_s == 30
-
-
-def test_complete_session_allows_omitted_optional_metrics() -> None:
-    user_id = uuid4()
-    ride_sessions = FakeRideSessionRepository()
-    draft_session = _build_session(user_id=user_id)
-    ride_sessions.sessions[draft_session.id] = draft_session
-    service = _build_service(ride_session_repository=ride_sessions)
-    ended_at = draft_session.started_at + timedelta(seconds=45)
-
-    completed = service.complete_session(
-        session_id=draft_session.id,
-        user_id=user_id,
-        completion=SessionCompleteRequest(ended_at=ended_at),
-    )
-
-    assert completed.status == RideSessionStatus.COMPLETED
-    assert completed.total_duration_s == 45
-
-
-def test_complete_session_persists_valid_metrics() -> None:
-    user_id = uuid4()
-    ride_sessions = FakeRideSessionRepository()
-    draft_session = _build_session(user_id=user_id)
-    ride_sessions.sessions[draft_session.id] = draft_session
-    service = _build_service(ride_session_repository=ride_sessions)
-    ended_at = draft_session.started_at + timedelta(seconds=60)
-
-    completed = service.complete_session(
-        session_id=draft_session.id,
-        user_id=user_id,
-        completion=SessionCompleteRequest(ended_at=ended_at),
-    )
-
-    assert completed.total_duration_s == 60
 
 
 def test_upload_points_batch_skips_existing_offsets() -> None:

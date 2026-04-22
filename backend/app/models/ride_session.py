@@ -127,34 +127,42 @@ class RideSession(Base):
     descent_distance_m: Mapped[float] = mapped_column(
         Numeric(10, 2, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     descent_duration_s: Mapped[float] = mapped_column(
         Numeric(10, 3, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     descent_vertical_m: Mapped[float] = mapped_column(
         Numeric(8, 2, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     lift_distance_m: Mapped[float] = mapped_column(
         Numeric(10, 2, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     lift_duration_s: Mapped[float] = mapped_column(
         Numeric(10, 3, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     lift_vertical_m: Mapped[float] = mapped_column(
         Numeric(8, 2, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     avg_descent_speed_mps: Mapped[float] = mapped_column(
         Numeric(7, 4, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     total_duration_s: Mapped[float] = mapped_column(
         Numeric(10, 3, asdecimal=False),
         nullable=False,
+        server_default=text("0"),
     )
     processed_by_version: Mapped[str | None] = mapped_column(
         Text,
