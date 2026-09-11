@@ -201,10 +201,10 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    expect(find.text('2025/2026'), findsOneWidget);
+    expect(find.text('25/26'), findsOneWidget);
     expect(find.text('Whistler Blackcomb'), findsOneWidget);
     expect(find.textContaining('00:06:00'), findsOneWidget);
-    expect(find.textContaining('Pending'), findsOneWidget);
+    expect(find.textContaining('LOCAL ONLY'), findsOneWidget);
   });
 
   testWidgets(
@@ -246,7 +246,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    expect(find.textContaining('Pending'), findsOneWidget);
+    expect(find.textContaining('LOCAL ONLY'), findsOneWidget);
     expect(find.byTooltip('Sync now'), findsOneWidget);
     expect(find.byTooltip('Session actions'), findsNothing);
   });

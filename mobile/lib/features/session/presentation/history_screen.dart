@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../app/shell/app_tab_bar.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
-import '../../../core/utils/date_time_formatting.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_empty_view.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
+import '../../../core/widgets/design_widgets.dart';
 import '../domain/session_models.dart';
 import 'history_view_models.dart';
+import 'season_summary.dart';
 import 'session_providers.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -28,219 +32,181 @@ class HistoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final history =
-        ref.watch(historySectionsProvider);
+    final history = ref.watch(historySectionsProvider);
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final unsyncedCount =
-        ref.watch(unsyncedSessionCountProvider);
+    final unsyncedCount = ref.watch(unsyncedSessionCountProvider);
+    final t = context.tokens;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('History'),
-        actions: <Widget>[
-          unsyncedCount.maybeWhen(
-            data: (int count) => count > 0
-                ? IconButton(
-                    tooltip: 'Sync unsynced sessions',
-                    onPressed: () async {
-                      await _runSyncPass(ref);
-                    },
-                    icon: const Icon(Icons.sync),
-                  )
-                : const SizedBox.shrink(),
-            orElse: () => const SizedBox.shrink(),
-          ),
-        ],
-      ),
-      body: history.when(
-        loading: () => const AppLoadingView(label: 'Loading sessions...'),
-        error: (Object error, StackTrace _) => AppErrorView(
-          message: error.toString(),
-          onRetry: () {
-            ref.invalidate(historyProvider);
-            ref.invalidate(historySectionsProvider);
-          },
-        ),
-        data: (List<SessionHistorySeasonSection> sections) {
-          final totalSessions = sections.fold<int>(
-            0,
-            (int count, SessionHistorySeasonSection section) =>
-                count + section.items.length,
-          );
-          if (totalSessions == 0) {
-            return const AppEmptyView(
-              title: 'No sessions yet',
-              subtitle: 'Record your first run to start your logbook.',
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              await _runSyncPass(ref);
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(12),
-              children: sections
-                  .expand(
-                    (SessionHistorySeasonSection section) => <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8, bottom: 8),
-                        child: Text(
-                          section.label,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      ...section.items.map(
-                        (SessionHistoryEntryViewModel item) =>
-                            _HistorySessionCard(
-                          item: item,
-                          speedUnit: speedUnit,
-                          distanceUnit: distanceUnit,
-                        ),
-                      ),
-                    ],
-                  )
-                  .toList(growable: false),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text('SEASONS', style: Theme.of(context).textTheme.headlineSmall),
+                  unsyncedCount.maybeWhen(
+                    data: (int count) => count > 0
+                        ? IconButton(
+                            tooltip: 'Sync unsynced sessions',
+                            onPressed: () async => _runSyncPass(ref),
+                            icon: Icon(Icons.sync, color: t.ice),
+                          )
+                        : const SizedBox.shrink(),
+                    orElse: () => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
             ),
-          );
-        },
+            Expanded(
+              child: history.when(
+                loading: () => const AppLoadingView(label: 'Loading sessions...'),
+                error: (Object error, StackTrace _) => AppErrorView(
+                  message: error.toString(),
+                  onRetry: () {
+                    ref.invalidate(historyProvider);
+                    ref.invalidate(historySectionsProvider);
+                  },
+                ),
+                data: (List<SessionHistorySeasonSection> sections) {
+                  final totalSessions = sections.fold<int>(0, (int c, SessionHistorySeasonSection s) => c + s.items.length);
+                  if (totalSessions == 0) {
+                    return const AppEmptyView(title: 'No sessions yet', subtitle: 'Record your first run to start your logbook.');
+                  }
+                  return RefreshIndicator(
+                    onRefresh: () async => _runSyncPass(ref),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.height + 24),
+                      children: <Widget>[
+                        for (final SessionHistorySeasonSection section in sections) ...<Widget>[
+                          _SeasonHeader(section: section, distanceUnit: distanceUnit, speedUnit: speedUnit),
+                          for (final SessionHistoryEntryViewModel item in section.items)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: _HistorySessionCard(item: item, speedUnit: speedUnit, distanceUnit: distanceUnit),
+                            ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _HistorySessionCard extends ConsumerWidget {
-  const _HistorySessionCard({
-    required this.item,
-    required this.speedUnit,
-    required this.distanceUnit,
-  });
+class _SeasonHeader extends StatelessWidget {
+  const _SeasonHeader({required this.section, required this.distanceUnit, required this.speedUnit});
+
+  final SessionHistorySeasonSection section;
+  final DistanceUnit distanceUnit;
+  final SpeedUnit speedUnit;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final sessions = section.items.map((SessionHistoryEntryViewModel i) => i.session).toList(growable: false);
+    final days = sessions.map((LocalRideSession s) {
+      final d = s.startedAt.toLocal();
+      return '${d.year}-${d.month}-${d.day}';
+    }).toSet().length;
+    final vert = sessions.fold<int>(0, (int a, LocalRideSession s) => a + (s.elevationLossM ?? 0));
+    final top = sessions.fold<double>(0, (double a, LocalRideSession s) => s.maxSpeedMps > a ? s.maxSpeedMps : a);
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: <Widget>[
+          Text(
+            shortSeasonLabel(section.label),
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  foreground: Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 1.2
+                    ..color = t.voltText,
+                ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: MonoLabel(
+              '$days days · ${distanceUnit.formatFromMeters(vert.toDouble())} vert · ${speedUnit.formatFromMetersPerSecond(top)} top',
+              size: 8,
+              tone: MonoTone.muted,
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistorySessionCard extends StatelessWidget {
+  const _HistorySessionCard({required this.item, required this.speedUnit, required this.distanceUnit});
 
   final SessionHistoryEntryViewModel item;
   final SpeedUnit speedUnit;
   final DistanceUnit distanceUnit;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final t = context.tokens;
     final session = item.session;
-    final canSync =
-        session.localId > 0 && session.isUnsynced && !session.isInProgress;
-    final syncLabel = switch (session.state) {
-      LocalSessionState.synced => 'Synced',
-      LocalSessionState.syncPending => 'Pending',
-      LocalSessionState.syncFailed => 'Failed',
-      LocalSessionState.syncing => 'Syncing',
-      _ => 'Pending',
+    final local = session.startedAt.toLocal();
+    final (String syncLabel, Color syncColor) = switch (session.state) {
+      LocalSessionState.synced => ('● Synced', t.ice),
+      LocalSessionState.syncing => ('◌ Syncing', t.textSecondary),
+      LocalSessionState.syncFailed => ('! Failed', t.rec),
+      _ => ('○ Local only', t.textSecondary),
     };
 
-    return Card(
-      child: ListTile(
-        onTap: session.localId > 0
-            ? () => context.go(
-                  RoutePaths.sessionDetail.replaceAll(
-                    ':sessionId',
-                    session.localId.toString(),
-                  ),
-                )
-            : null,
-        leading: _SessionDateBox(date: session.startedAt),
-        title: Text(
-          item.resortLabel,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          'Duration ${formatSecondsAsDuration(session.activeDurationS)} | Distance ${distanceUnit.formatFromMeters(session.distanceM)}\n'
-          'Max ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)}',
-        ),
-        // trailing: Row(
-        //   mainAxisSize: MainAxisSize.min,
-        //   children: <Widget>[
-        //     _SyncBadge(label: syncLabel, state: session.state),
-        //     if (canSync) ...<Widget>[
-        //       const SizedBox(width: 8),
-        //       IconButton(
-        //         tooltip: 'Sync now',
-        //         onPressed: () => _syncNow(ref, session),
-        //         icon: const Icon(Icons.sync),
-        //       ),
-        //     ],
-        //   ],
-        // ),
-      ),
-    );
-  }
-
-  Future<void> _syncNow(WidgetRef ref, LocalRideSession session) async {
-    await ref.read(sessionRepositoryProvider).syncSession(session.localId);
-    ref.invalidate(historyProvider);
-    ref.invalidate(historySectionsProvider);
-    ref.invalidate(unsyncedSessionCountProvider);
-    ref.invalidate(sessionDetailProvider(session.localId));
-  }
-}
-
-class _SyncBadge extends StatelessWidget {
-  const _SyncBadge({
-    required this.label,
-    required this.state,
-  });
-
-  final String label;
-  final LocalSessionState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color = switch (state) {
-      LocalSessionState.synced => Colors.green,
-      LocalSessionState.syncing => Colors.lightBlue,
-      LocalSessionState.syncFailed => Colors.redAccent,
-      _ => Colors.orange,
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _SessionDateBox extends StatelessWidget {
-  const _SessionDateBox({required this.date});
-
-  final DateTime date;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 88,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF123048),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        date.toDayLabel(),
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+    return SurfaceCard(
+      radius: 16,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      onTap: session.localId > 0
+          ? () => context.go(RoutePaths.sessionDetail.replaceAll(':sessionId', session.localId.toString()))
+          : null,
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 44,
+            child: Column(
+              children: <Widget>[
+                Text('${local.day}', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 14)),
+                MonoLabel(DateFormat('MMM').format(local), size: 8, tone: MonoTone.muted, letterSpacing: 1),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 36, color: t.line),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(item.resortLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                MonoLabel(
+                  '${formatSecondsAsDuration(session.activeDurationS)} · ${distanceUnit.formatFromMeters(session.distanceM)} · ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)} max',
+                  size: 8,
+                  letterSpacing: 0.8,
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          MonoLabel(syncLabel, size: 7, weight: FontWeight.w700, letterSpacing: 1.1, color: syncColor),
+        ],
       ),
     );
   }
