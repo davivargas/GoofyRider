@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
@@ -90,7 +91,7 @@ void main() {
             }) async => r'C:\tmp\goofyrider_debug.json',
           ),
         ],
-        child: const MaterialApp(home: ProfileScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
       ),
     );
 
@@ -126,7 +127,7 @@ void main() {
             }) async => r'C:\tmp\should_not_be_used.json',
           ),
         ],
-        child: const MaterialApp(home: ProfileScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
       ),
     );
 
@@ -171,7 +172,7 @@ void main() {
             }) async => throw Exception('disk full'),
           ),
         ],
-        child: const MaterialApp(home: ProfileScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
       ),
     );
 

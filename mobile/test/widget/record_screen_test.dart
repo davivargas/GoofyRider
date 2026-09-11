@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
@@ -229,7 +230,7 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(home: RecordScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
     );
 
@@ -258,7 +259,7 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(home: RecordScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
     );
     await tester.pumpAndSettle();
@@ -301,7 +302,7 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(home: RecordScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
     );
     await tester.pumpAndSettle();
@@ -366,7 +367,7 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(home: RecordScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
     );
 
@@ -424,7 +425,7 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(home: RecordScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
     );
 

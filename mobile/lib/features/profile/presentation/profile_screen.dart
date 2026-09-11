@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../app/shell/app_tab_bar.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
@@ -59,7 +58,7 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       body: ListView(
-        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24, 24, AppTabBar.height + 24),
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24, 24, MediaQuery.paddingOf(context).bottom + 24),
         children: <Widget>[
           Row(
             children: <Widget>[

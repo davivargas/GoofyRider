@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../app/shell/app_tab_bar.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/failures.dart';
@@ -36,6 +35,7 @@ class SessionDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(sessionDetailProvider(localSessionId));
+    final resortLabel = ref.watch(sessionResortLabelProvider(localSessionId)).valueOrNull;
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig = ref.watch(activeMapTileProviderConfigProvider);
@@ -49,7 +49,10 @@ class SessionDetailScreen extends ConsumerWidget {
           loading: () => const AppLoadingView(label: 'Loading details...'),
           error: (Object error, StackTrace _) => AppErrorView(
             message: error.toString(),
-            onRetry: () => ref.invalidate(sessionDetailProvider(localSessionId)),
+            onRetry: () {
+              ref.invalidate(sessionDetailProvider(localSessionId));
+              ref.invalidate(sessionResortLabelProvider(localSessionId));
+            },
           ),
           data: (SessionDetail data) {
             final session = data.session;
@@ -57,7 +60,7 @@ class SessionDetailScreen extends ConsumerWidget {
             final runs = data.timeline.where((SessionTimelineSegment s) => s.type == SessionActivityType.descent).length;
             final vert = session.elevationLossM;
             return ListView(
-              padding: EdgeInsets.fromLTRB(24, 16, 24, AppTabBar.height + 24),
+              padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.paddingOf(context).bottom + 24),
               children: <Widget>[
                 Row(
                   children: <Widget>[
@@ -78,7 +81,7 @@ class SessionDetailScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(session.resortId ?? 'Session', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                          Text(resortLabel ?? session.resortId ?? 'Session', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
                           const SizedBox(height: 2),
                           MonoLabel('${session.startedAt.toDayLabel()} · ${session.startedAt.toTimeLabel()}', size: 8, tone: MonoTone.muted, letterSpacing: 1.6),
                         ],
@@ -140,6 +143,7 @@ class SessionDetailScreen extends ConsumerWidget {
                     onPressed: () async {
                       await ref.read(sessionRepositoryProvider).syncSession(localSessionId);
                       ref.invalidate(sessionDetailProvider(localSessionId));
+                      ref.invalidate(sessionResortLabelProvider(localSessionId));
                       ref.invalidate(historyProvider);
                       ref.invalidate(unsyncedSessionCountProvider);
                     },
@@ -192,6 +196,7 @@ class SessionDetailScreen extends ConsumerWidget {
       ref.invalidate(historySectionsProvider);
       ref.invalidate(unsyncedSessionCountProvider);
       ref.invalidate(sessionDetailProvider(localSessionId));
+      ref.invalidate(sessionResortLabelProvider(localSessionId));
       if (context.mounted) {
         if (result.queuedRemoteDelete) {
           ScaffoldMessenger.of(context).showSnackBar(

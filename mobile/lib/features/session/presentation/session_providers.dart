@@ -117,6 +117,14 @@ final sessionDetailProvider = FutureProvider.family.autoDispose(
       ref.watch(sessionRepositoryProvider).getSessionDetail(localSessionId),
 );
 
+/// Human-readable resort label for a session detail, so screens never render a
+/// raw resort UUID.
+final sessionResortLabelProvider =
+    FutureProvider.family.autoDispose<String, int>((ref, int localSessionId) async {
+  final detail = await ref.watch(sessionDetailProvider(localSessionId).future);
+  return ref.watch(sessionRepositoryProvider).resolveSessionResortLabel(detail.session);
+});
+
 final unsyncedSessionCountProvider = FutureProvider.autoDispose(
   (ref) {
     ref.watch(

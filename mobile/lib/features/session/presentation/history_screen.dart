@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../app/shell/app_tab_bar.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
@@ -81,7 +80,7 @@ class HistoryScreen extends ConsumerWidget {
                     onRefresh: () async => _runSyncPass(ref),
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.height + 24),
+                      padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.paddingOf(context).bottom + 24),
                       children: <Widget>[
                         for (final SessionHistorySeasonSection section in sections) ...<Widget>[
                           _SeasonHeader(section: section, distanceUnit: distanceUnit, speedUnit: speedUnit),

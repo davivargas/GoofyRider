@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
 import 'package:goofyrider_mobile/features/auth/presentation/auth_providers.dart';
@@ -51,7 +52,7 @@ void main() {
         overrides: <Override>[
           authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
         ],
-        child: const MaterialApp(home: LoginScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const LoginScreen()),
       ),
     );
 

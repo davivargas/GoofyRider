@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +31,11 @@ class _LocationOnboardingScreenState
       await ref.read(locationTrackingRepositoryProvider).ensureForegroundPermission();
     }
     await ref.read(locationOnboardingSeenProvider.notifier).markSeen();
+    if (requestPermission) {
+      // The warm-up service gave up on the first foreground pass because
+      // permission was still missing; kick it again now that it was granted.
+      unawaited(ref.read(gpsWarmupServiceProvider).onAppForeground());
+    }
     if (mounted) {
       context.go(RoutePaths.home);
     }

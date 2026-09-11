@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/errors/failures.dart';
 import 'package:goofyrider_mobile/core/providers.dart';
@@ -351,8 +352,9 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(
-          home: SessionDetailScreen(localSessionId: 1),
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const SessionDetailScreen(localSessionId: 1),
         ),
       ),
     );
@@ -380,8 +382,9 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(
-          home: SessionDetailScreen(localSessionId: 1),
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const SessionDetailScreen(localSessionId: 1),
         ),
       ),
     );
@@ -407,8 +410,9 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(
-          home: SessionDetailScreen(localSessionId: 1),
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const SessionDetailScreen(localSessionId: 1),
         ),
       ),
     );
@@ -443,6 +447,7 @@ void main() {
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: MaterialApp(
+          theme: AppTheme.dark(),
           initialRoute: '/detail',
           routes: <String, WidgetBuilder>{
             '/': (_) =>
@@ -487,6 +492,7 @@ void main() {
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
         child: MaterialApp(
+          theme: AppTheme.dark(),
           initialRoute: '/detail',
           routes: <String, WidgetBuilder>{
             '/': (_) =>
@@ -529,8 +535,9 @@ void main() {
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
         ],
-        child: const MaterialApp(
-          home: SessionDetailScreen(localSessionId: 1),
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const SessionDetailScreen(localSessionId: 1),
         ),
       ),
     );

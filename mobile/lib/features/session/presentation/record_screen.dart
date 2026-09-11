@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../app/shell/app_tab_bar.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
@@ -83,6 +82,10 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
     final t = context.tokens;
+    // With Scaffold.extendBody, MediaQuery bottom padding equals the real
+    // AppTabBar height (bar + system inset), so anchor overlays to it.
+    final double bottomInset = MediaQuery.paddingOf(context).bottom;
+    final double sheetAnchor = bottomInset + 12;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRecoveryPrompt(state);
@@ -246,7 +249,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           Positioned(top: 0, left: 0, right: 0, child: topRow),
           Positioned(
             right: 12,
-            bottom: AppTabBar.height + 222,
+            bottom: sheetAnchor + 214,
             child: FloatingActionButton.small(
               heroTag: 'recenter-record-map',
               onPressed: () =>
@@ -256,13 +259,13 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           ),
           Positioned(
             left: 24,
-            bottom: AppTabBar.height + 222,
+            bottom: sheetAnchor + 214,
             child: _speedHero(state, speedUnit, size: 84, shadow: true),
           ),
           Positioned(
             left: 12,
             right: 12,
-            bottom: AppTabBar.height + 8,
+            bottom: sheetAnchor,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -279,18 +282,18 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           topRow,
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 24,
                 30,
                 24,
-                AppTabBar.height + 16,
+                bottomInset + 16,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Center(
                     child: MonoLabel(
-                      '${_phaseLabel(state)} · ${state.preselectedResortId ?? 'Session'}',
+                      '${_phaseLabel(state)} · Session',
                       size: 10,
                       tone: MonoTone.muted,
                       letterSpacing: 2,

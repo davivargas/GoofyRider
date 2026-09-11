@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/app/shell/home_screen.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
@@ -159,7 +160,7 @@ void main() {
           ),
           unsyncedSessionCountProvider.overrideWith((_) async => 0),
         ],
-        child: const MaterialApp(home: HomeScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const HomeScreen()),
       ),
     );
 
@@ -173,6 +174,37 @@ void main() {
     final recentTop = tester.getTopLeft(recentTitle).dy;
     final favoritesTop = tester.getTopLeft(favoritesTitle).dy;
     expect(recentTop, lessThan(favoritesTop));
+  });
+
+  testWidgets('home renders under the real light theme without exceptions',
+      (WidgetTester tester) async {
+    final startedAt = DateTime.utc(2026, 1, 1, 16, 30);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authControllerProvider.overrideWith((_) => _FakeAuthController()),
+          distanceUnitPreferenceProvider
+              .overrideWith((_) => DistanceUnitPreferenceController()),
+          speedUnitPreferenceProvider
+              .overrideWith((_) => SpeedUnitPreferenceController()),
+          historyProvider.overrideWith(
+              (_) async => <LocalRideSession>[_buildSession(startedAt)]),
+          favoriteResortsProvider
+              .overrideWith((_) async => <ResortSummary>[_buildResort()]),
+          resortWeatherProvider.overrideWith(
+            (Ref ref, String resortId) async => null,
+          ),
+          unsyncedSessionCountProvider.overrideWith((_) async => 0),
+        ],
+        child: MaterialApp(theme: AppTheme.light(), home: const HomeScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('YOUR MOUNTAINS'), findsOneWidget);
   });
 
   testWidgets('home recent session row renders formatted timestamp',
@@ -196,7 +228,7 @@ void main() {
           ),
           unsyncedSessionCountProvider.overrideWith((_) async => 0),
         ],
-        child: const MaterialApp(home: HomeScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const HomeScreen()),
       ),
     );
 
@@ -237,7 +269,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: HomeScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const HomeScreen()),
       ),
     );
 
@@ -289,7 +321,7 @@ void main() {
           ),
           unsyncedSessionCountProvider.overrideWith((_) async => 0),
         ],
-        child: const MaterialApp(home: HomeScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const HomeScreen()),
       ),
     );
 

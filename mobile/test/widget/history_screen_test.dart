@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
@@ -191,6 +192,7 @@ void main() {
           ),
         ],
         child: MaterialApp.router(
+          theme: AppTheme.dark(),
           routerConfig: GoRouter(
             routes: <RouteBase>[
               GoRoute(path: '/', builder: (_, __) => const HistoryScreen()),
@@ -236,6 +238,7 @@ void main() {
           ),
         ],
         child: MaterialApp.router(
+          theme: AppTheme.dark(),
           routerConfig: GoRouter(
             routes: <RouteBase>[
               GoRoute(path: '/', builder: (_, __) => const HistoryScreen()),

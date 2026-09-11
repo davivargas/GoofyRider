@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/features/session/data/gps_warmup_permission_preference.dart';
+import 'package:goofyrider_mobile/features/session/data/gps_warmup_service.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/presentation/onboarding/location_onboarding_screen.dart';
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
@@ -66,9 +67,22 @@ class _FakeLocationRepository implements LocationTrackingRepository {
   Future<void> setTrackingMode(TrackingMode mode) async {}
 }
 
+/// Counts warm-up restarts without touching the platform location plugin.
+class _CountingWarmupService extends GpsWarmupService {
+  _CountingWarmupService({required super.locationTrackingRepository});
+
+  int foregroundCalls = 0;
+
+  @override
+  Future<void> onAppForeground() async {
+    foregroundCalls++;
+  }
+}
+
 Widget _host({
   required _FakePreference preference,
   required _FakeLocationRepository repository,
+  required _CountingWarmupService warmup,
 }) {
   final router = GoRouter(
     initialLocation: '/onboarding/location',
@@ -81,6 +95,7 @@ Widget _host({
     overrides: <Override>[
       gpsWarmupPermissionPreferenceProvider.overrideWithValue(preference),
       locationTrackingRepositoryProvider.overrideWithValue(repository),
+      gpsWarmupServiceProvider.overrideWithValue(warmup),
     ],
     child: MaterialApp.router(theme: AppTheme.dark(), routerConfig: router),
   );
@@ -91,7 +106,10 @@ void main() {
       (WidgetTester tester) async {
     final preference = _FakePreference();
     final repository = _FakeLocationRepository();
-    await tester.pumpWidget(_host(preference: preference, repository: repository));
+    final warmup = _CountingWarmupService(locationTrackingRepository: repository);
+    await tester.pumpWidget(
+      _host(preference: preference, repository: repository, warmup: warmup),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('STEP 1 OF 2'), findsOneWidget);
@@ -99,6 +117,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.foregroundRequests, 1);
+    expect(warmup.foregroundCalls, 1);
     expect(preference.marked, isTrue);
     expect(find.text('HOME SCREEN'), findsOneWidget);
   });
@@ -107,13 +126,17 @@ void main() {
       (WidgetTester tester) async {
     final preference = _FakePreference();
     final repository = _FakeLocationRepository();
-    await tester.pumpWidget(_host(preference: preference, repository: repository));
+    final warmup = _CountingWarmupService(locationTrackingRepository: repository);
+    await tester.pumpWidget(
+      _host(preference: preference, repository: repository, warmup: warmup),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('NOT NOW'));
     await tester.pumpAndSettle();
 
     expect(repository.foregroundRequests, 0);
+    expect(warmup.foregroundCalls, 0);
     expect(preference.marked, isTrue);
     expect(find.text('HOME SCREEN'), findsOneWidget);
   });

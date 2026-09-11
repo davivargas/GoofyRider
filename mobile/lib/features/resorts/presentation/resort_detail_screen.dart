@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../app/shell/app_tab_bar.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/widgets/app_error_view.dart';
@@ -47,7 +46,7 @@ class ResortDetailScreen extends ConsumerWidget {
 
         return Scaffold(
           body: ListView(
-            padding: EdgeInsets.only(bottom: AppTabBar.height + 24),
+            padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom + 24),
             children: <Widget>[
               SizedBox(
                 height: mapHeight,

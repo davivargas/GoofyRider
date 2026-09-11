@@ -20,7 +20,6 @@ import '../../features/session/presentation/session_providers.dart';
 import '../../features/weather/domain/weather_models.dart';
 import '../../features/weather/presentation/weather_providers.dart';
 import '../router/route_paths.dart';
-import '../shell/app_tab_bar.dart';
 import '../theme/app_theme.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -48,7 +47,7 @@ class HomeScreen extends ConsumerWidget {
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 18, 24, AppTabBar.height + 24),
+          padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 18, 24, MediaQuery.paddingOf(context).bottom + 24),
           children: <Widget>[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

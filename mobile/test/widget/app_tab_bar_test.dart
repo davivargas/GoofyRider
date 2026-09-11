@@ -27,6 +27,12 @@ void main() {
     expect(find.byKey(const ValueKey<String>('tab-record-puck')), findsOneWidget);
     await tester.tap(find.text('RECORD'));
     expect(tapped, 2);
+
+    // The puck protrudes above the visible bar; the tab bar's own box now
+    // includes that strip so the protruding part is hit-testable.
+    tapped = null;
+    await tester.tap(find.byKey(const ValueKey<String>('tab-record-puck')));
+    expect(tapped, 2);
   });
 
   testWidgets('active tab gets a volt dot', (WidgetTester tester) async {

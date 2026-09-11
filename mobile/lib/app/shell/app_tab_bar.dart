@@ -7,6 +7,12 @@ import '../theme/app_theme.dart';
 
 /// Canvas TabBar: translucent bar, hairline top, volt record puck, volt dot
 /// under the active tab.
+///
+/// The widget's own box is [puckOverhang] taller than the visible bar so the
+/// part of the record puck that protrudes above the bar stays hit-testable —
+/// a [RenderBox] rejects pointer events outside its own size. The extra strip
+/// is fully transparent and contains no opaque child, so taps that miss the
+/// puck fall through to the screen behind it.
 class AppTabBar extends StatelessWidget {
   const AppTabBar({
     super.key,
@@ -14,7 +20,12 @@ class AppTabBar extends StatelessWidget {
     required this.onSelected,
   });
 
+  /// Height of the visible (blurred) bar, excluding the system bottom inset.
   static const double height = 82;
+
+  /// How far the record puck protrudes above the visible bar.
+  static const double puckOverhang = 22;
+
   static const List<String> labels = <String>['HOME', 'RESORTS', 'RECORD', 'SEASONS', 'PROFILE'];
   static const List<IconData> _icons = <IconData>[
     Icons.home_outlined,
@@ -31,23 +42,44 @@ class AppTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          height: height + bottomInset,
-          padding: EdgeInsets.fromLTRB(6, 10, 6, 12 + bottomInset),
-          decoration: BoxDecoration(
-            color: t.barBg,
-            border: Border(top: BorderSide(color: t.line)),
+    return SizedBox(
+      height: height + puckOverhang + bottomInset,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Positioned(
+            top: puckOverhang,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: t.barBg,
+                    border: Border(top: BorderSide(color: t.line)),
+                  ),
+                ),
+              ),
+            ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: List<Widget>.generate(labels.length, (int index) {
-              return Expanded(child: _item(context, index));
-            }),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(6, puckOverhang + 10, 6, 12 + bottomInset),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List<Widget>.generate(labels.length, (int index) {
+                  return Expanded(child: _item(context, index));
+                }),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -65,24 +97,28 @@ class AppTabBar extends StatelessWidget {
           alignment: Alignment.topCenter,
           children: <Widget>[
             Positioned(
-              top: -22,
-              child: Container(
-                key: const ValueKey<String>('tab-record-puck'),
-                width: 52,
-                height: 52,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: t.volt,
-                  shape: BoxShape.circle,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(color: t.volt.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 8)),
-                    BoxShadow(color: t.barBg, spreadRadius: 5),
-                  ],
-                ),
+              top: -puckOverhang,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSelected(index),
                 child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(color: t.voltInk, shape: BoxShape.circle),
+                  key: const ValueKey<String>('tab-record-puck'),
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: t.volt,
+                    shape: BoxShape.circle,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(color: t.volt.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 8)),
+                      BoxShadow(color: t.barBg, spreadRadius: 5),
+                    ],
+                  ),
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(color: t.voltInk, shape: BoxShape.circle),
+                  ),
                 ),
               ),
             ),

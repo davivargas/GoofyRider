@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
-import '../../../app/shell/app_tab_bar.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../core/widgets/app_empty_view.dart';
@@ -78,7 +77,7 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
                     onRefresh: () => ref.read(resortsControllerProvider.notifier).refresh(),
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.height + 24),
+                      padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.paddingOf(context).bottom + 24),
                       itemCount: result.items.length + 1,
                       itemBuilder: (BuildContext context, int index) {
                         if (index == 0) {
