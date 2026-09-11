@@ -10,4 +10,5 @@ class RoutePaths {
   static const String profile = '/profile';
   static const String resortDetail = '/resorts/detail/:resortId';
   static const String sessionDetail = '/history/detail/:sessionId';
+  static const String onboardingLocation = '/onboarding/location';
 }

@@ -10,6 +10,8 @@ import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/resorts/presentation/resort_detail_screen.dart';
 import '../../features/resorts/presentation/resorts_list_screen.dart';
 import '../../features/session/presentation/history_screen.dart';
+import '../../features/session/presentation/onboarding/location_onboarding_providers.dart';
+import '../../features/session/presentation/onboarding/location_onboarding_screen.dart';
 import '../../features/session/presentation/record_screen.dart';
 import '../../features/session/presentation/session_detail_screen.dart';
 import '../shell/app_shell.dart';
@@ -22,6 +24,7 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
     authControllerProvider,
     (_, __) => refresh.value++,
   );
+  ref.listen<bool?>(locationOnboardingSeenProvider, (_, __) => refresh.value++);
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
@@ -44,9 +47,24 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
         return RoutePaths.home;
       }
 
+      final onboardingSeen = ref.read(locationOnboardingSeenProvider);
+      final isOnboarding = state.matchedLocation == RoutePaths.onboardingLocation;
+      if (authState.status == AuthStatus.authenticated &&
+          onboardingSeen == false &&
+          !isOnboarding) {
+        return RoutePaths.onboardingLocation;
+      }
+      if (isOnboarding && onboardingSeen != false) {
+        return RoutePaths.home;
+      }
+
       return null;
     },
     routes: <RouteBase>[
+      GoRoute(
+        path: RoutePaths.onboardingLocation,
+        builder: (BuildContext context, GoRouterState state) => const LocationOnboardingScreen(),
+      ),
       GoRoute(
         path: RoutePaths.login,
         builder: (BuildContext context, GoRouterState state) => const LoginScreen(),

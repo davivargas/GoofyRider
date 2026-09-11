@@ -12,6 +12,7 @@ import 'core/storage/drift_local_database.dart';
 import 'core/widgets/app_error_view.dart';
 import 'features/auth/domain/auth_models.dart';
 import 'features/auth/presentation/auth_providers.dart';
+import 'features/session/presentation/onboarding/location_onboarding_providers.dart';
 import 'features/session/presentation/session_providers.dart';
 
 typedef DatabaseLoader = Future<DriftLocalDatabase> Function();
@@ -95,26 +96,12 @@ class _GoofyRiderAppState extends ConsumerState<GoofyRiderApp>
   }
 
   Future<void> _bootstrapApp() async {
+    await ref.read(locationOnboardingSeenProvider.notifier).load();
     await ref.read(authControllerProvider.notifier).bootstrap();
     await ref
         .read(recordingControllerProvider.notifier)
         .onAuthenticatedSessionAvailable();
-    await _ensureGpsWarmupPermissionOnce();
     await ref.read(gpsWarmupServiceProvider).onAppForeground();
-  }
-
-  Future<void> _ensureGpsWarmupPermissionOnce() async {
-    final prefs = ref.read(gpsWarmupPermissionPreferenceProvider);
-    if (await prefs.hasBeenRequested()) {
-      return;
-    }
-    // The warmup flow only needs foreground (whileInUse) permission. The
-    // recording flow will later escalate to background if/when the user
-    // actually starts a session.
-    await ref
-        .read(locationTrackingRepositoryProvider)
-        .ensureForegroundPermission();
-    await prefs.markRequested();
   }
 
   @override
