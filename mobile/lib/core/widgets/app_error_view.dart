@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'design_widgets.dart';
+
 class AppErrorView extends StatelessWidget {
-  const AppErrorView({
-    super.key,
-    required this.message,
-    this.onRetry,
-  });
+  const AppErrorView({super.key, required this.message, this.onRetry});
 
   final String message;
   final VoidCallback? onRetry;
@@ -14,21 +12,15 @@ class AppErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
             if (onRetry != null) ...<Widget>[
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: onRetry,
-                child: const Text('Retry'),
-              ),
+              const SizedBox(height: 16),
+              VoltButton(label: 'Retry', onPressed: onRetry),
             ],
           ],
         ),

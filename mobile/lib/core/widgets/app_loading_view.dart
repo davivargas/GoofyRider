@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'design_widgets.dart';
+
 class AppLoadingView extends StatelessWidget {
   const AppLoadingView({super.key, this.label});
 
@@ -11,10 +13,10 @@ class AppLoadingView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const CircularProgressIndicator(),
+          const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
           if (label != null) ...<Widget>[
-            const SizedBox(height: 12),
-            Text(label!),
+            const SizedBox(height: 14),
+            MonoLabel(label!, size: 9, tone: MonoTone.muted),
           ],
         ],
       ),

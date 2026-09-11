@@ -18,7 +18,7 @@ void main() {
 
     expect(find.textContaining('App bootstrap failed.'), findsOneWidget);
     expect(find.textContaining('disk unavailable #1'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'RETRY'), findsOneWidget);
     expect(attempts, 1);
   });
 
@@ -36,7 +36,7 @@ void main() {
 
     expect(attempts, 1);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
+    await tester.tap(find.widgetWithText(FilledButton, 'RETRY'));
     await tester.pumpAndSettle();
 
     expect(attempts, 2);
