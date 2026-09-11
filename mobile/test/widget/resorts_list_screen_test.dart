@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_repository.dart';
 import 'package:goofyrider_mobile/features/resorts/presentation/resort_providers.dart';
@@ -57,7 +58,7 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: ResortsListScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const ResortsListScreen()),
       ),
     );
 
@@ -99,16 +100,16 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: ResortsListScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const ResortsListScreen()),
       ),
     );
 
     await tester.pumpAndSettle();
     expect(find.text('Whistler'), findsOneWidget);
-    expect(find.byType(ListTile), findsWidgets);
+    expect(find.text('BRITISH COLUMBIA, CANADA'), findsOneWidget);
   });
 
-  testWidgets('resorts screen uses amber favorite icon for favorite resort',
+  testWidgets('resorts screen uses volt favorite icon for favorite resort',
       (WidgetTester tester) async {
     const resort = ResortSummary(
       id: 'r-1',
@@ -142,13 +143,13 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: ResortsListScreen()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const ResortsListScreen()),
       ),
     );
 
     await tester.pumpAndSettle();
 
     final favoriteIcon = tester.widget<Icon>(find.byIcon(Icons.favorite));
-    expect(favoriteIcon.color, Colors.amber);
+    expect(favoriteIcon.color, AppTokens.dark.voltText);
   });
 }

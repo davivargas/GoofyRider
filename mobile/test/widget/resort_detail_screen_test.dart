@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
@@ -78,6 +79,7 @@ void main() {
             .overrideWithValue(MapTileProviderConfig.devFallback),
       ],
       child: MaterialApp(
+        theme: AppTheme.dark(),
         home: MediaQuery(
           data: const MediaQueryData(
             size: Size(390, 844),
@@ -111,7 +113,7 @@ void main() {
     expect(find.byIcon(Icons.favorite), findsOneWidget);
 
     final icon = tester.widget<Icon>(find.byIcon(Icons.favorite));
-    expect(icon.color, Colors.amber);
+    expect(icon.color, AppTokens.dark.voltText);
   });
 
   testWidgets(
@@ -143,9 +145,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Location'), findsNothing);
-    expect(find.text('BC, Canada'), findsOneWidget);
-    expect(find.text('Whistler'), findsOneWidget);
-    expect(find.text('Elevation'), findsOneWidget);
-    expect(find.text('Start recording here'), findsOneWidget);
+    expect(find.text('BC, CANADA · WHISTLER'), findsOneWidget);
+    expect(find.textContaining('SKIABLE VERT'), findsOneWidget);
+    expect(find.text('START RECORDING HERE'), findsOneWidget);
   });
 }
