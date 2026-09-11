@@ -1,23 +1,28 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/constants/app_constants.dart';
+import '../../../app/shell/app_tab_bar.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
-import '../../../core/utils/date_time_formatting.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/widgets/design_widgets.dart';
 import '../../../core/widgets/map_attribution.dart';
 import '../domain/location_tracking_repository.dart';
 import 'recording_controller.dart';
+import 'recording_view_state.dart';
 import 'session_providers.dart';
+
+/// Which record presentation is on screen: the map-first canvas (1b) or the
+/// HUD-first canvas (1c).
+enum RecordLayout { map, hud }
 
 class RecordScreen extends ConsumerStatefulWidget {
   const RecordScreen({
@@ -42,6 +47,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   String? _lastShownErrorMessage;
   Timer? _gpsSignalRefreshTicker;
   LatLng? _lastWarmupCenter;
+  RecordLayout _layout = RecordLayout.map;
 
   @override
   void initState() {
@@ -76,9 +82,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
-    final theme = Theme.of(context);
-    final showDebugDiagnostics =
-        kDebugMode && AppConstants.isDebugDiagnostics;
+    final t = context.tokens;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRecoveryPrompt(state);
@@ -96,403 +100,601 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
         ? LatLng(warmupSample.latitude, warmupSample.longitude)
         : null;
     _maybeFollowWarmup(warmupLatLng);
-
     final center = route.isNotEmpty
         ? route.last
         : (warmupLatLng ?? const LatLng(50.1, -119.4));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Record'),
-        // actions: <Widget>[
-        //   if (showDebugDiagnostics && state.sync.lastSyncMessage != null)
-        //     Padding(
-        //       padding: const EdgeInsets.symmetric(horizontal: 12),
-        //       child: Center(
-        //         child: Text(
-        //           state.sync.lastSyncMessage!,
-        //           style: theme.textTheme.labelSmall,
-        //         ),
-        //       ),
-        //     ),
-        // ],
-      ),
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final mapHeight = _mapSectionHeight(constraints.maxHeight);
-          return Column(
-            children: <Widget>[
-              SizedBox(
-                height: mapHeight,
-                child: Stack(
-                  children: <Widget>[
-                    FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: center,
-                        initialZoom: _mapZoom,
-                        onPositionChanged: (MapCamera camera, bool hasGesture) {
-                          _mapZoom = camera.zoom;
-                          if (hasGesture && _isMapFollowing) {
-                            setState(() {
-                              _isMapFollowing = false;
-                            });
-                          }
-                        },
-                      ),
-                      children: <Widget>[
-                        TileLayer(
-                          urlTemplate: activeMapTileProviderConfig.urlTemplate,
-                          subdomains: activeMapTileProviderConfig.subdomains,
-                          retinaMode: activeMapTileProviderConfig.retinaMode,
-                          userAgentPackageName: 'com.goofyrider.mobile',
-                          errorTileCallback: (_, __, ___) {
-                            if (mounted && !_mapTileError) {
-                              setState(() {
-                                _mapTileError = true;
-                              });
-                            }
-                          },
-                        ),
-                        if (route.isNotEmpty)
-                          PolylineLayer(
-                            polylines: <Polyline>[
-                              Polyline(
-                                points: route,
-                                strokeWidth: 5,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ],
-                          ),
-                        if (route.isNotEmpty)
-                          MarkerLayer(
-                            markers: <Marker>[
-                              Marker(
-                                point: route.last,
-                                width: 32,
-                                height: 32,
-                                child: const Icon(
-                                  Icons.snowboarding,
-                                  size: 28,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ],
-                          ),
-                        if (warmupLatLng != null)
-                          MarkerLayer(
-                            markers: <Marker>[
-                              Marker(
-                                point: warmupLatLng,
-                                width: 24,
-                                height: 24,
-                                child: Icon(
-                                  Icons.my_location,
-                                  size: 22,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        MapAttribution(config: activeMapTileProviderConfig),
-                      ],
-                    ),
-                    // Positioned(
-                    //   top: 12,
-                    //   left: 12,
-                    //   right: 88,
-                    //   child: _statusBanner(state),
-                    // ),
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: _gpsSignalBadge(state),
-                    ),
-                    Positioned(
-                      right: 12,
-                      bottom: 12,
-                      child: FloatingActionButton.small(
-                        heroTag: 'recenter-record-map',
-                        onPressed: () => _recenterOnRider(route, warmupLatLng: warmupLatLng),
-                        child: const Icon(Icons.my_location),
-                      ),
-                    ),
+    final topRow = SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                _recPill(state),
+                const SizedBox(width: 8),
+                _phasePill(state),
+                const Spacer(),
+                _gpsSignalBadge(state),
+                const SizedBox(width: 8),
+                PillToggle<RecordLayout>(
+                  key: const ValueKey<String>('record-layout-toggle'),
+                  options: const <(RecordLayout, String)>[
+                    (RecordLayout.map, 'MAP'),
+                    (RecordLayout.hud, 'HUD'),
                   ],
+                  selected: _layout,
+                  onChanged: (RecordLayout v) => setState(() => _layout = v),
                 ),
-              ),
-              Expanded(
-                child: _statsPanel(state, speedUnit, distanceUnit),
-              ),
-              if (state.autoPaused) _autoPauseBanner(),
-              _controlBar(state),
-            ],
-          );
+              ],
+            ),
+            _permissionBanners(state),
+          ],
+        ),
+      ),
+    );
+
+    final mapLayers = <Widget>[
+      TileLayer(
+        urlTemplate: activeMapTileProviderConfig.urlTemplate,
+        subdomains: activeMapTileProviderConfig.subdomains,
+        retinaMode: activeMapTileProviderConfig.retinaMode,
+        userAgentPackageName: 'com.goofyrider.mobile',
+        errorTileCallback: (_, __, ___) {
+          if (mounted && !_mapTileError) {
+            setState(() => _mapTileError = true);
+          }
         },
       ),
+      if (route.isNotEmpty)
+        PolylineLayer(
+          polylines: <Polyline>[
+            Polyline(
+              points: route,
+              strokeWidth: 3.5,
+              color: t.volt,
+              strokeJoin: StrokeJoin.round,
+            ),
+          ],
+        ),
+      if (route.isNotEmpty)
+        MarkerLayer(
+          markers: <Marker>[
+            Marker(
+              point: route.last,
+              width: 28,
+              height: 28,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: t.volt.withValues(alpha: 0.4)),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: t.volt,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      if (warmupLatLng != null)
+        MarkerLayer(
+          markers: <Marker>[
+            Marker(
+              point: warmupLatLng,
+              width: 24,
+              height: 24,
+              child: Icon(Icons.my_location, size: 22, color: t.ice),
+            ),
+          ],
+        ),
+      MapAttribution(config: activeMapTileProviderConfig),
+    ];
+
+    // The HUD thumbnail deliberately omits `mapController`: a single
+    // `MapController` cannot be handed to a second `FlutterMap` while the
+    // previous one is still being deactivated, and the thumbnail is static
+    // anyway.
+    FlutterMap buildMap({required bool interactive}) => FlutterMap(
+          mapController: interactive ? _mapController : null,
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: _mapZoom,
+            backgroundColor: t.mapBg,
+            interactionOptions: interactive
+                ? const InteractionOptions()
+                : const InteractionOptions(flags: InteractiveFlag.none),
+            onPositionChanged: interactive
+                ? (MapCamera camera, bool hasGesture) {
+                    _mapZoom = camera.zoom;
+                    if (hasGesture && _isMapFollowing) {
+                      setState(() => _isMapFollowing = false);
+                    }
+                  }
+                : null,
+          ),
+          children: mapLayers,
+        );
+
+    final Widget body;
+    if (_layout == RecordLayout.map) {
+      body = Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          buildMap(interactive: true),
+          Positioned(top: 0, left: 0, right: 0, child: topRow),
+          Positioned(
+            right: 12,
+            bottom: AppTabBar.height + 222,
+            child: FloatingActionButton.small(
+              heroTag: 'recenter-record-map',
+              onPressed: () =>
+                  _recenterOnRider(route, warmupLatLng: warmupLatLng),
+              child: const Icon(Icons.my_location),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            bottom: AppTabBar.height + 222,
+            child: _speedHero(state, speedUnit, size: 84, shadow: true),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: AppTabBar.height + 8,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (state.autoPaused) _autoPauseBanner(),
+                _statsSheet(state, speedUnit, distanceUnit),
+              ],
+            ),
+          ),
+        ],
+      );
+    } else {
+      body = Column(
+        children: <Widget>[
+          topRow,
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                24,
+                30,
+                24,
+                AppTabBar.height + 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Center(
+                    child: MonoLabel(
+                      '${_phaseLabel(state)} · ${state.preselectedResortId ?? 'Session'}',
+                      size: 10,
+                      tone: MonoTone.muted,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Center(
+                    child: _speedHero(
+                      state,
+                      speedUnit,
+                      size: 148,
+                      shadow: false,
+                      centered: true,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Center(child: _sessionMax(state, speedUnit)),
+                  const SizedBox(height: 30),
+                  _hudTiles(state, distanceUnit),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => setState(() => _layout = RecordLayout.map),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        height: 96,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: t.line),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: <Widget>[
+                            IgnorePointer(child: buildMap(interactive: false)),
+                            const Positioned(
+                              right: 10,
+                              bottom: 8,
+                              child: MonoLabel('Tap for map ↗', size: 8),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (state.autoPaused) ...<Widget>[
+                    const SizedBox(height: 12),
+                    _autoPauseBanner(),
+                  ],
+                  const SizedBox(height: 18),
+                  _controlRow(state),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Scaffold(body: body);
+  }
+
+  String _phaseLabel(RecordingViewState state) {
+    if (state.autoPaused) {
+      return 'Auto-paused';
+    }
+    return switch (state.phase) {
+      RecordScreenPhase.recording => 'Recording',
+      RecordScreenPhase.paused => 'Paused',
+      RecordScreenPhase.finishing => 'Finishing',
+      RecordScreenPhase.syncPending => 'Sync pending',
+      RecordScreenPhase.requestingPermissions => 'Permissions',
+      _ => 'Ready',
+    };
+  }
+
+  Widget _recPill(RecordingViewState state) {
+    final active = state.phase == RecordScreenPhase.recording ||
+        state.phase == RecordScreenPhase.paused;
+    if (!active) {
+      return const StatusPill('Ready', variant: PillVariant.ghost);
+    }
+    return StatusPill(
+      '● Rec ${state.tracking.elapsed.toHoursMinutesSeconds()}',
+      variant: PillVariant.rec,
     );
   }
 
-  Widget _statusBanner(RecordingViewState state) {
-    final controller =
-        ref.read(recordingControllerProvider.notifier);
-    final nowUtc = DateTime.now().toUtc();
-    final labels = <String>[
-      'Phase: ${state.phase.name}',
-      'Elapsed: ${state.tracking.elapsed.toHoursMinutesSeconds()}',
-      if (state.tracking.lowAccuracy) 'Low GPS accuracy',
-      if (!state.permission.hasLocationPermission) 'Location permission required',
-      if (state.phase == RecordScreenPhase.recording &&
-          state.permission.hasConfirmedBackgroundTracking)
-        'Background tracking active',
-      if (state.phase == RecordScreenPhase.recording &&
-          !state.permission.hasConfirmedBackgroundTracking)
-        'Background tracking limited: allow "All the time".',
-      if (state.phase == RecordScreenPhase.recording &&
-          state.tracking.lastSampleAtUtc != null)
-        'Last sample ${nowUtc.difference(state.tracking.lastSampleAtUtc!).toHoursMinutesSeconds()} ago',
-      if (state.phase == RecordScreenPhase.recording &&
-          state.tracking.lastPersistedPointAtUtc != null)
-        'Last DB write ${nowUtc.difference(state.tracking.lastPersistedPointAtUtc!).toHoursMinutesSeconds()} ago',
-      if (state.streamRestartCount > 0)
-        'Stream restarts: ${state.streamRestartCount}',
-      if (state.preselectedResortId != null) 'Resort selected',
-      if (_mapTileError) 'Map tiles failing, check network signal.',
-    ];
+  Widget _phasePill(RecordingViewState state) {
+    final recording =
+        state.phase == RecordScreenPhase.recording && !state.autoPaused;
+    return StatusPill(
+      _phaseLabel(state),
+      variant: recording ? PillVariant.volt : PillVariant.muted,
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _speedHero(
+    RecordingViewState state,
+    SpeedUnit speedUnit, {
+    required double size,
+    required bool shadow,
+    bool centered = false,
+  }) {
+    final t = context.tokens;
+    final value =
+        speedUnit.convertFromMetersPerSecond(state.tracking.currentSpeedMps);
+    final whole = value.floor().toString();
+    final frac = '.${((value - value.floor()) * 10).floor()}';
+    final style = TextStyle(
+      fontFamily: AppFonts.archivo,
+      fontSize: size,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -size * 0.04,
+      height: 0.9,
+      color: t.text,
+      shadows: shadow
+          ? <Shadow>[
+              Shadow(
+                color: t.bg.withValues(alpha: 0.9),
+                blurRadius: 18,
+                offset: const Offset(0, 2),
+              ),
+            ]
+          : null,
+    );
+    final number = Text.rich(
+      TextSpan(
+        text: whole,
+        style: style,
+        children: <InlineSpan>[
+          TextSpan(
+            text: frac,
+            style: style.copyWith(
+              fontSize: size * 0.5,
+              color: t.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (centered) {
+      return Column(
+        children: <Widget>[
+          number,
+          const SizedBox(height: 8),
+          MonoLabel(
+            speedUnit.shortLabel,
+            size: 11,
+            tone: MonoTone.volt,
+            letterSpacing: 2.6,
+          ),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: <Widget>[
-        Card(
-          color: Colors.black54,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: labels
-                  .map(
-                    (String text) => Chip(
-                      label: Text(text),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-          ),
+        number,
+        const SizedBox(width: 8),
+        MonoLabel(
+          speedUnit.shortLabel,
+          size: 11,
+          tone: MonoTone.volt,
+          letterSpacing: 1.6,
         ),
-        if (state.permission.needsAlwaysOnPermission)
-          Card(
-            color: Colors.black54,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  const Text(
-                    'Enable "Allow all the time" to keep tracking when your phone is locked.',
-                  ),
-                  FilledButton.tonal(
-                    onPressed: controller.requestRequiredLocationPermissions,
-                    child: const Text('Retry permission'),
-                  ),
-                  OutlinedButton(
-                    onPressed: controller.openLocationPermissionSettings,
-                    child: const Text('Open location settings'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (state.permission.permissionState == LocationPermissionState.serviceDisabled)
-          Card(
-            color: Colors.black54,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  const Text('Turn GPS on to keep recording accurately.'),
-                  OutlinedButton(
-                    onPressed: controller.openLocationServiceSettings,
-                    child: const Text('Open GPS settings'),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
     );
   }
 
-  Widget _statsPanel(
+  Widget _sessionMax(RecordingViewState state, SpeedUnit speedUnit) {
+    final t = context.tokens;
+    final max = state.tracking.liveStats.maxSpeedMps;
+    final current = state.tracking.currentSpeedMps;
+    final ratio = max <= 0 ? 0.0 : (current / max).clamp(0.0, 1.0);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        const MonoLabel('Session max', size: 9),
+        const SizedBox(width: 8),
+        Text(
+          speedUnit.convertFromMetersPerSecond(max).toStringAsFixed(1),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 14),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          width: 44,
+          height: 4,
+          decoration: BoxDecoration(
+            color: t.raised,
+            borderRadius: BorderRadius.circular(2),
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: ratio,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: t.volt,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _verticalLabel(RecordingViewState state, DistanceUnit distanceUnit) {
+    final loss = state.tracking.liveStats.elevationLossM;
+    return loss == null ? '--' : distanceUnit.formatFromMeters(loss.toDouble());
+  }
+
+  String _altitudeLabel(RecordingViewState state, DistanceUnit distanceUnit) {
+    final alt = state.tracking.currentAltitudeM;
+    return alt == null ? '--' : distanceUnit.formatFromMeters(alt);
+  }
+
+  Widget _hudTiles(RecordingViewState state, DistanceUnit distanceUnit) {
+    final stats = state.tracking.liveStats;
+    Widget tile(String value, String label) => SurfaceCard(
+          radius: 16,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: StatBlock(value: value, label: label, size: StatSize.large),
+        );
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 2.2,
+      children: <Widget>[
+        tile(_verticalLabel(state, distanceUnit), 'Vert'),
+        tile(distanceUnit.formatFromMeters(stats.distanceM), 'Dist'),
+        tile(state.tracking.elapsed.toHoursMinutesSeconds(), 'Ride time'),
+        tile(_altitudeLabel(state, distanceUnit), 'Alt'),
+      ],
+    );
+  }
+
+  Widget _statsSheet(
     RecordingViewState state,
     SpeedUnit speedUnit,
     DistanceUnit distanceUnit,
   ) {
+    final t = context.tokens;
     final stats = state.tracking.liveStats;
-    final verticalLabel = stats.elevationLossM == null
-        ? '--'
-        : distanceUnit.formatFromMeters(stats.elevationLossM!.toDouble());
-    final altitudeLabel = state.tracking.currentAltitudeM == null
-        ? '--'
-        : distanceUnit.formatFromMeters(state.tracking.currentAltitudeM!);
-
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            const spacing = 8.0;
-            final columns = constraints.maxWidth >= 320 ? 3 : 2;
-            final cardWidth =
-                (constraints.maxWidth - (spacing * (columns - 1))) / columns;
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: <Widget>[
-                _statCard(
-                  'Current',
-                  speedUnit
-                      .formatFromMetersPerSecond(state.tracking.currentSpeedMps),
-                  width: cardWidth,
-                ),
-                _statCard(
-                  'Max',
-                  speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps),
-                  width: cardWidth,
-                ),
-                _statCard(
-                  'Distance',
-                  distanceUnit.formatFromMeters(stats.distanceM),
-                  width: cardWidth,
-                ),
-                _statCard('Vertical', verticalLabel, width: cardWidth),
-                _statCard('Altitude', altitudeLabel, width: cardWidth),
-                _statCard(
-                  'Ride avg',
-                  speedUnit.formatFromMetersPerSecond(stats.rideAvgSpeedMps),
-                  width: cardWidth,
-                ),
-                _statCard(
-                  'Duration',
-                  state.tracking.elapsed.toHoursMinutesSeconds(),
-                  width: cardWidth,
-                ),
-                _statCard('Points', '${state.tracking.route.length}',
-                    width: cardWidth),
-                _statCard('Updated', DateTime.now().toTimeLabel(),
-                    width: cardWidth),
-              ],
-            );
-          },
-        ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: BoxDecoration(
+        color: t.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: t.line),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 10,
+            childAspectRatio: 2.6,
+            children: <Widget>[
+              StatBlock(
+                value: speedUnit
+                    .convertFromMetersPerSecond(stats.maxSpeedMps)
+                    .toStringAsFixed(1),
+                label: 'Max ${speedUnit.shortLabel}',
+              ),
+              StatBlock(
+                value: _verticalLabel(state, distanceUnit),
+                label: 'Vert',
+              ),
+              StatBlock(
+                value: distanceUnit.formatFromMeters(stats.distanceM),
+                label: 'Dist',
+              ),
+              StatBlock(
+                value: _altitudeLabel(state, distanceUnit),
+                label: 'Alt',
+              ),
+              StatBlock(
+                value: speedUnit
+                    .convertFromMetersPerSecond(stats.rideAvgSpeedMps)
+                    .toStringAsFixed(1),
+                label: 'Ride avg',
+              ),
+              StatBlock(
+                value: state.tracking.elapsed.toHoursMinutesSeconds(),
+                label: 'Ride time',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _controlRow(state),
+        ],
       ),
     );
   }
 
   Widget _gpsSignalBadge(RecordingViewState state) {
+    final t = context.tokens;
     final signalColor = switch (state.tracking.gpsSignal.bars) {
-      4 => const Color(0xFF6EDB8F),
-      3 => const Color(0xFF9BE070),
-      2 => const Color(0xFFF6C667),
-      1 => const Color(0xFFE28E5B),
-      _ => const Color(0xFF9BA4AF),
+      4 || 3 => t.ice,
+      2 || 1 => t.volt,
+      _ => t.textMuted,
     };
-
     return Semantics(
       label: 'GPS signal ${state.tracking.gpsSignal.description}',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.black87,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _GpsSignalBars(
-              bars: state.tracking.gpsSignal.bars,
-              color: signalColor,
-            ),
-            const SizedBox(height: 2),
-            const Text(
-              'GPS',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ],
+      child: StatusPill(
+        'GPS',
+        variant: PillVariant.ghost,
+        leading: _GpsSignalBars(
+          bars: state.tracking.gpsSignal.bars,
+          color: signalColor,
         ),
       ),
     );
   }
 
-  Widget _statCard(
-    String label,
-    String value, {
-    required double width,
-  }) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF11273A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(label, style: const TextStyle(fontSize: 11)),
-          const SizedBox(height: 2),
-          SizedBox(
-            width: double.infinity,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+  Widget _permissionBanners(RecordingViewState state) {
+    final controller = ref.read(recordingControllerProvider.notifier);
+    final children = <Widget>[
+      if (state.permission.needsAlwaysOnPermission)
+        SurfaceCard(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                'Enable "Allow all the time" to keep tracking when your phone is locked.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-            ),
+              const SizedBox(height: 8),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextButton(
+                      onPressed: controller.requestRequiredLocationPermissions,
+                      child: const Text('RETRY PERMISSION'),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: controller.openLocationPermissionSettings,
+                      child: const Text('OPEN SETTINGS'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
+      if (state.permission.permissionState ==
+          LocationPermissionState.serviceDisabled)
+        SurfaceCard(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'Turn GPS on to keep recording accurately.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                onPressed: controller.openLocationServiceSettings,
+                child: const Text('GPS SETTINGS'),
+              ),
+            ],
+          ),
+        ),
+      if (_mapTileError)
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: MonoLabel(
+            'Map tiles failing, check network signal.',
+            size: 8,
+            tone: MonoTone.muted,
+            uppercase: false,
+          ),
+        ),
+    ];
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
       ),
     );
-  }
-
-  double _mapSectionHeight(double availableHeight) {
-    const minimumStatsAndControlsHeight = 190.0;
-    const minimumMapHeight = 180.0;
-    final targetMapHeight = availableHeight * 0.65;
-    final maxMapHeight = availableHeight - minimumStatsAndControlsHeight;
-    if (maxMapHeight <= minimumMapHeight) {
-      return (availableHeight * 0.50).clamp(150.0, minimumMapHeight).toDouble();
-    }
-    return targetMapHeight.clamp(minimumMapHeight, maxMapHeight).toDouble();
   }
 
   Widget _autoPauseBanner() {
+    final t = context.tokens;
     return Container(
       width: double.infinity,
-      color: const Color(0xFF1E3A5F),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: const Row(
+      decoration: BoxDecoration(
+        color: t.raised,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: t.line),
+      ),
+      child: Row(
         children: <Widget>[
-          Icon(Icons.pause_circle_outline, color: Colors.white70, size: 20),
-          SizedBox(width: 10),
+          Icon(Icons.pause_circle_outline, color: t.textSecondary, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Paused while stopped. Tap resume when you start moving again.',
-              style: TextStyle(color: Colors.white, fontSize: 13),
+              style:
+                  Theme.of(context).textTheme.bodySmall?.copyWith(color: t.text),
             ),
           ),
         ],
@@ -500,48 +702,34 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     );
   }
 
-  Widget _controlBar(RecordingViewState state) {
-    final controller =
-        ref.read(recordingControllerProvider.notifier);
-
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: OutlinedButton(
-                onPressed: state.phase == RecordScreenPhase.recording
-                    ? controller.pause
-                    : state.phase == RecordScreenPhase.paused
-                        ? controller.resume
-                        : null,
-                child: Text(
-                  state.phase == RecordScreenPhase.paused ? 'Resume' : 'Pause',
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton(
-                onPressed: state.canStart
-                    ? controller.startRecording
-                    : state.phase == RecordScreenPhase.recording ||
-                            state.phase == RecordScreenPhase.paused
-                        ? controller.finish
-                        : null,
-                child: Text(
-                  state.phase == RecordScreenPhase.recording ||
-                          state.phase == RecordScreenPhase.paused
-                      ? 'Finish'
-                      : 'Start Recording',
-                ),
-              ),
-            ),
-          ],
+  Widget _controlRow(RecordingViewState state) {
+    final controller = ref.read(recordingControllerProvider.notifier);
+    final inSession = state.phase == RecordScreenPhase.recording ||
+        state.phase == RecordScreenPhase.paused;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          flex: 10,
+          child: GhostButton(
+            label: state.phase == RecordScreenPhase.paused ? 'Resume' : 'Pause',
+            onPressed: state.phase == RecordScreenPhase.recording
+                ? controller.pause
+                : state.phase == RecordScreenPhase.paused
+                    ? controller.resume
+                    : null,
+          ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 14,
+          child: VoltButton(
+            label: inSession ? 'Finish' : 'Start recording',
+            onPressed: state.canStart
+                ? controller.startRecording
+                : (inSession ? controller.finish : null),
+          ),
+        ),
+      ],
     );
   }
 
@@ -750,7 +938,7 @@ class _GpsSignalBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const heights = <double>[6, 10, 14, 18];
+    const heights = <double>[5, 8, 11, 14];
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -762,7 +950,7 @@ class _GpsSignalBars extends StatelessWidget {
             width: 4,
             height: heights[index],
             decoration: BoxDecoration(
-              color: active ? color : Colors.white24,
+              color: active ? color : context.tokens.line,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

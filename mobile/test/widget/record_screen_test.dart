@@ -233,16 +233,48 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    expect(find.text('Start Recording'), findsOneWidget);
+    expect(find.text('START RECORDING'), findsOneWidget);
     expect(find.text('GPS'), findsOneWidget);
 
-    await tester.tap(find.text('Start Recording'));
+    await tester.tap(find.text('START RECORDING'));
     await tester.pumpAndSettle();
-    expect(find.text('Finish'), findsOneWidget);
+    expect(find.text('FINISH'), findsOneWidget);
 
-    await tester.tap(find.text('Finish'));
+    await tester.tap(find.text('FINISH'));
     await tester.pumpAndSettle();
-    expect(find.text('Start Recording'), findsOneWidget);
+    expect(find.text('START RECORDING'), findsOneWidget);
+  });
+
+  testWidgets('record screen toggles between map and HUD layouts',
+      (WidgetTester tester) async {
+    final fakeRepository = FakeSessionRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(fakeRepository),
+          locationTrackingRepositoryProvider
+              .overrideWithValue(FakeLocationRepository()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+        ],
+        child: const MaterialApp(home: RecordScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TAP FOR MAP ↗'), findsNothing);
+    await tester.tap(find.text('HUD'));
+    await tester.pumpAndSettle();
+    expect(find.text('TAP FOR MAP ↗'), findsOneWidget);
+    expect(find.text('SESSION MAX'), findsOneWidget);
+
+    // The HUD column is taller than the 800x600 test surface, so scroll the
+    // map thumbnail into view before tapping it.
+    await tester.ensureVisible(find.text('TAP FOR MAP ↗'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('TAP FOR MAP ↗'));
+    await tester.pumpAndSettle();
+    expect(find.text('TAP FOR MAP ↗'), findsNothing);
   });
 
   testWidgets('record screen renders vertical and altitude cards in meters',
@@ -297,9 +329,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Vertical'), findsOneWidget);
+    expect(find.text('VERT'), findsOneWidget);
     expect(find.text('320 m'), findsOneWidget);
-    expect(find.text('Altitude'), findsOneWidget);
+    expect(find.text('ALT'), findsOneWidget);
     expect(find.text('1550 m'), findsOneWidget);
   });
 
