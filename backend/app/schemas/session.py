@@ -1,6 +1,7 @@
 from datetime import UTC
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -47,6 +48,27 @@ class SessionCondition(str, Enum):
     GRANULAR = "GRANULAR"
     GROOMED = "GROOMED"
     POWDER = "POWDER"
+
+
+class SessionAnalyzeRequest(BaseModel):
+    include_overrides: bool = True
+
+
+class SessionUpdateRequest(BaseModel):
+    conditions: SessionCondition | None = None
+
+
+class SessionOverrideCreateRequest(BaseModel):
+    started_at: datetime
+    ended_at: datetime
+    motion_state: Literal["run", "lift", "ignore"]
+
+    @field_validator("started_at", "ended_at", mode="before")
+    @classmethod
+    def ensure_timezone_aware(cls, value: datetime | str) -> datetime | str:
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 class SessionResortSummary(ORMBaseModel):
@@ -128,6 +150,11 @@ class SessionDetailResponse(BaseModel):
     session: SessionSummary
     actions: list[SessionActionRead]
     overrides: list[SessionOverrideRead]
+
+
+class SessionActionsListResponse(BaseModel):
+    session_id: UUID
+    items: list[SessionActionRead]
 
 
 class RideSessionPublic(SessionSummary):

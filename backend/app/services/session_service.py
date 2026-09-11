@@ -20,8 +20,10 @@ from app.repositories.protocols import SessionPointRepositoryProtocol
 from app.schemas.session import SessionCompleteRequest
 from app.schemas.session import SessionCreateRequest
 from app.schemas.session import SessionPointInput
+from app.schemas.session import SessionUpdateRequest
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
+from app.services.exceptions import SessionNotYetCompletedError
 from app.services.exceptions import ValidationError
 from app.services.session_analyzer import ActionRecord
 from app.services.session_analyzer import AnalyzerInput
@@ -40,6 +42,13 @@ class SessionOverrideSpec:
     started_at: datetime
     ended_at: datetime
     motion_state: str
+
+
+@dataclass(frozen=True)
+class SessionDetail:
+    session: RideSession
+    actions: list[RideSessionAction]
+    overrides: list[RideSessionOverride]
 
 
 class SessionService:
@@ -111,7 +120,7 @@ class SessionService:
         session_id: uuid.UUID,
         user_id: uuid.UUID,
         completion: SessionCompleteRequest,
-    ) -> RideSession:
+    ) -> SessionDetail:
         ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
         if ride_session.status != RideSessionStatus.DRAFT:
             raise ConflictError("Only draft sessions can be completed.")
@@ -123,36 +132,37 @@ class SessionService:
         ride_session.ended_at = ended_at
         ride_session.status = RideSessionStatus.COMPLETED
 
-        self._run_analysis(ride_session)
-
+        self._run_analysis(ride_session, include_overrides=True)
         self._ride_session_repository.commit()
-        self._ride_session_repository.refresh(ride_session)
-        return ride_session
+        return self._load_detail(session_id=session_id, user_id=user_id)
 
     def reanalyze_session(
         self,
         session_id: uuid.UUID,
         user_id: uuid.UUID,
-    ) -> RideSession:
+        include_overrides: bool = True,
+    ) -> SessionDetail:
         ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
         if ride_session.status == RideSessionStatus.DRAFT:
-            raise ConflictError("Only completed sessions can be analyzed.")
+            raise SessionNotYetCompletedError(
+                "Session must be completed before it can be analyzed."
+            )
 
-        self._run_analysis(ride_session)
-
+        self._run_analysis(ride_session, include_overrides=include_overrides)
         self._ride_session_repository.commit()
-        self._ride_session_repository.refresh(ride_session)
-        return ride_session
+        return self._load_detail(session_id=session_id, user_id=user_id)
 
     def apply_override(
         self,
         session_id: uuid.UUID,
         user_id: uuid.UUID,
         override_spec: SessionOverrideSpec,
-    ) -> RideSession:
+    ) -> SessionDetail:
         ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
         if ride_session.status == RideSessionStatus.DRAFT:
-            raise ConflictError("Only completed sessions can receive overrides.")
+            raise SessionNotYetCompletedError(
+                "Session must be completed before overrides can be applied."
+            )
         if override_spec.ended_at < override_spec.started_at:
             raise ValidationError("Override ended_at must be >= started_at.")
 
@@ -168,8 +178,59 @@ class SessionService:
 
         return self.reanalyze_session(session_id=session_id, user_id=user_id)
 
+    def remove_override(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        override_id: uuid.UUID,
+    ) -> SessionDetail:
+        ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
+        override = self._session_override_repository.get_by_id(override_id)
+        if override is None or override.session_id != ride_session.id:
+            raise NotFoundError("Session override not found.")
+
+        self._session_override_repository.delete(override)
+        self._session_override_repository.commit()
+
+        return self.reanalyze_session(session_id=session_id, user_id=user_id)
+
+    def update_session_metadata(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        update: SessionUpdateRequest,
+    ) -> RideSession:
+        ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
+        if ride_session.status == RideSessionStatus.DRAFT:
+            raise SessionNotYetCompletedError(
+                "Session must be completed before metadata can be updated."
+            )
+
+        update_data = update.model_dump(exclude_unset=True)
+        if "conditions" in update_data:
+            ride_session.conditions = update_data["conditions"]
+
+        self._ride_session_repository.commit()
+        self._ride_session_repository.refresh(ride_session)
+        return ride_session
+
     def get_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession:
         return self._get_owned_session(session_id=session_id, user_id=user_id)
+
+    def get_session_detail(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> SessionDetail:
+        return self._load_detail(session_id=session_id, user_id=user_id)
+
+    def list_session_actions(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> list[RideSessionAction]:
+        detail = self._load_detail(session_id=session_id, user_id=user_id)
+        return detail.actions
 
     def list_session_points(self, session_id: uuid.UUID, user_id: uuid.UUID) -> list[SessionPoint]:
         ride_session = self._get_owned_session(session_id=session_id, user_id=user_id)
@@ -188,9 +249,12 @@ class SessionService:
         self._ride_session_repository.delete(ride_session)
         self._ride_session_repository.commit()
 
-    def _run_analysis(self, ride_session: RideSession) -> None:
+    def _run_analysis(self, ride_session: RideSession, *, include_overrides: bool) -> None:
         raw_points = self._session_point_repository.list_by_session(ride_session.id)
-        existing_overrides = self._session_override_repository.list_by_session(ride_session.id)
+        if include_overrides:
+            existing_overrides = self._session_override_repository.list_by_session(ride_session.id)
+        else:
+            existing_overrides = []
 
         record_end = ride_session.ended_at or ride_session.started_at
         metadata = SessionMetadataInput(
@@ -213,6 +277,16 @@ class SessionService:
             actions=[_to_action_model(a) for a in result.actions],
             overrides=[_to_override_model(o) for o in result.overrides],
             version=result.analyzer_version,
+        )
+
+    def _load_detail(self, session_id: uuid.UUID, user_id: uuid.UUID) -> SessionDetail:
+        session = self._ride_session_repository.get_detail_with_actions(session_id)
+        if session is None or session.user_id != user_id:
+            raise NotFoundError("Session not found.")
+        return SessionDetail(
+            session=session,
+            actions=list(session.actions),
+            overrides=list(session.overrides),
         )
 
     def _get_owned_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> RideSession:

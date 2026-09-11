@@ -23,6 +23,12 @@ class SessionOverrideRepository(SqlAlchemyRepository):
         )
         return list(self._db.scalars(stmt).all())
 
+    def get_by_id(self, override_id: uuid.UUID) -> RideSessionOverride | None:
+        return self._db.get(RideSessionOverride, override_id)
+
+    def delete(self, override: RideSessionOverride) -> None:
+        self._db.delete(override)
+
     def delete_by_session(self, session_id: uuid.UUID) -> int:
         result = self._db.execute(
             delete(RideSessionOverride).where(RideSessionOverride.session_id == session_id)

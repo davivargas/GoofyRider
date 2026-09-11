@@ -68,21 +68,26 @@ def test_complete_session_runs_analyzer_and_writes_actions(
     )
     assert complete.status_code == 200
     completed = complete.json()
+    summary = completed["session"]
 
-    assert completed["status"] == "COMPLETED"
-    assert completed["processed_by_version"] is not None
-    assert completed["processed_at"] is not None
+    assert summary["status"] == "COMPLETED"
+    assert summary["processed_by_version"] is not None
+    assert summary["processed_at"] is not None
 
     # Analyzer-owned summary fields must be populated on the response body.
-    assert completed["total_duration_s"] > 0
-    assert completed["descent_duration_s"] > 0
-    assert completed["descent_distance_m"] > 0
-    assert completed["descent_vertical_m"] > 0
-    assert completed["avg_descent_speed_mps"] > 0
-    assert completed["max_speed_mps"] is not None
-    assert completed["peak_altitude_m"] is not None
-    assert completed["center_lat"] is not None
-    assert completed["center_long"] is not None
+    assert summary["total_duration_s"] > 0
+    assert summary["descent_duration_s"] > 0
+    assert summary["descent_distance_m"] > 0
+    assert summary["descent_vertical_m"] > 0
+    assert summary["avg_descent_speed_mps"] > 0
+    assert summary["max_speed_mps"] is not None
+    assert summary["peak_altitude_m"] is not None
+    assert summary["center_lat"] is not None
+    assert summary["center_long"] is not None
+
+    # Detail response now carries actions + overrides inline.
+    assert len(completed["actions"]) >= 1
+    assert isinstance(completed["overrides"], list)
 
     action_rows = list(
         db.scalars(

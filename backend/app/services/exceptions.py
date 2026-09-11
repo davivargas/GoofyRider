@@ -10,6 +10,10 @@ class ConflictError(ServiceError):
     pass
 
 
+class SessionNotYetCompletedError(ServiceError):
+    pass
+
+
 class NotFoundError(ServiceError):
     pass
 

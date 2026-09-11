@@ -58,7 +58,9 @@ def test_sessions_lifecycle_create_points_complete_list(
     )
     assert complete_response.status_code == 200
     completed = complete_response.json()
-    assert completed["status"] == "COMPLETED"
+    assert completed["session"]["status"] == "COMPLETED"
+    assert "actions" in completed
+    assert "overrides" in completed
 
     list_response = client.get("/v1/users/me/sessions", headers=headers)
     assert list_response.status_code == 200
@@ -390,8 +392,8 @@ def test_sessions_get_detail_and_points_endpoints(
 
     detail = client.get(f"/v1/sessions/{session_id}", headers=headers)
     assert detail.status_code == 200
-    assert detail.json()["id"] == session_id
-    assert detail.json()["resort"]["id"] == str(resort.id)
+    assert detail.json()["session"]["id"] == session_id
+    assert detail.json()["session"]["resort"]["id"] == str(resort.id)
 
     points = client.get(f"/v1/sessions/{session_id}/points", headers=headers)
     assert points.status_code == 200

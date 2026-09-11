@@ -12,6 +12,7 @@ from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ServiceError
 from app.services.exceptions import ServiceUnavailableError
+from app.services.exceptions import SessionNotYetCompletedError
 from app.services.exceptions import ValidationError
 
 
@@ -35,6 +36,10 @@ def register_service_exception_handlers(app: FastAPI) -> None:
     )
     app.add_exception_handler(
         ConflictError,
+        _service_error_handler(status.HTTP_409_CONFLICT),
+    )
+    app.add_exception_handler(
+        SessionNotYetCompletedError,
         _service_error_handler(status.HTTP_409_CONFLICT),
     )
     app.add_exception_handler(
