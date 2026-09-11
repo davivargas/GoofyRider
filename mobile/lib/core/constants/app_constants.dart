@@ -5,6 +5,14 @@ class AppConstants {
 
   static const String androidEmulatorApiBaseUrl = 'http://10.0.2.2:8000/v1';
 
+  /// Wordmark rendered by `Wordmark`. Override with
+  /// `--dart-define=BRAND_WORDMARK=...` (canvas candidates: FALL LINE,
+  /// FIRST CHAIR, VERT, CORDUROY, GOOFYRIDER).
+  static const String brandWordmark = String.fromEnvironment(
+    'BRAND_WORDMARK',
+    defaultValue: 'GOOFYRIDER',
+  );
+
   static const String _configuredApiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',

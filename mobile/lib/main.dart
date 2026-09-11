@@ -64,7 +64,7 @@ class BootstrapErrorApp extends StatelessWidget {
     return MaterialApp(
       title: 'GoofyRider',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: ThemeMode.system,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       home: Scaffold(
@@ -158,7 +158,7 @@ class _GoofyRiderAppState extends ConsumerState<GoofyRiderApp>
     return MaterialApp.router(
       title: 'GoofyRider',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: ThemeMode.system,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       routerConfig: router,

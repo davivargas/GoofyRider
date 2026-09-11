@@ -1,4 +1,4 @@
-﻿name: goofyrider_mobile
+name: goofyrider_mobile
 description: GoofyRider Android-first snowboarding tracker.
 publish_to: none
 version: 0.1.0+1
@@ -41,3 +41,25 @@ flutter:
   assets:
     - assets/branding/icon.png
     - assets/branding/splash_center_icon.png
+  fonts:
+    - family: Archivo
+      fonts:
+        - asset: assets/fonts/Archivo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Archivo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Archivo-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Archivo-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Archivo-ExtraBoldItalic.ttf
+          weight: 800
+          style: italic
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
