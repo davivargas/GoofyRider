@@ -359,21 +359,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Session'), findsWidgets);
-    expect(find.text('Ride time'), findsOneWidget);
-    expect(find.text('Lift'), findsWidgets);
-    expect(find.text('Idle'), findsWidgets);
-    expect(find.text('Ride distance'), findsOneWidget);
-    expect(find.text('Ride avg'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Timeline'),
-      300,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Timeline'), findsOneWidget);
+    expect(find.text('RIDE'), findsWidgets);
+    expect(find.text('LIFT'), findsWidgets);
+    expect(find.text('IDLE'), findsWidgets);
+    expect(find.textContaining('TIME SPLIT'), findsOneWidget);
+    expect(find.text('RUNS'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('TIMELINE'), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.text('TIMELINE'), findsOneWidget);
     expect(find.textContaining('00:02:00'), findsWidgets);
   });
 
@@ -400,7 +392,7 @@ void main() {
       find.text('Motion segments are not available for this session yet.'),
       findsOneWidget,
     );
-    expect(find.text('Ride time'), findsOneWidget);
+    expect(find.text('RIDE TIME'), findsOneWidget);
   });
 
   testWidgets('session detail screen exposes sync action for unsynced sessions',
@@ -424,14 +416,14 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Retry sync'),
+      find.text('RETRY SYNC'),
       300,
       scrollable: find.byType(Scrollable),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Retry sync'), findsOneWidget);
-    await tester.tap(find.text('Retry sync'));
+    expect(find.text('RETRY SYNC'), findsOneWidget);
+    await tester.tap(find.text('RETRY SYNC'));
     await tester.pumpAndSettle();
 
     expect(repository.syncedSessionIds, <int>[1]);

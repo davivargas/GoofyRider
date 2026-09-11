@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../app/shell/app_tab_bar.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/providers.dart';
@@ -17,6 +19,7 @@ import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
+import '../../../core/widgets/design_widgets.dart';
 import '../../../core/widgets/map_attribution.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
@@ -32,420 +35,339 @@ class SessionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detail =
-        ref.watch(sessionDetailProvider(localSessionId));
+    final detail = ref.watch(sessionDetailProvider(localSessionId));
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final activeMapTileProviderConfig =
-        ref.watch(activeMapTileProviderConfigProvider);
-    final showDebugDiagnostics =
-        kDebugMode && AppConstants.isDebugDiagnostics;
-    final appBarTitle = detail.maybeWhen(
-      data: (SessionDetail data) => data.session.startedAt.toDayLabel(),
-      orElse: () => 'Session detail',
-    );
+    final activeMapTileProviderConfig = ref.watch(activeMapTileProviderConfigProvider);
+    final showDebugDiagnostics = kDebugMode && AppConstants.isDebugDiagnostics;
+    final t = context.tokens;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(appBarTitle),
-        actions: <Widget>[
-          detail.maybeWhen(
-            data: (SessionDetail data) => PopupMenuButton<_SessionDetailAction>(
-              tooltip: 'Session actions',
-              itemBuilder: (BuildContext context) =>
-                  <PopupMenuEntry<_SessionDetailAction>>[
-                const PopupMenuItem<_SessionDetailAction>(
-                  value: _SessionDetailAction.delete,
-                  child: Text(
-                    'Delete session',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
-              onSelected: (_SessionDetailAction action) async {
-                if (action != _SessionDetailAction.delete) {
-                  return;
-                }
-
-                final confirmed = await _confirmDelete(context);
-                if (!confirmed) {
-                  return;
-                }
-
-                try {
-                  final result = await ref
-                      .read(sessionRepositoryProvider)
-                      .deleteSession(data.session);
-
-                  ref.invalidate(historyProvider);
-                  ref.invalidate(historySectionsProvider);
-                  ref.invalidate(unsyncedSessionCountProvider);
-                  ref.invalidate(sessionDetailProvider(localSessionId));
-
-                  if (context.mounted) {
-                    if (result.queuedRemoteDelete) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Session removed locally. Server deletion will retry when the backend is reachable.',
-                          ),
-                        ),
-                      );
-                    }
-                    final router = GoRouter.maybeOf(context);
-                    if (router != null) {
-                      router.go(RoutePaths.history);
-                    } else {
-                      Navigator.of(context).pop();
-                    }
-                  }
-                } catch (error) {
-                  final message = switch (error) {
-                    final AppFailure failure => failure.message,
-                    _ => error.toString(),
-                  };
-
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to delete session: $message'),
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-            orElse: () => const SizedBox.shrink(),
+      body: SafeArea(
+        bottom: false,
+        child: detail.when(
+          loading: () => const AppLoadingView(label: 'Loading details...'),
+          error: (Object error, StackTrace _) => AppErrorView(
+            message: error.toString(),
+            onRetry: () => ref.invalidate(sessionDetailProvider(localSessionId)),
           ),
-        ],
-      ),
-      body: detail.when(
-        loading: () => const AppLoadingView(label: 'Loading details...'),
-        error: (Object error, StackTrace _) => AppErrorView(
-          message: error.toString(),
-          onRetry: () => ref.invalidate(sessionDetailProvider(localSessionId)),
-        ),
-        data: (SessionDetail data) {
-          final session = data.session;
-
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: <Widget>[
-              // Card(
-              //   child: ListTile(
-              //     title: Text(
-              //       session.startedAt.toDayLabel(),
-              //       style: const TextStyle(fontWeight: FontWeight.w700),
-              //     ),
-              //     subtitle:
-              //         Text('Started at ${session.startedAt.toTimeLabel()}'),
-              //   ),
-              // ),
-              const SizedBox(height: 12),
-              _summaryCards(data, speedUnit, distanceUnit),
-              const SizedBox(height: 12),
-              _mapReplay(data, activeMapTileProviderConfig),
-              const SizedBox(height: 12),
-              _timelineCard(data, distanceUnit),
-              const SizedBox(height: 12),
-              Card(
-                child: ListTile(
-                  title: const Text('Route metadata'),
-                  subtitle: Text(
-                    'Point count: ${data.points.length}\n'
-                    'Accepted for analytics: ${data.acceptedPoints.length}\n'
-                    'Origin: ${session.remoteId != null ? 'Local+Server' : 'Local only'}',
-                  ),
-                ),
-              ),
-              if (data.trackingDiagnostics.isNotEmpty)
-                Card(
-                  child: ListTile(
-                    title: const Text('Tracking diagnostics'),
-                    subtitle: Text(
-                      data.trackingDiagnostics
-                          .take(16)
-                          .map(_diagnosticLine)
-                          .join('\n'),
-                    ),
-                  ),
-                ),
-              if (showDebugDiagnostics)
-                Card(
-                  child: ListTile(
-                    title: const Text('Diagnostics'),
-                    subtitle: Text(
-                      'Raw points: ${data.points.length}\n'
-                      'Filtered points: ${data.acceptedPoints.length}\n'
-                      'Upload state: ${session.state.wireValue}\n'
-                      'Last sync error: ${session.lastSyncError ?? 'None'}\n'
-                      'Tracking events: ${data.trackingDiagnostics.length}',
-                    ),
-                  ),
-                ),
-              if (session.localId > 0 &&
-                  session.isUnsynced &&
-                  !session.isInProgress)
-                FilledButton(
-                  onPressed: () async {
-                    await ref
-                        .read(sessionRepositoryProvider)
-                        .syncSession(localSessionId);
-                    ref.invalidate(sessionDetailProvider(localSessionId));
-                    ref.invalidate(historyProvider);
-                    ref.invalidate(unsyncedSessionCountProvider);
-                  },
-                  child: Text(
-                    session.state == LocalSessionState.syncFailed
-                        ? 'Retry sync'
-                        : 'Sync now',
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _summaryCards(
-    SessionDetail detail,
-    SpeedUnit speedUnit,
-    DistanceUnit distanceUnit,
-  ) {
-    final stats = detail.stats;
-    final hasSegmentBreakdown = detail.timeline.isNotEmpty ||
-        stats.descentDurationS > 0 ||
-        stats.liftDurationS > 0 ||
-        stats.idleDurationS > 0;
-    final rideDurationS =
-        hasSegmentBreakdown ? stats.descentDurationS : stats.durationS;
-    final liftDuration = hasSegmentBreakdown
-        ? formatSecondsAsDuration(stats.liftDurationS)
-        : '--';
-    final idleDuration = hasSegmentBreakdown
-        ? formatSecondsAsDuration(stats.idleDurationS)
-        : '--';
-    final rideDistanceM =
-        hasSegmentBreakdown ? stats.descentDistanceM : stats.distanceM;
-    final rideAvgSpeedMps =
-        hasSegmentBreakdown ? stats.rideAvgSpeedMps : stats.avgSpeedMps;
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: <Widget>[
-        _summaryCard('Duration', formatSecondsAsDuration(stats.durationS)),
-        _summaryCard('Ride time', formatSecondsAsDuration(rideDurationS)),
-        _summaryCard('Lift', liftDuration),
-        _summaryCard('Idle', idleDuration),
-        _summaryCard(
-          'Ride distance',
-          distanceUnit.formatFromMeters(rideDistanceM),
-        ),
-        _summaryCard(
-          'Total route',
-          distanceUnit.formatFromMeters(stats.distanceM),
-        ),
-        _summaryCard(
-          'Max speed',
-          speedUnit.formatFromMetersPerSecond(stats.maxSpeedMps),
-        ),
-        _summaryCard(
-          'Ride avg',
-          speedUnit.formatFromMetersPerSecond(rideAvgSpeedMps),
-        ),
-        // Debug-only hint: recovered idle time reclassified as descent by
-        // the Layer-2 post-finish pass (§4.3 of the GPS overhaul plan).
-        // Uncomment to surface during tracking-pipeline investigations.
-        // if (detail.reclassifiedIdleDurationS > 0)
-        //   _summaryCard(
-        //     'Recovered',
-        //     '${formatSecondsAsDuration(detail.reclassifiedIdleDurationS)} '
-        //         'of descent from on-slope stops',
-        //   ),
-      ],
-    );
-  }
-
-  Widget _summaryCard(String title, String value) {
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF123048),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title, style: const TextStyle(fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _mapReplay(
-    SessionDetail detail,
-    MapTileProviderConfig activeMapTileProviderConfig,
-  ) {
-    final routePoints = detail.acceptedPoints.isNotEmpty
-        ? detail.acceptedPoints
-        : detail.points;
-    if (routePoints.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('No route points available.'),
-        ),
-      );
-    }
-
-    final route = routePoints
-        .map(
-          (LocalSessionPoint point) => LatLng(
-            point.filteredLatitude ?? point.latitude,
-            point.filteredLongitude ?? point.longitude,
-          ),
-        )
-        .toList(growable: false);
-    final polylines = detail.timeline.isEmpty
-        ? <Polyline>[
-            Polyline(
-              points: route,
-              strokeWidth: 4,
-              color: const Color(0xFF59C3FF),
-            ),
-          ]
-        : detail.timeline
-            .where(
-                (SessionTimelineSegment segment) => segment.points.length >= 2)
-            .map(
-              (SessionTimelineSegment segment) => Polyline(
-                points: segment.points
-                    .map(
-                      (LocalSessionPoint point) => LatLng(
-                        point.filteredLatitude ?? point.latitude,
-                        point.filteredLongitude ?? point.longitude,
-                      ),
-                    )
-                    .toList(growable: false),
-                strokeWidth: 5,
-                color: _segmentColor(segment.type),
-              ),
-            )
-            .toList(growable: false);
-
-    return SizedBox(
-      height: 380,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: FlutterMap(
-          options: MapOptions(initialCenter: route.first, initialZoom: 14),
-          children: <Widget>[
-            TileLayer(
-              urlTemplate: activeMapTileProviderConfig.urlTemplate,
-              subdomains: activeMapTileProviderConfig.subdomains,
-              retinaMode: activeMapTileProviderConfig.retinaMode,
-              userAgentPackageName: 'com.goofyrider.mobile',
-            ),
-            PolylineLayer(
-              polylines: polylines,
-            ),
-            MarkerLayer(
-              markers: <Marker>[
-                Marker(
-                  point: route.last,
-                  width: 30,
-                  height: 30,
-                  child: const Icon(
-                    Icons.flag,
-                    size: 22,
-                    color: Colors.black,
-                  ),
-                ),
-              ],
-            ),
-            MapAttribution(config: activeMapTileProviderConfig),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _timelineCard(SessionDetail detail, DistanceUnit distanceUnit) {
-    if (detail.timeline.isEmpty) {
-      return const Card(
-        child: ListTile(
-          title: Text('Timeline'),
-          subtitle: Text(
-            'Motion segments are not available for this session yet.',
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Timeline',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            ...detail.timeline.map(
-              (SessionTimelineSegment segment) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          data: (SessionDetail data) {
+            final session = data.session;
+            final synced = session.state == LocalSessionState.synced;
+            final runs = data.timeline.where((SessionTimelineSegment s) => s.type == SessionActivityType.descent).length;
+            final vert = session.elevationLossM;
+            return ListView(
+              padding: EdgeInsets.fromLTRB(24, 16, 24, AppTabBar.height + 24),
+              children: <Widget>[
+                Row(
                   children: <Widget>[
-                    Container(
-                      width: 10,
-                      height: 10,
-                      margin: const EdgeInsets.only(top: 5, right: 10),
-                      decoration: BoxDecoration(
-                        color: _segmentColor(segment.type),
-                        shape: BoxShape.circle,
-                      ),
+                    IconButton(
+                      tooltip: 'Back',
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        final router = GoRouter.maybeOf(context);
+                        if (router != null) {
+                          router.go(RoutePaths.history);
+                        } else {
+                          Navigator.of(context).maybePop();
+                        }
+                      },
+                      icon: Icon(Icons.arrow_back, color: t.textSecondary),
                     ),
                     Expanded(
-                      child: Text(
-                        '${segment.type.label}  ${segment.startedAt.toTimeLabel()} - ${segment.endedAt.toTimeLabel()}\n'
-                        '${formatSecondsAsDuration(segment.durationS)} | ${distanceUnit.formatFromMeters(segment.distanceM)}',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(session.resortId ?? 'Session', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 2),
+                          MonoLabel('${session.startedAt.toDayLabel()} · ${session.startedAt.toTimeLabel()}', size: 8, tone: MonoTone.muted, letterSpacing: 1.6),
+                        ],
+                      ),
+                    ),
+                    StatusPill(synced ? '● Synced' : '○ Local only', variant: synced ? PillVariant.ice : PillVariant.muted),
+                    PopupMenuButton<_SessionDetailAction>(
+                      tooltip: 'Session actions',
+                      icon: Icon(Icons.more_vert, color: t.textSecondary),
+                      itemBuilder: (BuildContext context) => <PopupMenuEntry<_SessionDetailAction>>[
+                        PopupMenuItem<_SessionDetailAction>(
+                          value: _SessionDetailAction.delete,
+                          child: Text('Delete session', style: TextStyle(color: t.rec)),
+                        ),
+                      ],
+                      onSelected: (_SessionDetailAction action) => _onAction(context, ref, action, data),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: <Widget>[
+                        Text(vert == null ? '--' : distanceUnit.convertFromMeters(vert.toDouble()).round().toString(), style: Theme.of(context).textTheme.displayMedium),
+                        const SizedBox(width: 8),
+                        MonoLabel('${distanceUnit.shortLabel} vert', size: 10, tone: MonoTone.volt, letterSpacing: 1.6),
+                      ],
+                    ),
+                    const SizedBox(width: 22),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Wrap(
+                          spacing: 18,
+                          children: <Widget>[
+                            StatBlock(value: speedUnit.convertFromMetersPerSecond(data.stats.maxSpeedMps).toStringAsFixed(1), label: 'Max', size: StatSize.small),
+                            StatBlock(value: distanceUnit.formatFromMeters(data.stats.distanceM), label: 'Dist', size: StatSize.small),
+                            StatBlock(value: '$runs', label: 'Runs', size: StatSize.small),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 20),
+                _timeSplit(context, data),
+                const SizedBox(height: 18),
+                _mapReplay(context, data, activeMapTileProviderConfig),
+                const SizedBox(height: 20),
+                _timeline(context, data, distanceUnit, speedUnit),
+                if (session.localId > 0 && session.isUnsynced && !session.isInProgress) ...<Widget>[
+                  const SizedBox(height: 18),
+                  VoltButton(
+                    label: session.state == LocalSessionState.syncFailed ? 'Retry sync' : 'Sync now',
+                    onPressed: () async {
+                      await ref.read(sessionRepositoryProvider).syncSession(localSessionId);
+                      ref.invalidate(sessionDetailProvider(localSessionId));
+                      ref.invalidate(historyProvider);
+                      ref.invalidate(unsyncedSessionCountProvider);
+                    },
+                  ),
+                ],
+                if (showDebugDiagnostics) ...<Widget>[
+                  const SizedBox(height: 18),
+                  SurfaceCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const MonoLabel('Diagnostics', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Raw points: ${data.points.length}\n'
+                          'Filtered points: ${data.acceptedPoints.length}\n'
+                          'Upload state: ${session.state.wireValue}\n'
+                          'Last sync error: ${session.lastSyncError ?? 'None'}\n'
+                          'Origin: ${session.remoteId != null ? 'Local+Server' : 'Local only'}\n'
+                          'Tracking events: ${data.trackingDiagnostics.length}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        if (data.trackingDiagnostics.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 8),
+                          Text(data.trackingDiagnostics.take(16).map(_diagnosticLine).join('\n'), style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onAction(BuildContext context, WidgetRef ref, _SessionDetailAction action, SessionDetail data) async {
+    if (action != _SessionDetailAction.delete) {
+      return;
+    }
+    final confirmed = await _confirmDelete(context);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      final result = await ref.read(sessionRepositoryProvider).deleteSession(data.session);
+      ref.invalidate(historyProvider);
+      ref.invalidate(historySectionsProvider);
+      ref.invalidate(unsyncedSessionCountProvider);
+      ref.invalidate(sessionDetailProvider(localSessionId));
+      if (context.mounted) {
+        if (result.queuedRemoteDelete) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session removed locally. Server deletion will retry when the backend is reachable.'),
             ),
+          );
+        }
+        final router = GoRouter.maybeOf(context);
+        if (router != null) {
+          router.go(RoutePaths.history);
+        } else {
+          Navigator.of(context).pop();
+        }
+      }
+    } catch (error) {
+      final message = switch (error) {
+        final AppFailure failure => failure.message,
+        _ => error.toString(),
+      };
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete session: $message')));
+      }
+    }
+  }
+
+  Widget _timeSplit(BuildContext context, SessionDetail data) {
+    final t = context.tokens;
+    final stats = data.stats;
+    final hasSplit = data.timeline.isNotEmpty || stats.descentDurationS > 0 || stats.liftDurationS > 0 || stats.idleDurationS > 0;
+    final total = hasSplit ? (stats.descentDurationS + stats.liftDurationS + stats.idleDurationS) : stats.durationS;
+    int flex(int s) => total == 0 ? 1 : (s * 1000 ~/ total).clamp(1, 1000);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            MonoLabel('Time split · ${formatSecondsAsDuration(stats.durationS)}', size: 8, tone: MonoTone.muted),
+            Row(
+              children: <Widget>[
+                MonoLabel('■ Ride', size: 8, color: t.voltText),
+                const SizedBox(width: 8),
+                MonoLabel('■ Lift', size: 8, color: t.ice),
+                const SizedBox(width: 8),
+                const MonoLabel('■ Idle', size: 8, tone: MonoTone.muted),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(5),
+          child: SizedBox(
+            height: 10,
+            child: hasSplit
+                ? Row(
+                    children: <Widget>[
+                      Expanded(flex: flex(stats.descentDurationS), child: ColoredBox(color: t.descent)),
+                      const SizedBox(width: 2),
+                      Expanded(flex: flex(stats.liftDurationS), child: ColoredBox(color: t.lift)),
+                      const SizedBox(width: 2),
+                      Expanded(flex: flex(stats.idleDurationS), child: ColoredBox(color: t.idle)),
+                    ],
+                  )
+                : ColoredBox(color: t.descent),
+          ),
+        ),
+        if (!hasSplit) ...<Widget>[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 18,
+            children: <Widget>[
+              StatBlock(value: formatSecondsAsDuration(stats.durationS), label: 'Ride time', size: StatSize.small),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _mapReplay(BuildContext context, SessionDetail detail, MapTileProviderConfig activeMapTileProviderConfig) {
+    final t = context.tokens;
+    final routePoints = detail.acceptedPoints.isNotEmpty ? detail.acceptedPoints : detail.points;
+    if (routePoints.isEmpty) {
+      return const SurfaceCard(child: MonoLabel('No route points available.', size: 9, uppercase: false, tone: MonoTone.muted));
+    }
+    LatLng toLatLng(LocalSessionPoint p) => LatLng(p.filteredLatitude ?? p.latitude, p.filteredLongitude ?? p.longitude);
+    final route = routePoints.map(toLatLng).toList(growable: false);
+    final polylines = detail.timeline.isEmpty
+        ? <Polyline>[Polyline(points: route, strokeWidth: 3, color: t.descent)]
+        : detail.timeline
+            .where((SessionTimelineSegment s) => s.points.length >= 2)
+            .map(
+              (SessionTimelineSegment s) => Polyline(
+                points: s.points.map(toLatLng).toList(growable: false),
+                strokeWidth: s.type == SessionActivityType.descent ? 3 : 2,
+                color: segmentColor(t, s.type),
+                pattern: s.type == SessionActivityType.lift ? const StrokePattern.dotted(spacingFactor: 3) : const StrokePattern.solid(),
+              ),
+            )
+            .toList(growable: false);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 210,
+        decoration: BoxDecoration(border: Border.all(color: t.line), borderRadius: BorderRadius.circular(18)),
+        child: Stack(
+          children: <Widget>[
+            FlutterMap(
+              options: MapOptions(initialCenter: route.first, initialZoom: 14),
+              children: <Widget>[
+                TileLayer(
+                  urlTemplate: activeMapTileProviderConfig.urlTemplate,
+                  subdomains: activeMapTileProviderConfig.subdomains,
+                  retinaMode: activeMapTileProviderConfig.retinaMode,
+                  userAgentPackageName: 'com.goofyrider.mobile',
+                ),
+                PolylineLayer(polylines: polylines),
+                MarkerLayer(
+                  markers: <Marker>[
+                    Marker(point: route.first, width: 8, height: 8, child: DecoratedBox(decoration: BoxDecoration(color: t.text, shape: BoxShape.circle))),
+                    Marker(point: route.last, width: 10, height: 10, child: DecoratedBox(decoration: BoxDecoration(color: t.volt, shape: BoxShape.circle))),
+                  ],
+                ),
+                MapAttribution(config: activeMapTileProviderConfig),
+              ],
+            ),
+            const Positioned(left: 12, bottom: 10, child: MonoLabel('Full route', size: 8)),
           ],
         ),
       ),
     );
   }
 
-  Color _segmentColor(SessionActivityType type) {
-    switch (type) {
-      case SessionActivityType.descent:
-        return const Color(0xFF59C3FF);
-      case SessionActivityType.lift:
-        return const Color(0xFFFFB347);
-      case SessionActivityType.idle:
-        return const Color(0xFF94A3B8);
+  Widget _timeline(BuildContext context, SessionDetail detail, DistanceUnit distanceUnit, SpeedUnit speedUnit) {
+    final t = context.tokens;
+    if (detail.timeline.isEmpty) {
+      return SurfaceCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const MonoLabel('Timeline', size: 9, letterSpacing: 1.8),
+            const SizedBox(height: 8),
+            Text('Motion segments are not available for this session yet.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary)),
+          ],
+        ),
+      );
     }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const MonoLabel('Timeline', size: 9, letterSpacing: 1.8),
+        const SizedBox(height: 6),
+        for (final SessionTimelineSegment segment in detail.timeline)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+            child: Row(
+              children: <Widget>[
+                SegmentSwatch(type: segment.type),
+                const SizedBox(width: 12),
+                SizedBox(width: 64, child: MonoLabel(segment.type == SessionActivityType.descent ? 'Ride' : segment.type.label, size: 10, weight: FontWeight.w700, tone: MonoTone.primary)),
+                MonoLabel('${segment.startedAt.toTimeLabel()}–${segment.endedAt.toTimeLabel()}', size: 9, tone: MonoTone.muted, letterSpacing: 0.4, uppercase: false),
+                const Spacer(),
+                MonoLabel('${formatSecondsAsDuration(segment.durationS)} · ${distanceUnit.formatFromMeters(segment.distanceM)}', size: 9, letterSpacing: 0.4),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 
   String _diagnosticLine(TrackingDiagnosticEvent event) {
-    final stamp =
-        event.occurredAt.toLocal().toIso8601String().substring(11, 19);
+    final stamp = event.occurredAt.toLocal().toIso8601String().substring(11, 19);
     final details = event.details.isEmpty ? '' : ' ${event.details}';
     final message = event.message == null ? '' : ' (${event.message})';
     return '[$stamp] ${event.eventType}$message$details';
