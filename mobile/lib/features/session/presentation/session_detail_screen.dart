@@ -389,9 +389,9 @@ class SessionDetailScreen extends ConsumerWidget {
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text(
+              child: Text(
                 'Delete',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: context.tokens.rec),
               ),
             ),
           ],
