@@ -55,10 +55,10 @@ void main() {
       ),
     );
 
-    expect(find.text('GoofyRider'), findsOneWidget);
+    expect(find.textContaining('GOOFYRIDER'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
 
-    await tester.tap(find.text('Log In'));
+    await tester.tap(find.text('LOG IN'));
     await tester.pump();
 
     expect(find.text('Email is required.'), findsOneWidget);

@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../app/theme/app_theme.dart';
+import '../../../core/widgets/design_widgets.dart';
 import 'auth_providers.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -29,86 +32,83 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final t = context.tokens;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Display name'),
-                      validator: (String? value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Display name is required.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      validator: (String? value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Email is required.';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Enter a valid email.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                      validator: (String? value) {
-                        if (value == null || value.length < 8) {
-                          return 'Use at least 8 characters.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    if (authState.errorMessage != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          authState.errorMessage!,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+      body: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          const AuthBackdrop(),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        const Wordmark(size: 44),
+                        const SizedBox(height: 12),
+                        const MonoLabel('Create your account', size: 10, letterSpacing: 2.4),
+                        const SizedBox(height: 44),
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(labelText: 'DISPLAY NAME'),
+                          validator: (String? value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Display name is required.';
+                            }
+                            return null;
+                          },
                         ),
-                      ),
-                    FilledButton(
-                      onPressed: authState.isBusy ? null : _onRegister,
-                      child: authState.isBusy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Create account'),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(labelText: 'EMAIL'),
+                          validator: (String? value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Email is required.';
+                            }
+                            if (!value.contains('@')) {
+                              return 'Enter a valid email.';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          decoration: const InputDecoration(labelText: 'PASSWORD'),
+                          validator: (String? value) {
+                            if (value == null || value.length < 8) {
+                              return 'Use at least 8 characters.';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        if (authState.errorMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(authState.errorMessage!, style: TextStyle(color: t.rec)),
+                          ),
+                        VoltButton(label: 'Create account', busy: authState.isBusy, onPressed: _onRegister),
+                        const SizedBox(height: 12),
+                        GhostButton(label: 'Back to log in', onPressed: () => context.go(RoutePaths.login)),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () => context.go(RoutePaths.login),
-                      child: const Text('Back to login'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
