@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/core/constants/app_constants.dart';
@@ -275,6 +276,48 @@ void main() {
     await tester.tap(find.text('TAP FOR MAP ↗'));
     await tester.pumpAndSettle();
     expect(find.text('TAP FOR MAP ↗'), findsNothing);
+  });
+
+  testWidgets('record screen has no layout overflow at phone size in both layouts',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    // Real font metrics: the mono pills are what can overflow the top row.
+    final loader = FontLoader('JetBrainsMono')
+      ..addFont(rootBundle.load('assets/fonts/JetBrainsMono-Bold.ttf'))
+      ..addFont(rootBundle.load('assets/fonts/JetBrainsMono-SemiBold.ttf'));
+    await loader.load();
+
+    final fakeRepository = FakeSessionRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(fakeRepository),
+          locationTrackingRepositoryProvider
+              .overrideWithValue(FakeLocationRepository()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+        ],
+        child: const MaterialApp(home: RecordScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('START RECORDING'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('HUD'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('TAP FOR MAP ↗'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('record screen renders vertical and altitude cards in meters',

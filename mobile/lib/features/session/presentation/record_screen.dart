@@ -113,10 +113,23 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           children: <Widget>[
             Row(
               children: <Widget>[
-                _recPill(state),
+                // The REC timer and phase labels vary in width; scale the pair
+                // down rather than overflowing the row on narrow phones.
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        _recPill(state),
+                        const SizedBox(width: 8),
+                        _phasePill(state),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                _phasePill(state),
-                const Spacer(),
                 _gpsSignalBadge(state),
                 const SizedBox(width: 8),
                 PillToggle<RecordLayout>(
