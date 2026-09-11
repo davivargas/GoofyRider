@@ -3,12 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
+import '../../../app/shell/app_tab_bar.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/widgets/design_widgets.dart';
 import '../../auth/presentation/auth_providers.dart';
+import '../../session/domain/session_models.dart';
+import '../../session/presentation/season_summary.dart';
+import '../../session/presentation/session_providers.dart';
 import 'debug_export_service.dart';
 
 typedef DebugExportAction = Future<String> Function({
@@ -46,79 +52,98 @@ class ProfileScreen extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
-    final activeMapTileProviderConfig =
-        ref.watch(activeMapTileProviderConfigProvider);
+    final history = ref.watch(historyProvider);
+    final t = context.tokens;
+    final name = authState.session?.user.displayName ?? 'Guest';
+    final email = authState.session?.user.email ?? 'Not signed in';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24, 24, AppTabBar.height + 24),
         children: <Widget>[
-          Card(
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text(authState.session?.user.displayName ?? 'Guest'),
-              subtitle: Text(authState.session?.user.email ?? 'Not signed in'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const Text('Units preference'),
-                  const SizedBox(height: 10),
-                  const Text('Speed'),
-                  const SizedBox(height: 8),
-                  SegmentedButton<SpeedUnit>(
-                    segments: const <ButtonSegment<SpeedUnit>>[
-                      ButtonSegment<SpeedUnit>(
-                        value: SpeedUnit.kilometersPerHour,
-                        label: Text('km/h'),
-                      ),
-                      ButtonSegment<SpeedUnit>(
-                        value: SpeedUnit.metersPerSecond,
-                        label: Text('m/s'),
-                      ),
-                      ButtonSegment<SpeedUnit>(
-                        value: SpeedUnit.milesPerHour,
-                        label: Text('mph'),
-                      ),
-                    ],
-                    selected: <SpeedUnit>{speedUnit},
-                    onSelectionChanged: (Set<SpeedUnit> selection) {
-                      ref
-                          .read(speedUnitPreferenceProvider.notifier)
-                          .setSpeedUnit(selection.first);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('Distance'),
-                  const SizedBox(height: 8),
-                  SegmentedButton<DistanceUnit>(
-                    segments: const <ButtonSegment<DistanceUnit>>[
-                      ButtonSegment<DistanceUnit>(
-                        value: DistanceUnit.meters,
-                        label: Text('m'),
-                      ),
-                      ButtonSegment<DistanceUnit>(
-                        value: DistanceUnit.feet,
-                        label: Text('ft'),
-                      ),
-                    ],
-                    selected: <DistanceUnit>{distanceUnit},
-                    onSelectionChanged: (Set<DistanceUnit> selection) {
-                      ref
-                          .read(distanceUnitPreferenceProvider.notifier)
-                          .setDistanceUnit(selection.first);
-                    },
-                  ),
-                ],
+          Row(
+            children: <Widget>[
+              InitialsAvatar(name: name, size: 56, ring: true),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(name, style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 3),
+                    MonoLabel(email, size: 9, tone: MonoTone.muted, letterSpacing: 0.8, uppercase: false, maxLines: 1),
+                  ],
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          history.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (List<LocalRideSession> sessions) {
+              final s = buildSeasonSummary(sessions, now: DateTime.now());
+              return SurfaceCard(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    MonoLabel('Season ${shortSeasonLabel(s.label)}', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 26,
+                      runSpacing: 12,
+                      children: <Widget>[
+                        StatBlock(value: '${s.daysRidden}', label: 'Days', size: StatSize.large),
+                        StatBlock(value: distanceUnit.formatFromMeters(s.totalVertM), label: 'Vert', size: StatSize.large),
+                        StatBlock(value: speedUnit.convertFromMetersPerSecond(s.topSpeedMps).toStringAsFixed(1), label: 'Top ${speedUnit.shortLabel}', size: StatSize.large),
+                        StatBlock(value: '${s.sessionCount}', label: 'Sessions', size: StatSize.large),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 22),
+          SurfaceCard(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const MonoLabel('Units', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Text('Speed', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary, fontWeight: FontWeight.w600)),
+                    PillToggle<SpeedUnit>(
+                      options: const <(SpeedUnit, String)>[
+                        (SpeedUnit.kilometersPerHour, 'KM/H'),
+                        (SpeedUnit.milesPerHour, 'MPH'),
+                        (SpeedUnit.metersPerSecond, 'M/S'),
+                      ],
+                      selected: speedUnit,
+                      onChanged: (SpeedUnit v) => ref.read(speedUnitPreferenceProvider.notifier).setSpeedUnit(v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Text('Distance', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary, fontWeight: FontWeight.w600)),
+                    PillToggle<DistanceUnit>(
+                      options: const <(DistanceUnit, String)>[(DistanceUnit.meters, 'M'), (DistanceUnit.feet, 'FT')],
+                      selected: distanceUnit,
+                      onChanged: (DistanceUnit v) => ref.read(distanceUnitPreferenceProvider.notifier).setDistanceUnit(v),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 22),
           // Card(
           //   child: ListTile(
           //     title: const Text('Map attribution'),
@@ -186,15 +211,24 @@ class ProfileScreen extends ConsumerWidget {
           //     },
           //   ),
           // ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: () async {
-              await ref.read(authControllerProvider.notifier).logout();
-              if (context.mounted) {
-                context.go(RoutePaths.login);
-              }
-            },
-            child: const Text('Log out'),
+          const SizedBox(height: 22),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              SizedBox(
+                width: 140,
+                child: GhostButton(
+                  label: 'Log out',
+                  onPressed: () async {
+                    await ref.read(authControllerProvider.notifier).logout();
+                    if (context.mounted) {
+                      context.go(RoutePaths.login);
+                    }
+                  },
+                ),
+              ),
+              const MonoLabel('v0.1.0 · Sync ok', size: 8, tone: MonoTone.faint),
+            ],
           ),
         ],
       ),
