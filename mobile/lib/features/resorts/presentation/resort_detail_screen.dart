@@ -15,6 +15,7 @@ import '../../weather/domain/weather_models.dart';
 import '../../weather/presentation/weather_providers.dart';
 import '../domain/resort_models.dart';
 import 'resort_providers.dart';
+import '../../../app/shell/app_tab_bar.dart';
 
 class ResortDetailScreen extends ConsumerWidget {
   const ResortDetailScreen({super.key, required this.resortId});
@@ -46,7 +47,7 @@ class ResortDetailScreen extends ConsumerWidget {
 
         return Scaffold(
           body: ListView(
-            padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom + 24),
+            padding: EdgeInsets.only(bottom: AppTabBar.bottomClearance(context) + 24),
             children: <Widget>[
               SizedBox(
                 height: mapHeight,

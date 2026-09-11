@@ -23,6 +23,7 @@ import '../../../core/widgets/map_attribution.dart';
 import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import 'session_providers.dart';
+import '../../../app/shell/app_tab_bar.dart';
 
 class SessionDetailScreen extends ConsumerWidget {
   const SessionDetailScreen({
@@ -60,7 +61,7 @@ class SessionDetailScreen extends ConsumerWidget {
             final runs = data.timeline.where((SessionTimelineSegment s) => s.type == SessionActivityType.descent).length;
             final vert = session.elevationLossM;
             return ListView(
-              padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.paddingOf(context).bottom + 24),
+              padding: EdgeInsets.fromLTRB(24, 16, 24, AppTabBar.bottomClearance(context) + 24),
               children: <Widget>[
                 Row(
                   children: <Widget>[

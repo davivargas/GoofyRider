@@ -15,6 +15,7 @@ import '../../session/domain/session_models.dart';
 import '../../session/presentation/season_summary.dart';
 import '../../session/presentation/session_providers.dart';
 import 'debug_export_service.dart';
+import '../../../app/shell/app_tab_bar.dart';
 
 typedef DebugExportAction = Future<String> Function({
   required String ownerUserId,
@@ -58,7 +59,7 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       body: ListView(
-        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24, 24, MediaQuery.paddingOf(context).bottom + 24),
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24, 24, AppTabBar.bottomClearance(context) + 24),
         children: <Widget>[
           Row(
             children: <Widget>[

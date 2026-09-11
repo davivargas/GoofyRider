@@ -18,6 +18,7 @@ import '../domain/session_models.dart';
 import 'history_view_models.dart';
 import 'season_summary.dart';
 import 'session_providers.dart';
+import '../../../app/shell/app_tab_bar.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -80,7 +81,7 @@ class HistoryScreen extends ConsumerWidget {
                     onRefresh: () async => _runSyncPass(ref),
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.paddingOf(context).bottom + 24),
+                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.bottomClearance(context) + 24),
                       children: <Widget>[
                         for (final SessionHistorySeasonSection section in sections) ...<Widget>[
                           _SeasonHeader(section: section, distanceUnit: distanceUnit, speedUnit: speedUnit),

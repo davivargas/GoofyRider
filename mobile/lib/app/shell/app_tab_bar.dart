@@ -27,6 +27,18 @@ class AppTabBar extends StatelessWidget {
   static const double puckOverhang = 22;
 
   static const List<String> labels = <String>['HOME', 'RESORTS', 'RECORD', 'SEASONS', 'PROFILE'];
+
+  /// Distance from the bottom of a shell screen's body to the top edge of the
+  /// visible bar.
+  ///
+  /// With `Scaffold.extendBody`, the body's `MediaQuery.padding.bottom` equals
+  /// this widget's full box (`height + puckOverhang + system inset`). Screens
+  /// that anchor content above the bar want the visible bar's edge, so the
+  /// transparent puck strip is subtracted. Outside the shell (no bar) this is 0.
+  static double bottomClearance(BuildContext context) {
+    final double padding = MediaQuery.paddingOf(context).bottom;
+    return padding <= 0 ? 0 : (padding - puckOverhang).clamp(0, double.infinity);
+  }
   static const List<IconData> _icons = <IconData>[
     Icons.home_outlined,
     Icons.landscape_outlined,

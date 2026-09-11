@@ -11,6 +11,7 @@ import '../../../core/widgets/app_loading_view.dart';
 import '../../../core/widgets/design_widgets.dart';
 import '../domain/resort_models.dart';
 import 'resort_providers.dart';
+import '../../../app/shell/app_tab_bar.dart';
 
 class ResortsListScreen extends ConsumerStatefulWidget {
   const ResortsListScreen({super.key});
@@ -77,7 +78,7 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
                     onRefresh: () => ref.read(resortsControllerProvider.notifier).refresh(),
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.paddingOf(context).bottom + 24),
+                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.bottomClearance(context) + 24),
                       itemCount: result.items.length + 1,
                       itemBuilder: (BuildContext context, int index) {
                         if (index == 0) {

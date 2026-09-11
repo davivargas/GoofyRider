@@ -49,4 +49,40 @@ void main() {
     final idle = tester.widget<Container>(find.byKey(const ValueKey<String>('tab-dot-0')));
     expect((idle.decoration! as BoxDecoration).color, Colors.transparent);
   });
+
+  testWidgets('bottomClearance measures to the visible bar top, not the puck strip',
+      (WidgetTester tester) async {
+    late double insideShell;
+    late double outsideShell;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(),
+        home: Column(
+          children: <Widget>[
+            // Scaffold.extendBody hands the body padding.bottom == full bar box.
+            MediaQuery(
+              data: const MediaQueryData(
+                padding: EdgeInsets.only(
+                  bottom: AppTabBar.height + AppTabBar.puckOverhang + 34,
+                ),
+              ),
+              child: Builder(builder: (BuildContext context) {
+                insideShell = AppTabBar.bottomClearance(context);
+                return const SizedBox();
+              }),
+            ),
+            MediaQuery(
+              data: const MediaQueryData(),
+              child: Builder(builder: (BuildContext context) {
+                outsideShell = AppTabBar.bottomClearance(context);
+                return const SizedBox();
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+    expect(insideShell, AppTabBar.height + 34);
+    expect(outsideShell, 0);
+  });
 }

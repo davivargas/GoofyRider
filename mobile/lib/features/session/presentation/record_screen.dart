@@ -18,6 +18,7 @@ import '../domain/location_tracking_repository.dart';
 import 'recording_controller.dart';
 import 'recording_view_state.dart';
 import 'session_providers.dart';
+import '../../../app/shell/app_tab_bar.dart';
 
 /// Which record presentation is on screen: the map-first canvas (1b) or the
 /// HUD-first canvas (1c).
@@ -82,10 +83,9 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
     final t = context.tokens;
-    // With Scaffold.extendBody, MediaQuery bottom padding equals the real
-    // AppTabBar height (bar + system inset), so anchor overlays to it.
-    final double bottomInset = MediaQuery.paddingOf(context).bottom;
-    final double sheetAnchor = bottomInset + 12;
+    // Distance to the visible tab bar's top edge (0 outside the shell).
+    final double barClearance = AppTabBar.bottomClearance(context);
+    final double sheetAnchor = barClearance + 8;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRecoveryPrompt(state);
@@ -286,7 +286,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                 24,
                 30,
                 24,
-                bottomInset + 16,
+                barClearance + 16,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
