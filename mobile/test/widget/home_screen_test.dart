@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goofyrider_mobile/app/shell/home_screen.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/utils/date_time_formatting.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
@@ -147,6 +148,8 @@ void main() {
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          speedUnitPreferenceProvider
+              .overrideWith((_) => SpeedUnitPreferenceController()),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
@@ -162,8 +165,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final recentTitle = find.text('Recent sessions');
-    final favoritesTitle = find.text('Favorite resorts');
+    final recentTitle = find.textContaining('LAST SESSION');
+    final favoritesTitle = find.text('YOUR MOUNTAINS');
     expect(recentTitle, findsOneWidget);
     expect(favoritesTitle, findsOneWidget);
 
@@ -182,6 +185,8 @@ void main() {
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          speedUnitPreferenceProvider
+              .overrideWith((_) => SpeedUnitPreferenceController()),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
@@ -216,6 +221,8 @@ void main() {
         authControllerProvider.overrideWith((_) => _FakeAuthController()),
         distanceUnitPreferenceProvider
             .overrideWith((_) => DistanceUnitPreferenceController()),
+        speedUnitPreferenceProvider
+            .overrideWith((_) => SpeedUnitPreferenceController()),
         historyProvider.overrideWith((_) async => <LocalRideSession>[]),
         favoriteResortsProvider
             .overrideWith((Ref ref) async => ref.watch(favoritesStateProvider)),
@@ -258,6 +265,8 @@ void main() {
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
           distanceUnitPreferenceProvider
               .overrideWith((_) => DistanceUnitPreferenceController()),
+          speedUnitPreferenceProvider
+              .overrideWith((_) => SpeedUnitPreferenceController()),
           historyProvider.overrideWith((_) async => <LocalRideSession>[]),
           favoriteResortsProvider.overrideWith(
             (_) async => <ResortSummary>[
@@ -285,11 +294,11 @@ void main() {
     );
 
     await tester.pump();
-    expect(find.text('Conditions unavailable • -- C'), findsOneWidget);
+    expect(find.text('-- · CONDITIONS UNAVAILABLE'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 30));
     await tester.pumpAndSettle();
 
-    expect(find.text('Powder • -7.0 C'), findsOneWidget);
+    expect(find.text('-7.0°C · POWDER'), findsOneWidget);
   });
 }
