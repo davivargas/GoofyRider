@@ -35,6 +35,10 @@ SWEEP_EVERY = 1000
 class InMemoryRateLimiter:
     def __init__(self) -> None:
         self._events: dict[tuple[str, str], deque[float]] = {}
+        # Most recent window each bucket was checked with, so the sweep can
+        # judge staleness per bucket instead of with the triggering call's
+        # window (register uses a longer window than login/refresh).
+        self._bucket_windows: dict[str, int] = {}
         self._lock = threading.Lock()
         self._check_count = 0
 
@@ -48,6 +52,7 @@ class InMemoryRateLimiter:
         now: float,
     ) -> RateLimitDecision:
         with self._lock:
+            self._bucket_windows[bucket] = window_seconds
             events = self._events.setdefault((bucket, key), deque())
             cutoff = now - window_seconds
             while events and events[0] <= cutoff:
@@ -62,19 +67,22 @@ class InMemoryRateLimiter:
             self._check_count += 1
             if self._check_count >= SWEEP_EVERY:
                 self._check_count = 0
-                self._sweep(now=now, window_seconds=window_seconds)
+                self._sweep(now=now)
 
             return decision
 
-    def _sweep(self, *, now: float, window_seconds: int) -> None:
+    def _sweep(self, *, now: float) -> None:
         # O(n) pass over every tracked (bucket, key) so the map does not grow
         # without bound when many distinct keys (e.g. attacker IPs) are seen
-        # once and never again. Uses the current call's window as the
-        # staleness bound, which is the same window every caller of a given
-        # bucket passes.
-        cutoff = now - window_seconds
-        stale_keys = [
-            map_key for map_key, events in self._events.items() if not events or events[-1] < cutoff
-        ]
+        # once and never again. Each entry is judged against its own bucket's
+        # window; a bucket with no recorded window is never evicted here.
+        stale_keys = []
+        for map_key, events in self._events.items():
+            if not events:
+                stale_keys.append(map_key)
+                continue
+            window = self._bucket_windows.get(map_key[0])
+            if window is not None and events[-1] < now - window:
+                stale_keys.append(map_key)
         for map_key in stale_keys:
             del self._events[map_key]

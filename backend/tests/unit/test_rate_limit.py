@@ -57,3 +57,21 @@ def test_periodic_sweep_shrinks_map_after_many_stale_keys() -> None:
     limiter.check("login", "live", limit=100, window_seconds=window, now=later)
 
     assert list(limiter._events.keys()) == [("login", "live")]
+
+
+def test_sweep_uses_each_buckets_own_window() -> None:
+    limiter = InMemoryRateLimiter()
+    # register_ip has a long window; login_ip a short one.
+    limiter.check("register_ip", "1.2.3.4", limit=3, window_seconds=3600, now=0.0)
+    limiter._check_count = SWEEP_EVERY - 1
+    # A short-window login check triggers the sweep at t=500.
+    limiter.check("login_ip", "9.9.9.9", limit=5, window_seconds=300, now=500.0)
+
+    assert ("register_ip", "1.2.3.4") in limiter._events
+    # The register key is still counted: two more allowed, the fourth rejected.
+    limiter.check("register_ip", "1.2.3.4", limit=3, window_seconds=3600, now=501.0)
+    limiter.check("register_ip", "1.2.3.4", limit=3, window_seconds=3600, now=502.0)
+    assert (
+        limiter.check("register_ip", "1.2.3.4", limit=3, window_seconds=3600, now=503.0).allowed
+        is False
+    )
