@@ -107,7 +107,7 @@ Expected runtime:
   - duplicate email conflict
   - invalid login
   - protected route without token
-  - refresh token negative cases (wrong token type, malformed token, unknown user)
+  - refresh token negative cases (rotated token rejected, reuse revokes the family, logout revokes, malformed and non-ASCII tokens rejected with `Invalid or expired refresh token.`)
   - invalid access-token subject on `/auth/me`
 - `test_resorts_favorites_qa.py`
   - resorts list/query/region/detail

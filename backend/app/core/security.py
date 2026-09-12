@@ -8,6 +8,7 @@ from functools import lru_cache
 import hashlib
 import hmac
 import secrets
+import threading
 from typing import Any
 from typing import Protocol
 from typing import cast
@@ -29,6 +30,13 @@ SALT_BYTES = 16
 KEY_BYTES = 32
 ARGON2_PREFIX = "$argon2id$"
 PBKDF2_PREFIX = f"{PASSWORD_HASH_ALGORITHM}$"
+
+# Each Argon2id hash/verify allocates ~64 MiB (argon2_memory_kib). FastAPI's
+# sync routes run on a threadpool, so a burst of concurrent auth requests
+# could otherwise allocate memory_kib * threadpool-size all at once. Bound
+# the number of hashes running at the same time to cap that burst.
+ARGON2_MAX_CONCURRENT_HASHES = 4
+_argon2_semaphore = threading.BoundedSemaphore(ARGON2_MAX_CONCURRENT_HASHES)
 
 
 class TokenValidationError(Exception):
@@ -72,7 +80,8 @@ def _password_hasher() -> PasswordHasher:
 
 
 def hash_password(password: str) -> str:
-    return _password_hasher().hash(password)
+    with _argon2_semaphore:
+        return _password_hasher().hash(password)
 
 
 def hash_password_pbkdf2(password: str) -> str:
@@ -94,7 +103,8 @@ def hash_password_pbkdf2(password: str) -> str:
 def verify_password(password: str, stored_password_hash: str) -> bool:
     if stored_password_hash.startswith(ARGON2_PREFIX):
         try:
-            return _password_hasher().verify(stored_password_hash, password)
+            with _argon2_semaphore:
+                return _password_hasher().verify(stored_password_hash, password)
         except (
             argon2_exceptions.VerifyMismatchError,
             argon2_exceptions.VerificationError,

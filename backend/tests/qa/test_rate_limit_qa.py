@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 
 
 def test_login_is_rate_limited_per_email(client: TestClient, register_user) -> None:
@@ -59,3 +60,17 @@ def test_rate_limit_can_be_disabled(client: TestClient, register_user, monkeypat
             json={"email": user["email"], "password": "wrong"},
         )
         assert response.status_code == 401
+
+
+def test_logout_is_rate_limited_per_ip(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("RATE_LIMIT_REFRESH_PER_IP", "2")
+    get_settings.cache_clear()
+
+    for _ in range(2):
+        response = client.post("/v1/auth/logout", json={"refresh_token": "bogus-token"})
+        assert response.status_code == 204
+
+    limited = client.post("/v1/auth/logout", json={"refresh_token": "bogus-token"})
+    assert limited.status_code == 429

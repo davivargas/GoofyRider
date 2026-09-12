@@ -1,3 +1,4 @@
+from functools import lru_cache
 import time
 
 from fastapi import Depends
@@ -9,14 +10,10 @@ from app.core.rate_limit import RateLimiterProtocol
 from app.schemas.auth import LoginRequest
 from app.services.exceptions import RateLimitedError
 
-_limiter: InMemoryRateLimiter | None = None
 
-
+@lru_cache(maxsize=1)
 def get_rate_limiter() -> RateLimiterProtocol:
-    global _limiter
-    if _limiter is None:
-        _limiter = InMemoryRateLimiter()
-    return _limiter
+    return InMemoryRateLimiter()
 
 
 def client_ip(request: Request) -> str:

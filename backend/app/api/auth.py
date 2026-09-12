@@ -60,7 +60,11 @@ def refresh(
     return TokenPair.model_validate(token_pair)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(limit_refresh)],
+)
 def logout(
     payload: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service),

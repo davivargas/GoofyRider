@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.security import ARGON2_PREFIX
 from app.core.security import hash_password
 from app.core.security import hash_password_pbkdf2
+from app.core.security import hash_refresh_token
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 import app.services.auth_service as auth_service_module
@@ -58,6 +59,7 @@ class FakeRefreshTokenRepository:
     def __init__(self) -> None:
         self.tokens: list[RefreshToken] = []
         self.commit_count = 0
+        self.delete_expired_calls: list[object] = []
 
     def add(self, token: RefreshToken) -> None:
         if token.id is None:
@@ -82,6 +84,7 @@ class FakeRefreshTokenRepository:
         return count
 
     def delete_expired(self, *, now) -> int:
+        self.delete_expired_calls.append(now)
         return 0
 
     def commit(self) -> None:
@@ -152,6 +155,7 @@ def test_register_issues_stored_refresh_token_with_device_label() -> None:
     assert stored.device_label == "Pixel 8 / Android 15"
     assert stored.token_hash != pair["refresh_token"]
     assert stored.family_expires_at - stored.issued_at == timedelta(days=90)
+    assert len(tokens.delete_expired_calls) == 1
 
 
 def test_login_rejects_unknown_email_with_uniform_timing(
@@ -197,6 +201,24 @@ def test_login_rehashes_legacy_pbkdf2_password() -> None:
     assert len(tokens.tokens) == 1
 
 
+def test_login_still_issues_tokens_when_rehash_commit_fails() -> None:
+    service, users, tokens = _service()
+    legacy = User(
+        email="old2@example.com",
+        password_hash=hash_password_pbkdf2("legacy-pass"),
+        display_name="Old",
+    )
+    legacy.id = uuid4()
+    _seed_user(users, legacy)
+    users.commit_error = RuntimeError("db unavailable")
+
+    pair = service.login(email="old2@example.com", password="legacy-pass")
+
+    assert pair["token_type"] == "bearer"
+    assert users.did_rollback is True
+    assert len(tokens.tokens) == 1
+
+
 def test_refresh_rotates_and_revokes_previous_token() -> None:
     service, users, tokens = _service()
     _seed_user(users, _user())
@@ -210,6 +232,26 @@ def test_refresh_rotates_and_revokes_previous_token() -> None:
     assert old.replaced_by_id == new.id
     assert new.family_id == old.family_id
     assert new.family_expires_at == old.family_expires_at
+
+
+def test_refresh_with_no_matching_user_raises_generic_invalid_token() -> None:
+    service, _, tokens = _service()
+    orphan_user_id = uuid4()
+    wire_token = "wire-token-placeholder"
+    token = RefreshToken(
+        user_id=orphan_user_id,
+        token_hash=hash_refresh_token(wire_token),
+        family_id=uuid4(),
+        device_label=None,
+        issued_at=datetime(2026, 9, 12, 12, 0, tzinfo=UTC),
+        expires_at=datetime(2026, 9, 13, 12, 0, tzinfo=UTC),
+        family_expires_at=datetime(2026, 12, 1, 12, 0, tzinfo=UTC),
+    )
+    token.id = uuid4()
+    tokens.tokens.append(token)
+
+    with pytest.raises(AuthenticationError, match=r"Invalid or expired refresh token."):
+        service.refresh(wire_token)
 
 
 def test_refresh_reuse_revokes_whole_family() -> None:

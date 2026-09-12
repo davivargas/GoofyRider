@@ -104,7 +104,11 @@ class AuthService:
 
         if needs_rehash(user.password_hash):
             user.password_hash = hash_password(password)
-            self._user_repository.commit()
+            try:
+                self._user_repository.commit()
+            except Exception:
+                self._user_repository.rollback()
+                logger.warning("Password re-hash deferred for user %s", user.id)
 
         return self._issue_token_pair(user, family_id=uuid.uuid4(), device_label=device_label)
 
@@ -127,7 +131,7 @@ class AuthService:
 
         user = self._user_repository.get_by_id(token.user_id)
         if user is None:
-            raise AuthenticationError("User not found.")
+            raise AuthenticationError(INVALID_REFRESH_TOKEN)
 
         wire_token, token_hash = generate_refresh_token()
         successor = RefreshToken(
@@ -185,6 +189,7 @@ class AuthService:
     ) -> TokenPairPayload:
         settings = get_settings()
         now = self._clock()
+        self._refresh_token_repository.delete_expired(now=now)
         wire_token, token_hash = generate_refresh_token()
         self._refresh_token_repository.add(
             RefreshToken(

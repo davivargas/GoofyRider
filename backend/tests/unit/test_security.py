@@ -1,12 +1,16 @@
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+import threading
+import time
 from uuid import uuid4
 
 import jwt
 import pytest
 
 from app.core.config import get_settings
+import app.core.security as security_module
+from app.core.security import ARGON2_MAX_CONCURRENT_HASHES
 from app.core.security import ARGON2_PREFIX
 from app.core.security import TOKEN_TYPE_ACCESS
 from app.core.security import TokenValidationError
@@ -160,3 +164,32 @@ def test_hash_refresh_token_accepts_non_ascii_without_raising() -> None:
 
     assert len(token_hash) == 64
     int(token_hash, 16)
+
+
+def test_hash_password_caps_concurrent_argon2_hashes(monkeypatch: pytest.MonkeyPatch) -> None:
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+
+    class StubHasher:
+        def hash(self, password: str) -> str:
+            nonlocal active, max_active
+            with lock:
+                active += 1
+                max_active = max(max_active, active)
+            time.sleep(0.01)
+            with lock:
+                active -= 1
+            return f"$argon2id$stub${password}"
+
+    monkeypatch.setattr(security_module, "_password_hasher", lambda: StubHasher())
+
+    threads = [
+        threading.Thread(target=security_module.hash_password, args=(f"pw-{i}",)) for i in range(16)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert max_active <= ARGON2_MAX_CONCURRENT_HASHES
