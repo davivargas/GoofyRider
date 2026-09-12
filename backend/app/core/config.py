@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from pydantic import PositiveInt
 from pydantic import ValidationError as PydanticValidationError
 from pydantic import field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
@@ -24,9 +25,29 @@ class AppSettings(BaseSettings):
 
     jwt_secret_key: str | None = None
     jwt_algorithm: str = "HS256"
+    jwt_issuer: str = "fall-line-api"
+    jwt_audience: str = "fall-line-mobile"
 
-    access_token_expire_minutes: PositiveInt = 30
-    refresh_token_expire_days: PositiveInt = 14
+    access_token_expire_minutes: PositiveInt = 15
+    refresh_token_expire_days: PositiveInt = 30
+    refresh_token_family_max_days: PositiveInt = 90
+
+    debug: bool = False
+
+    argon2_memory_kib: PositiveInt = 65536
+    argon2_time_cost: PositiveInt = 3
+    argon2_parallelism: PositiveInt = 4
+
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: PositiveInt = 300
+    rate_limit_register_window_seconds: PositiveInt = 3600
+    rate_limit_login_per_ip: PositiveInt = 10
+    rate_limit_login_per_email: PositiveInt = 5
+    rate_limit_register_per_ip: PositiveInt = 5
+    rate_limit_refresh_per_ip: PositiveInt = 30
+    trust_proxy_headers: bool = False
+
+    max_points_per_session: PositiveInt = 200000
 
     sqlalchemy_echo: bool = False
 
@@ -64,6 +85,12 @@ class AppSettings(BaseSettings):
         if value is None or value == "":
             return None
         return value
+
+    @model_validator(mode="after")
+    def _validate_refresh_lifetimes(self) -> "AppSettings":
+        if self.refresh_token_family_max_days < self.refresh_token_expire_days:
+            raise ValueError("REFRESH_TOKEN_FAMILY_MAX_DAYS must be >= REFRESH_TOKEN_EXPIRE_DAYS.")
+        return self
 
     def resolve_database_url(self) -> str:
         if self.database_url:

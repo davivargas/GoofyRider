@@ -193,3 +193,56 @@ def test_resort_sync_interval_days_rejects_non_positive(
         match=r"RESORT_SYNC_INTERVAL_DAYS must be a positive integer.",
     ):
         get_settings()
+
+
+def test_debug_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DEBUG", raising=False)
+
+    assert get_settings().debug is False
+
+
+def test_security_setting_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "ACCESS_TOKEN_EXPIRE_MINUTES",
+        "REFRESH_TOKEN_EXPIRE_DAYS",
+        "REFRESH_TOKEN_FAMILY_MAX_DAYS",
+        "RATE_LIMIT_LOGIN_PER_IP",
+        "MAX_POINTS_PER_SESSION",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = get_settings()
+
+    assert settings.access_token_expire_minutes == 15
+    assert settings.refresh_token_expire_days == 30
+    assert settings.refresh_token_family_max_days == 90
+    assert settings.jwt_issuer == "fall-line-api"
+    assert settings.jwt_audience == "fall-line-mobile"
+    assert settings.rate_limit_enabled is True
+    assert settings.rate_limit_login_per_ip == 10
+    assert settings.rate_limit_login_per_email == 5
+    assert settings.rate_limit_register_per_ip == 5
+    assert settings.rate_limit_refresh_per_ip == 30
+    assert settings.rate_limit_window_seconds == 300
+    assert settings.rate_limit_register_window_seconds == 3600
+    assert settings.trust_proxy_headers is False
+    assert settings.max_points_per_session == 200000
+
+
+def test_refresh_family_cap_must_cover_refresh_lifetime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REFRESH_TOKEN_EXPIRE_DAYS", "40")
+    monkeypatch.setenv("REFRESH_TOKEN_FAMILY_MAX_DAYS", "30")
+
+    with pytest.raises(
+        ValueError,
+        match=r"REFRESH_TOKEN_FAMILY_MAX_DAYS must be >= REFRESH_TOKEN_EXPIRE_DAYS.",
+    ):
+        get_settings()
+
+
+def test_rate_limit_setting_parses_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RATE_LIMIT_LOGIN_PER_IP", "3")
+
+    assert get_settings().rate_limit_login_per_ip == 3
