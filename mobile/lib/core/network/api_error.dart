@@ -15,6 +15,16 @@ AppFailure mapDioException(DioException exception) {
         details: payload);
   }
 
+  if (statusCode == 429) {
+    final retryAfter = int.tryParse(
+      exception.response?.headers.value('retry-after')?.trim() ?? '',
+    );
+    final fallback = retryAfter == null
+        ? 'Too many requests. Try again later.'
+        : 'Too many requests. Try again in $retryAfter seconds.';
+    return NetworkFailure(machineMessage ?? fallback, details: payload);
+  }
+
   return NetworkFailure(
     machineMessage ?? timeoutMessage ?? connectionMessage ?? fallback,
     details: payload,
