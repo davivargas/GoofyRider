@@ -10,6 +10,10 @@ from app.core.dependencies.auth import get_current_user
 from app.core.dependencies.auth import get_refresh_token_repository
 from app.core.dependencies.auth import get_user_repository
 from app.core.dependencies.database import get_db
+from app.core.dependencies.rate_limit import get_rate_limiter
+from app.core.dependencies.rate_limit import limit_login
+from app.core.dependencies.rate_limit import limit_refresh
+from app.core.dependencies.rate_limit import limit_register
 from app.core.dependencies.resorts import get_favorite_resort_repository
 from app.core.dependencies.resorts import get_favorites_service
 from app.core.dependencies.resorts import get_resort_repository
@@ -29,6 +33,7 @@ __all__ = [
     "get_favorite_resort_repository",
     "get_favorites_service",
     "get_open_meteo_weather_provider",
+    "get_rate_limiter",
     "get_refresh_token_repository",
     "get_resort_repository",
     "get_resort_service",
@@ -38,4 +43,7 @@ __all__ = [
     "get_user_repository",
     "get_weather_cache_repository",
     "get_weather_service",
+    "limit_login",
+    "limit_refresh",
+    "limit_register",
 ]

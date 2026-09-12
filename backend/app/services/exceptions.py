@@ -24,3 +24,9 @@ class ValidationError(ServiceError):
 
 class ServiceUnavailableError(ServiceError):
     pass
+
+
+class RateLimitedError(ServiceError):
+    def __init__(self, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(f"Too many requests. Try again in {retry_after_seconds} seconds.")

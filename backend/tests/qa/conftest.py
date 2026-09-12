@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_session_local
 from app.core.database_safety import assert_safe_test_database_name
 from app.core.dependencies import get_db
+from app.core.dependencies.rate_limit import get_rate_limiter
+from app.core.rate_limit import InMemoryRateLimiter
 from app.main import app
 from app.models.resort import Resort
 
@@ -40,7 +42,9 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
         yield db
 
+    limiter = InMemoryRateLimiter()
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_rate_limiter] = lambda: limiter
     try:
         with TestClient(app) as test_client:
             yield test_client

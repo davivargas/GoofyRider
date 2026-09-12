@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from app.services.exceptions import AuthenticationError
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
+from app.services.exceptions import RateLimitedError
 from app.services.exceptions import ServiceError
 from app.services.exceptions import ServiceUnavailableError
 from app.services.exceptions import SessionNotYetCompletedError
@@ -27,6 +28,15 @@ def _service_error_handler(
         )
 
     return handler
+
+
+async def _rate_limited_handler(_: Request, exc: Exception) -> Response:
+    assert isinstance(exc, RateLimitedError)
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": str(exc)},
+        headers={"Retry-After": str(exc.retry_after_seconds)},
+    )
 
 
 def register_service_exception_handlers(app: FastAPI) -> None:
@@ -54,3 +64,4 @@ def register_service_exception_handlers(app: FastAPI) -> None:
         ServiceUnavailableError,
         _service_error_handler(status.HTTP_503_SERVICE_UNAVAILABLE),
     )
+    app.add_exception_handler(RateLimitedError, _rate_limited_handler)
