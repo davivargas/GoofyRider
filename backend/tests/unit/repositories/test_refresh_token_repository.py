@@ -34,6 +34,21 @@ def test_add_and_get_by_hash(db: Session, create_user: Callable[..., User]) -> N
     assert repo.get_by_hash("b" * 64) is None
 
 
+def test_get_by_hash_for_update_returns_token_within_transaction(
+    db: Session, create_user: Callable[..., User]
+) -> None:
+    repo = RefreshTokenRepository(db)
+    token = _token(create_user(), hash_suffix="9")
+
+    repo.add(token)
+    repo.commit()
+
+    locked = repo.get_by_hash(token.token_hash, for_update=True)
+
+    assert locked is not None
+    assert locked.id == token.id
+
+
 def test_revoke_links_successor(db: Session, create_user: Callable[..., User]) -> None:
     repo = RefreshTokenRepository(db)
     user = create_user()

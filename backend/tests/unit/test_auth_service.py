@@ -64,7 +64,7 @@ class FakeRefreshTokenRepository:
             token.id = uuid4()
         self.tokens.append(token)
 
-    def get_by_hash(self, token_hash: str) -> RefreshToken | None:
+    def get_by_hash(self, token_hash: str, *, for_update: bool = False) -> RefreshToken | None:
         return next((t for t in self.tokens if t.token_hash == token_hash), None)
 
     def revoke(self, token: RefreshToken, *, now, replaced_by=None) -> None:

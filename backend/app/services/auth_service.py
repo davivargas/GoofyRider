@@ -110,7 +110,9 @@ class AuthService:
 
     def refresh(self, refresh_token: str, device_label: str | None = None) -> TokenPairPayload:
         now = self._clock()
-        token = self._refresh_token_repository.get_by_hash(hash_refresh_token(refresh_token))
+        token = self._refresh_token_repository.get_by_hash(
+            hash_refresh_token(refresh_token), for_update=True
+        )
         if token is None:
             raise AuthenticationError(INVALID_REFRESH_TOKEN)
 

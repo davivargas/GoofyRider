@@ -161,7 +161,7 @@ def generate_refresh_token() -> tuple[str, str]:
 
 
 def hash_refresh_token(wire_token: str) -> str:
-    return hashlib.sha256(wire_token.encode("ascii")).hexdigest()
+    return hashlib.sha256(wire_token.encode("utf-8")).hexdigest()
 
 
 def decode_token(token: str, expected_token_type: str | None = None) -> dict[str, Any]:

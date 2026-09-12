@@ -114,6 +114,15 @@ def test_auth_refresh_rejects_access_token_and_garbage(client: TestClient, regis
         assert response.json()["detail"] == INVALID_REFRESH
 
 
+def test_auth_refresh_and_logout_accept_non_ascii_refresh_token(client: TestClient) -> None:
+    refresh_response = client.post("/v1/auth/refresh", json={"refresh_token": "café"})
+    assert refresh_response.status_code == 401
+    assert refresh_response.json()["detail"] == INVALID_REFRESH
+
+    logout_response = client.post("/v1/auth/logout", json={"refresh_token": "café"})
+    assert logout_response.status_code == 204
+
+
 def test_auth_me_rejects_access_token_with_invalid_subject(client: TestClient) -> None:
     invalid_access = create_access_token("not-a-uuid")
     response = client.get(

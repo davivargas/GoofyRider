@@ -153,3 +153,10 @@ def test_generate_refresh_token_returns_urlsafe_secret_and_sha256_hash() -> None
     assert len(token_hash) == 64
     assert token_hash == hash_refresh_token(wire)
     assert generate_refresh_token()[0] != wire
+
+
+def test_hash_refresh_token_accepts_non_ascii_without_raising() -> None:
+    token_hash = hash_refresh_token("café")
+
+    assert len(token_hash) == 64
+    int(token_hash, 16)
