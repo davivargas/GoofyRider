@@ -35,4 +35,6 @@ def test_retry_after_is_at_least_one_second() -> None:
     limiter = InMemoryRateLimiter()
     limiter.check("login", "k", limit=1, window_seconds=10, now=0.0)
 
-    assert limiter.check("login", "k", limit=1, window_seconds=10, now=9.99).retry_after_seconds == 1
+    assert (
+        limiter.check("login", "k", limit=1, window_seconds=10, now=9.99).retry_after_seconds == 1
+    )
