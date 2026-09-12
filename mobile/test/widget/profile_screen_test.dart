@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/core/constants/app_constants.dart';
-import 'package:goofyrider_mobile/core/providers.dart';
-import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
-import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_controller.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_providers.dart';
-import 'package:goofyrider_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/core/constants/app_constants.dart';
+import 'package:fall_line_mobile/core/providers.dart';
+import 'package:fall_line_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:fall_line_mobile/core/providers/speed_unit_preference_provider.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_repository.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_controller.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_providers.dart';
+import 'package:fall_line_mobile/features/profile/presentation/profile_screen.dart';
 
 class _FakeAuthRepository implements AuthRepository {
   const _FakeAuthRepository();

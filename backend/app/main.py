@@ -25,9 +25,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="GoofyRider API",
+    title="Fall Line API",
     version="0.1.0",
-    description="Backend API for the GoofyRider snowboarding tracker.",
+    description="Backend API for the Fall Line snowboarding tracker.",
     lifespan=lifespan,
 )
 
@@ -39,4 +39,4 @@ app.include_router(api_router)
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict[str, str]:
-    return {"message": "GoofyRider API is running"}
+    return {"message": "Fall Line API is running"}

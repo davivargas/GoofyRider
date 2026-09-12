@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/core/constants/app_constants.dart';
-import 'package:goofyrider_mobile/core/providers.dart';
-import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
-import 'package:goofyrider_mobile/features/resorts/domain/resort_repository.dart';
-import 'package:goofyrider_mobile/features/resorts/presentation/resort_detail_screen.dart';
-import 'package:goofyrider_mobile/features/resorts/presentation/resort_providers.dart';
-import 'package:goofyrider_mobile/features/weather/presentation/weather_providers.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/core/constants/app_constants.dart';
+import 'package:fall_line_mobile/core/providers.dart';
+import 'package:fall_line_mobile/features/resorts/domain/resort_models.dart';
+import 'package:fall_line_mobile/features/resorts/domain/resort_repository.dart';
+import 'package:fall_line_mobile/features/resorts/presentation/resort_detail_screen.dart';
+import 'package:fall_line_mobile/features/resorts/presentation/resort_providers.dart';
+import 'package:fall_line_mobile/features/weather/presentation/weather_providers.dart';
 
 class _FakeResortRepository implements ResortRepository {
   _FakeResortRepository({required this.initialResort});

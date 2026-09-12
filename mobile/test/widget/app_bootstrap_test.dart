@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/main.dart';
+import 'package:fall_line_mobile/main.dart';
 
 void main() {
   testWidgets(

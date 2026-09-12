@@ -157,7 +157,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
         urlTemplate: activeMapTileProviderConfig.urlTemplate,
         subdomains: activeMapTileProviderConfig.subdomains,
         retinaMode: activeMapTileProviderConfig.retinaMode,
-        userAgentPackageName: 'com.goofyrider.mobile',
+        userAgentPackageName: 'com.fallline.mobile',
         errorTileCallback: (_, __, ___) {
           if (mounted && !_mapTileError) {
             setState(() => _mapTileError = true);

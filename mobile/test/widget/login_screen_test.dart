@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_providers.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/login_screen.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_repository.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_providers.dart';
+import 'package:fall_line_mobile/features/auth/presentation/login_screen.dart';
+import 'package:fall_line_mobile/core/constants/app_constants.dart';
 
 class FakeAuthRepository implements AuthRepository {
   @override
@@ -56,7 +57,7 @@ void main() {
       ),
     );
 
-    expect(find.textContaining('GOOFYRIDER'), findsOneWidget);
+    expect(find.textContaining(AppConstants.brandWordmark), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
 
     await tester.tap(find.text('LOG IN'));

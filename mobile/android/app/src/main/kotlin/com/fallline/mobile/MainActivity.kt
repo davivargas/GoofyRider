@@ -1,4 +1,4 @@
-package com.example.goofyrider_mobile
+package com.fallline.mobile
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity

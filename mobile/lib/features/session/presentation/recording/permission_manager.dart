@@ -11,9 +11,9 @@ const String _locationDeniedForeverMessage =
 const String _locationServiceDisabledMessage =
     'Location services are turned off. Turn on GPS to record your session.';
 const String _openSettingsFailedMessage =
-    'Could not open app settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
+    'Could not open app settings. Please open settings manually: Settings > Apps > Fall Line > Permissions.';
 const String _openLocationSettingsFailedMessage =
-    'Could not open location settings. Please open settings manually: Settings > Apps > GoofyRider > Permissions.';
+    'Could not open location settings. Please open settings manually: Settings > Apps > Fall Line > Permissions.';
 
 /// Manages location-permission checks, requests, and settings navigation.
 ///

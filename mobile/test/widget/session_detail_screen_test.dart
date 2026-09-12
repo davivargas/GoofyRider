@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/core/constants/app_constants.dart';
-import 'package:goofyrider_mobile/core/errors/failures.dart';
-import 'package:goofyrider_mobile/core/providers.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
-import 'package:goofyrider_mobile/features/session/presentation/session_detail_screen.dart';
-import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/core/constants/app_constants.dart';
+import 'package:fall_line_mobile/core/errors/failures.dart';
+import 'package:fall_line_mobile/core/providers.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
+import 'package:fall_line_mobile/features/session/presentation/session_detail_screen.dart';
+import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 
 class FakeSessionRepository implements SessionRepository {
   FakeSessionRepository(

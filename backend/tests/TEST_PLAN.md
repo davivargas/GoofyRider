@@ -1,4 +1,4 @@
-# GoofyRider Backend Testing Plan (Phase 1-3 Baseline, Future-Ready)
+# Fall Line Backend Testing Plan (Phase 1-3 Baseline, Future-Ready)
 
 ## 1. Test strategy in one page
 

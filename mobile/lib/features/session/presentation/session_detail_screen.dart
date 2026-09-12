@@ -315,7 +315,7 @@ class SessionDetailScreen extends ConsumerWidget {
                   urlTemplate: activeMapTileProviderConfig.urlTemplate,
                   subdomains: activeMapTileProviderConfig.subdomains,
                   retinaMode: activeMapTileProviderConfig.retinaMode,
-                  userAgentPackageName: 'com.goofyrider.mobile',
+                  userAgentPackageName: 'com.fallline.mobile',
                 ),
                 PolylineLayer(polylines: polylines),
                 MarkerLayer(

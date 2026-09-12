@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/constants/app_constants.dart';
+import 'package:fall_line_mobile/core/constants/app_constants.dart';
 
 void main() {
   group('AppConstants.resolveMapTileProviderConfig', () {

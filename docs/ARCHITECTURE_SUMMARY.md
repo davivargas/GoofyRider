@@ -1,8 +1,8 @@
-﻿# GoofyRider Architecture Summary
+﻿# Fall Line Architecture Summary
 
 ## System overview
 
-GoofyRider is a mobile + API system with offline-first session recording:
+Fall Line is a mobile + API system with offline-first session recording:
 
 1. Flutter app records location locally first.
 2. Drift local store persists sessions and points.

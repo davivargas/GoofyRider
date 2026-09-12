@@ -2,10 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
-import 'package:goofyrider_mobile/features/resorts/data/resort_repository_impl.dart';
-import 'package:goofyrider_mobile/features/resorts/data/resorts_api.dart';
-import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
+import 'package:fall_line_mobile/core/storage/drift_local_database.dart';
+import 'package:fall_line_mobile/features/resorts/data/resort_repository_impl.dart';
+import 'package:fall_line_mobile/features/resorts/data/resorts_api.dart';
+import 'package:fall_line_mobile/features/resorts/domain/resort_models.dart';
 
 class MockDriftLocalDatabase extends Mock implements DriftLocalDatabase {}
 

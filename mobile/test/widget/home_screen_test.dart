@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/app/shell/home_screen.dart';
-import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
-import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
-import 'package:goofyrider_mobile/core/utils/date_time_formatting.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_controller.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_providers.dart';
-import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
-import 'package:goofyrider_mobile/features/resorts/presentation/resort_providers.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
-import 'package:goofyrider_mobile/features/weather/domain/weather_models.dart';
-import 'package:goofyrider_mobile/features/weather/presentation/weather_providers.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/app/shell/home_screen.dart';
+import 'package:fall_line_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:fall_line_mobile/core/providers/speed_unit_preference_provider.dart';
+import 'package:fall_line_mobile/core/utils/date_time_formatting.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_repository.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_controller.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_providers.dart';
+import 'package:fall_line_mobile/features/resorts/domain/resort_models.dart';
+import 'package:fall_line_mobile/features/resorts/presentation/resort_providers.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
+import 'package:fall_line_mobile/features/weather/domain/weather_models.dart';
+import 'package:fall_line_mobile/features/weather/presentation/weather_providers.dart';
 
 class _FakeAuthRepository implements AuthRepository {
   const _FakeAuthRepository();

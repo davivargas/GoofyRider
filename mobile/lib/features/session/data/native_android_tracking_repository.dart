@@ -21,8 +21,8 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
         _nativeStreamStartupTimeout = nativeStreamStartupTimeout,
         _onFallbackActivated = onFallbackActivated;
 
-  static const String _eventChannelName = 'goofyrider/location_events';
-  static const String _controlChannelName = 'goofyrider/location_control';
+  static const String _eventChannelName = 'fallline/location_events';
+  static const String _controlChannelName = 'fallline/location_control';
 
   final EventChannel _eventChannel;
   final MethodChannel _controlChannel;
