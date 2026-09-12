@@ -7,11 +7,17 @@ import 'package:goofyrider_mobile/core/storage/token_storage.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_api.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_api_models.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_repository_impl.dart';
+import 'package:goofyrider_mobile/features/auth/data/device_label_provider.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 
 class MockAuthApi extends Mock implements AuthApi {}
 
 class MockTokenStorage extends Mock implements TokenStorage {}
+
+class FakeDeviceLabelProvider extends DeviceLabelProvider {
+  @override
+  Future<String> resolve() async => 'Test Device / Android 15';
+}
 
 void main() {
   setUpAll(() {
@@ -43,6 +49,7 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
     final loginPayload = TokenPairResponse(
       accessToken: tokenPair.accessToken,
@@ -52,6 +59,7 @@ void main() {
     when(() => authApi.login(
           email: 'test@example.com',
           password: 'password123',
+          deviceLabel: any(named: 'deviceLabel'),
         )).thenAnswer((_) async => loginPayload);
     when(() => tokenStorage.write(any<StoredTokens>()))
         .thenAnswer((_) async {});
@@ -81,6 +89,7 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
     final registerPayload = TokenPairResponse(
       accessToken: tokenPair.accessToken,
@@ -96,6 +105,7 @@ void main() {
           email: 'test@example.com',
           password: 'password123',
           displayName: 'Tester',
+          deviceLabel: any(named: 'deviceLabel'),
         )).thenAnswer((_) async => registerPayload);
     when(() => tokenStorage.write(any<StoredTokens>()))
         .thenAnswer((_) async {});
@@ -125,6 +135,7 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
     final cachedTokens = const StoredTokens(
       accessToken: 'access-token',
@@ -163,6 +174,7 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
     final cachedTokens = const StoredTokens(
       accessToken: 'access-token',
@@ -196,8 +208,10 @@ void main() {
     when(() => tokenStorage.read()).thenAnswer((_) async => cachedTokens);
     when(() => authApi.me(accessToken: cachedTokens.accessToken))
         .thenThrow(expiredAccess);
-    when(() => authApi.refresh(refreshToken: cachedTokens.refreshToken))
-        .thenAnswer((_) async => refreshPayload);
+    when(() => authApi.refresh(
+          refreshToken: cachedTokens.refreshToken,
+          deviceLabel: any(named: 'deviceLabel'),
+        )).thenAnswer((_) async => refreshPayload);
     when(() => authApi.me(accessToken: 'new-access-token'))
         .thenThrow(rejectedMe);
     when(() => tokenStorage.write(any<StoredTokens>()))
@@ -218,9 +232,13 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
     final options = RequestOptions(path: '/auth/refresh');
-    when(() => authApi.refresh(refreshToken: 'stale')).thenThrow(
+    when(() => authApi.refresh(
+          refreshToken: 'stale',
+          deviceLabel: any(named: 'deviceLabel'),
+        )).thenThrow(
       DioException(
         requestOptions: options,
         response: Response<dynamic>(
@@ -246,8 +264,12 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
-    when(() => authApi.refresh(refreshToken: 'offline')).thenThrow(
+    when(() => authApi.refresh(
+          refreshToken: 'offline',
+          deviceLabel: any(named: 'deviceLabel'),
+        )).thenThrow(
       DioException(
         requestOptions: RequestOptions(path: '/auth/refresh'),
         type: DioExceptionType.connectionError,
@@ -263,6 +285,7 @@ void main() {
     final repository = AuthRepositoryImpl(
       authApi: authApi,
       tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
     );
     when(() => tokenStorage.read()).thenAnswer((_) async => tokenPair);
     final meOptions = RequestOptions(path: '/auth/me');
@@ -274,7 +297,10 @@ void main() {
       ),
     );
     final refreshOptions = RequestOptions(path: '/auth/refresh');
-    when(() => authApi.refresh(refreshToken: tokenPair.refreshToken)).thenThrow(
+    when(() => authApi.refresh(
+          refreshToken: tokenPair.refreshToken,
+          deviceLabel: any(named: 'deviceLabel'),
+        )).thenThrow(
       DioException(
         requestOptions: refreshOptions,
         response:
@@ -288,5 +314,37 @@ void main() {
 
     expect(session, isNull);
     verify(() => tokenStorage.clear()).called(1);
+  });
+
+  test('login sends the resolved device label', () async {
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
+      authApi: authApi,
+      tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
+    );
+    when(() => authApi.login(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+          deviceLabel: any(named: 'deviceLabel'),
+        )).thenAnswer(
+      (_) async => TokenPairResponse(
+        accessToken: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+      ),
+    );
+    when(() => tokenStorage.write(any<StoredTokens>()))
+        .thenAnswer((_) async {});
+    when(() => authApi.me(accessToken: tokenPair.accessToken))
+        .thenAnswer((_) async => userProfileResponse());
+
+    await repository.login(email: 'a@b.c', password: 'pw');
+
+    verify(() => authApi.login(
+          email: 'a@b.c',
+          password: 'pw',
+          deviceLabel: 'Test Device / Android 15',
+        )).called(1);
   });
 }

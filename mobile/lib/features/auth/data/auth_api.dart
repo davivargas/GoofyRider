@@ -10,12 +10,14 @@ class AuthApi {
   Future<TokenPairResponse> login({
     required String email,
     required String password,
+    String? deviceLabel,
   }) async {
     final response = await _dio.post<dynamic>(
       '/auth/login',
       data: <String, dynamic>{
         'email': email,
         'password': password,
+        'device_label': deviceLabel,
       },
     );
     return TokenPairResponse.fromJson(response.data as Map<String, dynamic>);
@@ -25,6 +27,7 @@ class AuthApi {
     required String email,
     required String password,
     required String displayName,
+    String? deviceLabel,
   }) async {
     final response = await _dio.post<dynamic>(
       '/auth/register',
@@ -32,15 +35,22 @@ class AuthApi {
         'email': email,
         'password': password,
         'display_name': displayName,
+        'device_label': deviceLabel,
       },
     );
     return TokenPairResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<TokenPairResponse> refresh({required String refreshToken}) async {
+  Future<TokenPairResponse> refresh({
+    required String refreshToken,
+    String? deviceLabel,
+  }) async {
     final response = await _dio.post<dynamic>(
       '/auth/refresh',
-      data: <String, dynamic>{'refresh_token': refreshToken},
+      data: <String, dynamic>{
+        'refresh_token': refreshToken,
+        'device_label': deviceLabel,
+      },
       options: Options(
         headers: <String, String>{
           'Authorization': '',

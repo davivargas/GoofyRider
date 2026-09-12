@@ -147,6 +147,12 @@ class AndroidFusedLocationBridge(
                 ensureBackgroundLocationPermission(result)
             }
 
+            "getDeviceLabel" -> {
+                result.success(
+                    "${Build.MANUFACTURER} ${Build.MODEL} / Android ${Build.VERSION.RELEASE}".trim(),
+                )
+            }
+
             else -> result.notImplemented()
         }
     }

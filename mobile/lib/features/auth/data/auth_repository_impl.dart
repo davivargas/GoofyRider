@@ -7,16 +7,20 @@ import '../domain/auth_models.dart';
 import '../domain/auth_repository.dart';
 import 'auth_api.dart';
 import 'auth_api_models.dart';
+import 'device_label_provider.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     required AuthApi authApi,
     required TokenStorage tokenStorage,
+    DeviceLabelProvider? deviceLabelProvider,
   })  : _authApi = authApi,
-        _tokenStorage = tokenStorage;
+        _tokenStorage = tokenStorage,
+        _deviceLabelProvider = deviceLabelProvider ?? DeviceLabelProvider();
 
   final AuthApi _authApi;
   final TokenStorage _tokenStorage;
+  final DeviceLabelProvider _deviceLabelProvider;
 
   @override
   Future<AuthSession> login({
@@ -27,6 +31,7 @@ class AuthRepositoryImpl implements AuthRepository {
       final tokenPayload = await _authApi.login(
         email: email.trim().toLowerCase(),
         password: password,
+        deviceLabel: await _deviceLabelProvider.resolve(),
       );
       return _hydrateAndPersistSession(tokenPayload);
     } on DioException catch (exception) {
@@ -45,6 +50,7 @@ class AuthRepositoryImpl implements AuthRepository {
         email: email.trim().toLowerCase(),
         password: password,
         displayName: displayName.trim(),
+        deviceLabel: await _deviceLabelProvider.resolve(),
       );
       return _hydrateAndPersistSession(tokenPayload);
     } on DioException catch (exception) {
@@ -125,7 +131,10 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String?> refreshAccessToken(String refreshToken) async {
     try {
-      final payload = await _authApi.refresh(refreshToken: refreshToken);
+      final payload = await _authApi.refresh(
+        refreshToken: refreshToken,
+        deviceLabel: await _deviceLabelProvider.resolve(),
+      );
       final accessToken = payload.accessToken;
       final existing = await _tokenStorage.read();
       if (existing != null) {
