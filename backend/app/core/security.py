@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+from functools import lru_cache
 import hashlib
 import hmac
 import secrets
@@ -11,6 +12,9 @@ from typing import Any
 from typing import Protocol
 from typing import cast
 
+from argon2 import PasswordHasher
+from argon2 import exceptions as argon2_exceptions
+from argon2.low_level import Type as Argon2Type
 import jwt
 from jwt import ExpiredSignatureError
 from jwt import InvalidTokenError
@@ -23,6 +27,8 @@ PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 390000
 SALT_BYTES = 16
 KEY_BYTES = 32
+ARGON2_PREFIX = "$argon2id$"
+PBKDF2_PREFIX = f"{PASSWORD_HASH_ALGORITHM}$"
 
 
 class TokenValidationError(Exception):
@@ -53,7 +59,25 @@ jwt_decode = cast(JwtDecodeProtocol, jwt.decode)
 jwt_encode = cast(JwtEncodeProtocol, jwt.encode)
 
 
+def _password_hasher() -> PasswordHasher:
+    settings = get_settings()
+    return PasswordHasher(
+        time_cost=settings.argon2_time_cost,
+        memory_cost=settings.argon2_memory_kib,
+        parallelism=settings.argon2_parallelism,
+        hash_len=KEY_BYTES,
+        salt_len=SALT_BYTES,
+        type=Argon2Type.ID,
+    )
+
+
 def hash_password(password: str) -> str:
+    return _password_hasher().hash(password)
+
+
+def hash_password_pbkdf2(password: str) -> str:
+    """Legacy PBKDF2-SHA256 hash. Kept so tests and data fixes can produce
+    the pre-Argon2 format; production code never calls it."""
     salt = secrets.token_bytes(SALT_BYTES)
     digest = hashlib.pbkdf2_hmac(
         "sha256",
@@ -68,6 +92,37 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored_password_hash: str) -> bool:
+    if stored_password_hash.startswith(ARGON2_PREFIX):
+        try:
+            return _password_hasher().verify(stored_password_hash, password)
+        except (
+            argon2_exceptions.VerifyMismatchError,
+            argon2_exceptions.VerificationError,
+            argon2_exceptions.InvalidHashError,
+        ):
+            return False
+    if stored_password_hash.startswith(PBKDF2_PREFIX):
+        return _verify_pbkdf2(password, stored_password_hash)
+    return False
+
+
+def needs_rehash(stored_password_hash: str) -> bool:
+    if not stored_password_hash.startswith(ARGON2_PREFIX):
+        return True
+    try:
+        return _password_hasher().check_needs_rehash(stored_password_hash)
+    except argon2_exceptions.InvalidHashError:
+        return True
+
+
+@lru_cache(maxsize=1)
+def dummy_password_hash() -> str:
+    """Argon2id hash of a random secret, used to keep login timing uniform
+    when the email is unknown. Computed once per process."""
+    return hash_password(secrets.token_urlsafe(32))
+
+
+def _verify_pbkdf2(password: str, stored_password_hash: str) -> bool:
     try:
         algorithm, iterations_raw, salt_b64, digest_b64 = stored_password_hash.split("$", 3)
     except ValueError:

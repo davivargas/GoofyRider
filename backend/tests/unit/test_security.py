@@ -7,31 +7,60 @@ import jwt
 import pytest
 
 from app.core.config import get_settings
+from app.core.security import ARGON2_PREFIX
 from app.core.security import TOKEN_TYPE_ACCESS
 from app.core.security import TOKEN_TYPE_REFRESH
 from app.core.security import TokenValidationError
 from app.core.security import create_access_token
 from app.core.security import create_refresh_token
 from app.core.security import decode_token
+from app.core.security import dummy_password_hash
 from app.core.security import hash_password
+from app.core.security import hash_password_pbkdf2
+from app.core.security import needs_rehash
 from app.core.security import verify_password
 
 
-def test_hash_and_verify_password_round_trip() -> None:
-    plain_password = "super-secure-pass-123"
-    stored_hash = hash_password(plain_password)
+def test_hash_password_produces_argon2id() -> None:
+    stored_hash = hash_password("super-secure-pass-123")
 
-    assert verify_password(plain_password, stored_hash) is True
-
-
-def test_verify_password_rejects_wrong_password() -> None:
-    stored_hash = hash_password("correct-password")
-
+    assert stored_hash.startswith(ARGON2_PREFIX)
+    assert verify_password("super-secure-pass-123", stored_hash) is True
     assert verify_password("wrong-password", stored_hash) is False
+
+
+def test_verify_password_accepts_legacy_pbkdf2_hash() -> None:
+    stored_hash = hash_password_pbkdf2("legacy-pass")
+
+    assert stored_hash.startswith("pbkdf2_sha256$")
+    assert verify_password("legacy-pass", stored_hash) is True
+    assert verify_password("nope", stored_hash) is False
 
 
 def test_verify_password_rejects_malformed_hash() -> None:
     assert verify_password("anything", "not-a-valid-hash-format") is False
+
+
+def test_needs_rehash_for_pbkdf2_and_stale_argon2_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert needs_rehash(hash_password_pbkdf2("x")) is True
+    assert needs_rehash("garbage") is True
+
+    current = hash_password("x")
+    assert needs_rehash(current) is False
+
+    monkeypatch.setenv("ARGON2_TIME_COST", "2")
+    get_settings.cache_clear()
+    assert needs_rehash(current) is True
+
+
+def test_dummy_password_hash_is_verifiable_argon2() -> None:
+    dummy = dummy_password_hash()
+
+    assert dummy.startswith(ARGON2_PREFIX)
+    assert verify_password("definitely-not-the-secret", dummy) is False
+    assert dummy_password_hash() == dummy
 
 
 def test_create_and_decode_access_token() -> None:
