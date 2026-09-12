@@ -1,4 +1,5 @@
 from app.models.favorite_resort import FavoriteResort
+from app.models.refresh_token import RefreshToken
 from app.models.resort import Resort
 from app.models.resort_lift import ResortLift
 from app.models.ride_session import RideSession
@@ -12,6 +13,7 @@ from app.models.weather_cache import WeatherCache
 
 __all__ = [
     "FavoriteResort",
+    "RefreshToken",
     "Resort",
     "ResortLift",
     "RideSession",
