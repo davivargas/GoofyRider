@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import '../errors/failures.dart';
+
 typedef AccessTokenGetter = Future<String?> Function();
 typedef RefreshTokenGetter = Future<String?> Function();
 typedef TokenRefreshCallback = Future<String?> Function(String refreshToken);
@@ -26,6 +28,7 @@ class AuthTokenInterceptor extends Interceptor {
   /// the app waits for the next authenticated retry opportunity.
   static const String preserveAuthOnFailureExtraKey =
       'preserve_auth_on_failure';
+
   /// Opts a preserved-auth request into a single retry after token refresh even
   /// when the original HTTP method is not inherently idempotent.
   static const String retryPreservedAuthOnUnauthorizedExtraKey =
@@ -110,6 +113,10 @@ class AuthTokenInterceptor extends Interceptor {
 
       final response = await _dio.fetch(cloned);
       handler.resolve(response);
+    } on AuthFailure {
+      _refreshInFlight = null;
+      await _onAuthReset();
+      handler.next(err);
     } catch (_) {
       _refreshInFlight = null;
       await _resetAuthIfNeeded(preserveAuthOnFailure);

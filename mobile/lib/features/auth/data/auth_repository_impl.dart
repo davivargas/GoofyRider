@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../../core/errors/failures.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/storage/token_storage.dart';
 import '../domain/auth_models.dart';
@@ -69,8 +70,13 @@ class AuthRepositoryImpl implements AuthRepository {
         return _sessionFromStoredTokens(storedTokens);
       }
 
-      final newAccessToken =
-          await refreshAccessToken(storedTokens.refreshToken);
+      final String? newAccessToken;
+      try {
+        newAccessToken = await refreshAccessToken(storedTokens.refreshToken);
+      } on AuthFailure {
+        await _tokenStorage.clear();
+        return null;
+      }
       if (newAccessToken == null) {
         if (allowOfflineFallback) {
           return storedTokens.hasCachedUserProfile
@@ -119,8 +125,7 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String?> refreshAccessToken(String refreshToken) async {
     try {
-      final payload =
-          await _authApi.refresh(refreshToken: refreshToken);
+      final payload = await _authApi.refresh(refreshToken: refreshToken);
       final accessToken = payload.accessToken;
       final existing = await _tokenStorage.read();
       if (existing != null) {
@@ -135,7 +140,10 @@ class AuthRepositoryImpl implements AuthRepository {
         );
       }
       return accessToken;
-    } on DioException {
+    } on DioException catch (exception) {
+      if (exception.response?.statusCode == 401) {
+        throw const AuthFailure('Session expired. Please sign in again.');
+      }
       return null;
     }
   }
@@ -163,8 +171,7 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    final mePayload =
-        await _authApi.me(accessToken: accessToken);
+    final mePayload = await _authApi.me(accessToken: accessToken);
     final session = AuthSession(
       accessToken: accessToken,
       refreshToken: refreshToken,

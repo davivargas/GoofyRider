@@ -44,7 +44,8 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> register(String email, String password, String displayName) async {
+  Future<void> register(
+      String email, String password, String displayName) async {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
       final session = await _repository.register(
@@ -80,7 +81,13 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<String?> refreshAccessToken(String refreshToken) async {
-    final refreshed = await _repository.refreshAccessToken(refreshToken);
+    final String? refreshed;
+    try {
+      refreshed = await _repository.refreshAccessToken(refreshToken);
+    } on AuthFailure {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      rethrow;
+    }
     if (refreshed == null) {
       state = const AuthState(status: AuthStatus.unauthenticated);
       return null;

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:goofyrider_mobile/core/errors/failures.dart';
 import 'package:goofyrider_mobile/core/network/auth_token_interceptor.dart';
 
 class MockErrorInterceptorHandler extends Mock
@@ -40,5 +41,43 @@ void main() {
 
     verify(() => handler.next(exception)).called(1);
     expect(authResetCalled, isFalse);
+  });
+
+  test(
+      'resets auth when refresh reports a revoked token even for preserved requests',
+      () async {
+    var authResetCalled = false;
+    final interceptor = AuthTokenInterceptor(
+      dio: Dio(),
+      accessTokenGetter: () async => 'access-token',
+      refreshTokenGetter: () async => 'refresh-token',
+      refreshCallback: (_) async =>
+          throw const AuthFailure('Session expired. Please sign in again.'),
+      onAuthReset: () async {
+        authResetCalled = true;
+      },
+    );
+    final handler = MockErrorInterceptorHandler();
+    final requestOptions = RequestOptions(
+      path: '/sessions/remote-1/points:batch',
+      extra: <String, dynamic>{
+        AuthTokenInterceptor.preserveAuthOnFailureExtraKey: true,
+        AuthTokenInterceptor.retryPreservedAuthOnUnauthorizedExtraKey: true,
+      },
+    );
+    final exception = DioException(
+      requestOptions: requestOptions,
+      response: Response<dynamic>(
+        requestOptions: requestOptions,
+        statusCode: 401,
+        data: <String, dynamic>{'detail': 'Authentication required.'},
+      ),
+      type: DioExceptionType.badResponse,
+    );
+
+    await interceptor.onError(exception, handler);
+
+    verify(() => handler.next(exception)).called(1);
+    expect(authResetCalled, isTrue);
   });
 }

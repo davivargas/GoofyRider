@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:goofyrider_mobile/core/errors/failures.dart';
 import 'package:goofyrider_mobile/core/storage/token_storage.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_api.dart';
 import 'package:goofyrider_mobile/features/auth/data/auth_api_models.dart';
@@ -49,10 +50,11 @@ void main() {
     );
 
     when(() => authApi.login(
-      email: 'test@example.com',
-      password: 'password123',
-    )).thenAnswer((_) async => loginPayload);
-    when(() => tokenStorage.write(any<StoredTokens>())).thenAnswer((_) async {});
+          email: 'test@example.com',
+          password: 'password123',
+        )).thenAnswer((_) async => loginPayload);
+    when(() => tokenStorage.write(any<StoredTokens>()))
+        .thenAnswer((_) async {});
     when(() => authApi.me(accessToken: tokenPair.accessToken))
         .thenAnswer((_) async => userProfileResponse());
 
@@ -91,11 +93,12 @@ void main() {
     );
 
     when(() => authApi.register(
-      email: 'test@example.com',
-      password: 'password123',
-      displayName: 'Tester',
-    )).thenAnswer((_) async => registerPayload);
-    when(() => tokenStorage.write(any<StoredTokens>())).thenAnswer((_) async {});
+          email: 'test@example.com',
+          password: 'password123',
+          displayName: 'Tester',
+        )).thenAnswer((_) async => registerPayload);
+    when(() => tokenStorage.write(any<StoredTokens>()))
+        .thenAnswer((_) async {});
     when(() => authApi.me(accessToken: tokenPair.accessToken))
         .thenThrow(meFailure);
 
@@ -152,7 +155,8 @@ void main() {
     verifyNever(() => tokenStorage.write(any<StoredTokens>()));
   });
 
-  test('restoreSession clears tokens when refreshed identity lookup fails online',
+  test(
+      'restoreSession clears tokens when refreshed identity lookup fails online',
       () async {
     final authApi = MockAuthApi();
     final tokenStorage = MockTokenStorage();
@@ -198,6 +202,86 @@ void main() {
         .thenThrow(rejectedMe);
     when(() => tokenStorage.write(any<StoredTokens>()))
         .thenAnswer((_) async {});
+    when(() => tokenStorage.clear()).thenAnswer((_) async {});
+
+    final session = await repository.restoreSession();
+
+    expect(session, isNull);
+    verify(() => tokenStorage.clear()).called(1);
+  });
+
+  test(
+      'refreshAccessToken throws AuthFailure when the backend rejects the token',
+      () async {
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
+      authApi: authApi,
+      tokenStorage: tokenStorage,
+    );
+    final options = RequestOptions(path: '/auth/refresh');
+    when(() => authApi.refresh(refreshToken: 'stale')).thenThrow(
+      DioException(
+        requestOptions: options,
+        response: Response<dynamic>(
+          requestOptions: options,
+          statusCode: 401,
+          data: <String, dynamic>{
+            'detail': 'Invalid or expired refresh token.'
+          },
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+
+    expect(
+      () => repository.refreshAccessToken('stale'),
+      throwsA(isA<AuthFailure>()),
+    );
+  });
+
+  test('refreshAccessToken returns null on connectivity failure', () async {
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
+      authApi: authApi,
+      tokenStorage: tokenStorage,
+    );
+    when(() => authApi.refresh(refreshToken: 'offline')).thenThrow(
+      DioException(
+        requestOptions: RequestOptions(path: '/auth/refresh'),
+        type: DioExceptionType.connectionError,
+      ),
+    );
+
+    expect(await repository.refreshAccessToken('offline'), isNull);
+  });
+
+  test('restoreSession clears tokens when refresh is rejected', () async {
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
+      authApi: authApi,
+      tokenStorage: tokenStorage,
+    );
+    when(() => tokenStorage.read()).thenAnswer((_) async => tokenPair);
+    final meOptions = RequestOptions(path: '/auth/me');
+    when(() => authApi.me(accessToken: tokenPair.accessToken)).thenThrow(
+      DioException(
+        requestOptions: meOptions,
+        response: Response<dynamic>(requestOptions: meOptions, statusCode: 401),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+    final refreshOptions = RequestOptions(path: '/auth/refresh');
+    when(() => authApi.refresh(refreshToken: tokenPair.refreshToken)).thenThrow(
+      DioException(
+        requestOptions: refreshOptions,
+        response:
+            Response<dynamic>(requestOptions: refreshOptions, statusCode: 401),
+        type: DioExceptionType.badResponse,
+      ),
+    );
     when(() => tokenStorage.clear()).thenAnswer((_) async {});
 
     final session = await repository.restoreSession();
