@@ -23,7 +23,6 @@ from jwt import InvalidTokenError
 from app.core.config import get_settings
 
 TOKEN_TYPE_ACCESS = "access"
-TOKEN_TYPE_REFRESH = "refresh"
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 390000
 SALT_BYTES = 16
@@ -152,11 +151,6 @@ def _verify_pbkdf2(password: str, stored_password_hash: str) -> bool:
 def create_access_token(subject: str) -> str:
     expires = timedelta(minutes=get_settings().access_token_expire_minutes)
     return _create_token(subject=subject, token_type=TOKEN_TYPE_ACCESS, expires_delta=expires)
-
-
-def create_refresh_token(subject: str) -> str:
-    expires = timedelta(days=get_settings().refresh_token_expire_days)
-    return _create_token(subject=subject, token_type=TOKEN_TYPE_REFRESH, expires_delta=expires)
 
 
 def generate_refresh_token() -> tuple[str, str]:

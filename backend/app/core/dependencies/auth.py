@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies.database import get_db
 from app.models.user import User
+from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.exceptions import AuthenticationError
@@ -20,10 +21,18 @@ def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
     return UserRepository(db)
 
 
+def get_refresh_token_repository(db: Session = Depends(get_db)) -> RefreshTokenRepository:
+    return RefreshTokenRepository(db)
+
+
 def get_auth_service(
     user_repository: UserRepository = Depends(get_user_repository),
+    refresh_token_repository: RefreshTokenRepository = Depends(get_refresh_token_repository),
 ) -> AuthService:
-    return AuthService(user_repository=user_repository)
+    return AuthService(
+        user_repository=user_repository,
+        refresh_token_repository=refresh_token_repository,
+    )
 
 
 def get_current_user(

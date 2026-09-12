@@ -13,12 +13,14 @@ Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
 LoginPassword = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 DisplayName = Annotated[str, StringConstraints(min_length=1, max_length=100, strip_whitespace=True)]
 NonEmptyToken = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]
+DeviceLabel = Annotated[str, StringConstraints(max_length=80, strip_whitespace=True)]
 
 
 class RegisterRequest(BaseModel):
     email: NormalizedEmail
     password: Password
     display_name: DisplayName
+    device_label: DeviceLabel | None = None
 
     @field_validator("email")
     @classmethod
@@ -29,6 +31,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: NormalizedEmail
     password: LoginPassword
+    device_label: DeviceLabel | None = None
 
     @field_validator("email")
     @classmethod
@@ -38,6 +41,7 @@ class LoginRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: NonEmptyToken
+    device_label: DeviceLabel | None = None
 
 
 class TokenPair(BaseModel):

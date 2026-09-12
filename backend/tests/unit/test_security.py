@@ -9,10 +9,8 @@ import pytest
 from app.core.config import get_settings
 from app.core.security import ARGON2_PREFIX
 from app.core.security import TOKEN_TYPE_ACCESS
-from app.core.security import TOKEN_TYPE_REFRESH
 from app.core.security import TokenValidationError
 from app.core.security import create_access_token
-from app.core.security import create_refresh_token
 from app.core.security import decode_token
 from app.core.security import dummy_password_hash
 from app.core.security import generate_refresh_token
@@ -74,13 +72,6 @@ def test_create_and_decode_access_token() -> None:
     assert payload["type"] == TOKEN_TYPE_ACCESS
 
 
-def test_refresh_token_rejected_when_access_expected() -> None:
-    token = create_refresh_token(str(uuid4()))
-
-    with pytest.raises(TokenValidationError, match=r"Invalid token type."):
-        decode_token(token, expected_token_type=TOKEN_TYPE_ACCESS)
-
-
 def test_decode_token_rejects_expired_token() -> None:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -103,7 +94,7 @@ def test_decode_token_rejects_invalid_subject() -> None:
     now = datetime.now(UTC)
     payload = {
         "sub": "",
-        "type": TOKEN_TYPE_REFRESH,
+        "type": TOKEN_TYPE_ACCESS,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=5)).timestamp()),
         "iss": settings.jwt_issuer,
@@ -112,7 +103,7 @@ def test_decode_token_rejects_invalid_subject() -> None:
     token = jwt.encode(payload, settings.require_jwt_secret_key(), algorithm=settings.jwt_algorithm)
 
     with pytest.raises(TokenValidationError, match=r"Invalid token subject."):
-        decode_token(token, expected_token_type=TOKEN_TYPE_REFRESH)
+        decode_token(token, expected_token_type=TOKEN_TYPE_ACCESS)
 
 
 def test_access_token_carries_issuer_audience_and_jti() -> None:

@@ -25,6 +25,7 @@ def register(
         email=payload.email,
         password=payload.password,
         display_name=payload.display_name,
+        device_label=payload.device_label,
     )
     return TokenPair.model_validate(token_pair)
 
@@ -34,7 +35,11 @@ def login(
     payload: LoginRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenPair:
-    token_pair = auth_service.login(email=payload.email, password=payload.password)
+    token_pair = auth_service.login(
+        email=payload.email,
+        password=payload.password,
+        device_label=payload.device_label,
+    )
     return TokenPair.model_validate(token_pair)
 
 
@@ -43,13 +48,16 @@ def refresh(
     payload: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenPair:
-    token_pair = auth_service.refresh(payload.refresh_token)
+    token_pair = auth_service.refresh(payload.refresh_token, device_label=payload.device_label)
     return TokenPair.model_validate(token_pair)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(_: RefreshTokenRequest) -> Response:
-    # Stateless JWT logout: client discards tokens in this phase.
+def logout(
+    payload: RefreshTokenRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> Response:
+    auth_service.logout(payload.refresh_token)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

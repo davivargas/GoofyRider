@@ -7,6 +7,7 @@ continues to work after the split into sub-modules.
 from app.core.dependencies.auth import bearer_scheme
 from app.core.dependencies.auth import get_auth_service
 from app.core.dependencies.auth import get_current_user
+from app.core.dependencies.auth import get_refresh_token_repository
 from app.core.dependencies.auth import get_user_repository
 from app.core.dependencies.database import get_db
 from app.core.dependencies.resorts import get_favorite_resort_repository
@@ -28,6 +29,7 @@ __all__ = [
     "get_favorite_resort_repository",
     "get_favorites_service",
     "get_open_meteo_weather_provider",
+    "get_refresh_token_repository",
     "get_resort_repository",
     "get_resort_service",
     "get_ride_session_repository",
