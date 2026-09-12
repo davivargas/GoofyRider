@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy import select
 
 from app.models.session_point import SessionPoint
@@ -32,3 +33,11 @@ class SessionPointRepository(SqlAlchemyRepository):
             .order_by(SessionPoint.t_offset_ms.asc())
         )
         return list(self._db.scalars(stmt).all())
+
+    def count_by_session(self, session_id: uuid.UUID) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(SessionPoint)
+            .where(SessionPoint.session_id == session_id)
+        )
+        return int(self._db.scalar(stmt) or 0)

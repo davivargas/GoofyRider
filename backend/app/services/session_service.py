@@ -8,6 +8,7 @@ import uuid
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import get_settings
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.ride_session_action import RideSessionAction
@@ -100,6 +101,9 @@ class SessionService:
             raise ConflictError("Points can only be uploaded to draft sessions.")
 
         deduped_points = self._dedupe_points_by_elapsed_offset(points)
+        existing_count = self._session_point_repository.count_by_session(ride_session.id)
+        if existing_count + len(deduped_points) > get_settings().max_points_per_session:
+            raise ValidationError("Session point limit exceeded.")
         requested_elapsed_offsets_ms = [point.elapsed_offset_ms for point in deduped_points]
         existing_elapsed_offsets_ms = self._session_point_repository.existing_elapsed_offsets_ms(
             session_id=ride_session.id,

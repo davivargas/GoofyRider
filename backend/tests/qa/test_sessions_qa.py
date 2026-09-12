@@ -595,3 +595,27 @@ def test_sessions_delete_removes_owned_session_with_uploaded_points(
     history = client.get("/v1/users/me/sessions", headers=headers)
     assert history.status_code == 200
     assert history.json()["items"] == []
+
+
+def test_sessions_points_batch_rejects_over_cap(
+    client: TestClient,
+    register_user,
+    monkeypatch,
+) -> None:
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("MAX_POINTS_PER_SESSION", "2")
+    get_settings.cache_clear()
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    session_id = client.post("/v1/sessions", json={}, headers=headers).json()["id"]
+
+    points = [{"t_offset_ms": i * 1000, "latitude": 50.0, "longitude": -122.0} for i in range(3)]
+    response = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={"points": points},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Session point limit exceeded."

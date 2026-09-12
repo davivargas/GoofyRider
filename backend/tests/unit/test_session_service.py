@@ -190,6 +190,9 @@ class FakeSessionPointRepository:
             set(elapsed_offsets_ms)
         )
 
+    def count_by_session(self, session_id):
+        return len(self.offsets_by_session.get(session_id, set()))
+
     def list_by_session(self, _session_id):
         return []
 
@@ -775,3 +778,33 @@ def test_remove_override_missing_override_raises_not_found() -> None:
             user_id=user_id,
             override_id=uuid4(),
         )
+
+
+def test_upload_points_batch_rejects_when_session_cap_exceeded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("MAX_POINTS_PER_SESSION", "3")
+    get_settings.cache_clear()
+    user_id = uuid4()
+    ride_sessions = FakeRideSessionRepository()
+    point_repo = FakeSessionPointRepository()
+    draft_session = _build_session(user_id=user_id)
+    ride_sessions.sessions[draft_session.id] = draft_session
+    point_repo.offsets_by_session[draft_session.id] = {0, 1000}
+    service = _build_service(
+        ride_session_repository=ride_sessions,
+        session_point_repository=point_repo,
+    )
+
+    with pytest.raises(ValidationError, match=r"Session point limit exceeded."):
+        service.upload_points_batch(
+            session_id=draft_session.id,
+            user_id=user_id,
+            points=[
+                SessionPointInput(t_offset_ms=2000, latitude=50.0, longitude=-122.0),
+                SessionPointInput(t_offset_ms=3000, latitude=50.0, longitude=-122.0),
+            ],
+        )
+    assert point_repo.batches == []
