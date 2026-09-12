@@ -1,4 +1,5 @@
 from app.repositories.favorite_resort_repository import FavoriteResortRepository
+from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.resort_lift_repository import ResortLiftRepository
 from app.repositories.resort_repository import ResortRepository
 from app.repositories.ride_session_repository import RideSessionRepository
@@ -10,6 +11,7 @@ from app.repositories.weather_cache_repository import WeatherCacheRepository
 
 __all__ = [
     "FavoriteResortRepository",
+    "RefreshTokenRepository",
     "ResortLiftRepository",
     "ResortRepository",
     "RideSessionRepository",

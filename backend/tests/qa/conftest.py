@@ -14,6 +14,7 @@ from app.main import app
 from app.models.resort import Resort
 
 TABLES_TO_TRUNCATE = [
+    "refresh_tokens",
     "session_points",
     "weather_cache",
     "ride_sessions",

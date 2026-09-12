@@ -15,6 +15,7 @@ from app.models.ride_session import RideSession
 from app.models.user import User
 
 TABLES_TO_TRUNCATE = [
+    "refresh_tokens",
     "ride_session_actions",
     "ride_session_overrides",
     "session_points",

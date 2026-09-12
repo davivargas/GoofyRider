@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 from typing import Protocol
 import uuid
 
+from app.models.refresh_token import RefreshToken
 from app.models.resort import Resort
 from app.models.resort_lift import ResortLift
 from app.models.ride_session import RideSession
@@ -107,9 +109,7 @@ class RideSessionRepositoryProtocol(Protocol):
 
     def clear_analysis(self, session_id: uuid.UUID) -> RideSession | None: ...
 
-    def get_detail_with_actions(
-        self, session_id: uuid.UUID
-    ) -> RideSession | None: ...
+    def get_detail_with_actions(self, session_id: uuid.UUID) -> RideSession | None: ...
 
     def commit(self) -> None: ...
 
@@ -196,8 +196,31 @@ class WeatherCacheRepositoryProtocol(Protocol):
     def refresh(self, instance: object) -> None: ...
 
 
+class RefreshTokenRepositoryProtocol(Protocol):
+    def add(self, token: RefreshToken) -> None: ...
+
+    def get_by_hash(self, token_hash: str) -> RefreshToken | None: ...
+
+    def revoke(
+        self,
+        token: RefreshToken,
+        *,
+        now: datetime,
+        replaced_by: RefreshToken | None = None,
+    ) -> None: ...
+
+    def revoke_family(self, family_id: uuid.UUID, *, now: datetime) -> int: ...
+
+    def delete_expired(self, *, now: datetime) -> int: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
 __all__ = [
     "FavoriteResortRepositoryProtocol",
+    "RefreshTokenRepositoryProtocol",
     "ResortLiftRepositoryProtocol",
     "ResortRepositoryProtocol",
     "RideSessionRepositoryProtocol",
