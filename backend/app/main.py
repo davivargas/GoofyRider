@@ -24,19 +24,26 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await scheduler.stop()
 
 
-app = FastAPI(
-    title="GoofyRider API",
-    version="0.1.0",
-    description="Backend API for the GoofyRider snowboarding tracker.",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    settings = get_settings()
+    application = FastAPI(
+        title="GoofyRider API",
+        version="0.1.0",
+        description="Backend API for the GoofyRider snowboarding tracker.",
+        lifespan=lifespan,
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        openapi_url="/openapi.json" if settings.debug else None,
+    )
+    register_service_exception_handlers(application)
+    application.include_router(health_router)
+    application.include_router(api_router)
 
-register_service_exception_handlers(app)
+    @application.get("/", include_in_schema=False)
+    async def root() -> dict[str, str]:
+        return {"message": "GoofyRider API is running"}
 
-app.include_router(health_router)
-app.include_router(api_router)
+    return application
 
 
-@app.get("/", include_in_schema=False)
-async def root() -> dict[str, str]:
-    return {"message": "GoofyRider API is running"}
+app = create_app()
