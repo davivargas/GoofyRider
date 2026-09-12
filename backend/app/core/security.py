@@ -11,6 +11,7 @@ import secrets
 from typing import Any
 from typing import Protocol
 from typing import cast
+import uuid
 
 from argon2 import PasswordHasher
 from argon2 import exceptions as argon2_exceptions
@@ -158,6 +159,17 @@ def create_refresh_token(subject: str) -> str:
     return _create_token(subject=subject, token_type=TOKEN_TYPE_REFRESH, expires_delta=expires)
 
 
+def generate_refresh_token() -> tuple[str, str]:
+    """Return `(wire_token, token_hash)`. Only the hash is ever stored."""
+    raw = secrets.token_bytes(32)
+    wire = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    return wire, hash_refresh_token(wire)
+
+
+def hash_refresh_token(wire_token: str) -> str:
+    return hashlib.sha256(wire_token.encode("ascii")).hexdigest()
+
+
 def decode_token(token: str, expected_token_type: str | None = None) -> dict[str, Any]:
     settings = get_settings()
     try:
@@ -165,6 +177,8 @@ def decode_token(token: str, expected_token_type: str | None = None) -> dict[str
             token,
             settings.require_jwt_secret_key(),
             algorithms=[settings.jwt_algorithm],
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
         )
     except ExpiredSignatureError as exc:
         raise TokenValidationError("Token has expired.") from exc
@@ -186,13 +200,16 @@ def decode_token(token: str, expected_token_type: str | None = None) -> dict[str
 def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:
     issued_at = datetime.now(UTC)
     expires_at = issued_at + expires_delta
+    settings = get_settings()
     payload: dict[str, str | int] = {
         "sub": subject,
         "type": token_type,
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
+        "jti": uuid.uuid4().hex,
     }
-    settings = get_settings()
     return jwt_encode(
         payload,
         settings.require_jwt_secret_key(),

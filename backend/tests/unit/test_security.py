@@ -15,8 +15,10 @@ from app.core.security import create_access_token
 from app.core.security import create_refresh_token
 from app.core.security import decode_token
 from app.core.security import dummy_password_hash
+from app.core.security import generate_refresh_token
 from app.core.security import hash_password
 from app.core.security import hash_password_pbkdf2
+from app.core.security import hash_refresh_token
 from app.core.security import needs_rehash
 from app.core.security import verify_password
 
@@ -80,14 +82,16 @@ def test_refresh_token_rejected_when_access_expected() -> None:
 
 
 def test_decode_token_rejects_expired_token() -> None:
+    settings = get_settings()
     now = datetime.now(UTC)
     payload = {
         "sub": str(uuid4()),
         "type": TOKEN_TYPE_ACCESS,
         "iat": int((now - timedelta(minutes=10)).timestamp()),
         "exp": int((now - timedelta(minutes=5)).timestamp()),
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
     }
-    settings = get_settings()
     token = jwt.encode(payload, settings.require_jwt_secret_key(), algorithm=settings.jwt_algorithm)
 
     with pytest.raises(TokenValidationError, match=r"Token has expired."):
@@ -95,15 +99,66 @@ def test_decode_token_rejects_expired_token() -> None:
 
 
 def test_decode_token_rejects_invalid_subject() -> None:
+    settings = get_settings()
     now = datetime.now(UTC)
     payload = {
         "sub": "",
         "type": TOKEN_TYPE_REFRESH,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=5)).timestamp()),
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
     }
-    settings = get_settings()
     token = jwt.encode(payload, settings.require_jwt_secret_key(), algorithm=settings.jwt_algorithm)
 
     with pytest.raises(TokenValidationError, match=r"Invalid token subject."):
         decode_token(token, expected_token_type=TOKEN_TYPE_REFRESH)
+
+
+def test_access_token_carries_issuer_audience_and_jti() -> None:
+    settings = get_settings()
+    token = create_access_token(str(uuid4()))
+    payload = decode_token(token, expected_token_type=TOKEN_TYPE_ACCESS)
+
+    assert payload["iss"] == settings.jwt_issuer
+    assert payload["aud"] == settings.jwt_audience
+    assert len(payload["jti"]) == 32
+
+
+def test_decode_token_rejects_wrong_issuer_and_audience() -> None:
+    settings = get_settings()
+    now = datetime.now(UTC)
+    base = {
+        "sub": str(uuid4()),
+        "type": TOKEN_TYPE_ACCESS,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+        "jti": "x" * 32,
+    }
+    key = settings.require_jwt_secret_key()
+
+    wrong_issuer = jwt.encode(
+        {**base, "iss": "someone-else", "aud": settings.jwt_audience},
+        key,
+        algorithm=settings.jwt_algorithm,
+    )
+    wrong_audience = jwt.encode(
+        {**base, "iss": settings.jwt_issuer, "aud": "other-app"},
+        key,
+        algorithm=settings.jwt_algorithm,
+    )
+    missing_claims = jwt.encode(base, key, algorithm=settings.jwt_algorithm)
+
+    for token in (wrong_issuer, wrong_audience, missing_claims):
+        with pytest.raises(TokenValidationError, match=r"Invalid token."):
+            decode_token(token, expected_token_type=TOKEN_TYPE_ACCESS)
+
+
+def test_generate_refresh_token_returns_urlsafe_secret_and_sha256_hash() -> None:
+    wire, token_hash = generate_refresh_token()
+
+    assert len(wire) == 43
+    assert "=" not in wire and "+" not in wire and "/" not in wire
+    assert len(token_hash) == 64
+    assert token_hash == hash_refresh_token(wire)
+    assert generate_refresh_token()[0] != wire
