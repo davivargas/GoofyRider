@@ -7,6 +7,7 @@ from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import String
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
@@ -17,7 +18,10 @@ from app.models.base import Base
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
-    __table_args__ = (Index("ix_refresh_tokens_family_id", "family_id"),)
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_refresh_tokens_token_hash"),
+        Index("ix_refresh_tokens_family_id", "family_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -30,7 +34,7 @@ class RefreshToken(Base):
         nullable=False,
         index=True,
     )
-    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     device_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     issued_at: Mapped[datetime] = mapped_column(
