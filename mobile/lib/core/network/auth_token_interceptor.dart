@@ -82,15 +82,8 @@ class AuthTokenInterceptor extends Interceptor {
       return;
     }
 
-    final refreshToken = await _refreshTokenGetter();
-    if (refreshToken == null || refreshToken.isEmpty) {
-      await _resetAuthIfNeeded(preserveAuthOnFailure);
-      handler.next(err);
-      return;
-    }
-
     try {
-      _refreshInFlight ??= _refreshCallback(refreshToken);
+      _refreshInFlight ??= _refreshOnce();
       final newAccessToken = await _refreshInFlight;
       _refreshInFlight = null;
 
@@ -122,6 +115,19 @@ class AuthTokenInterceptor extends Interceptor {
       await _resetAuthIfNeeded(preserveAuthOnFailure);
       handler.next(err);
     }
+  }
+
+  /// Reads the refresh token and rotates it once.
+  ///
+  /// The read happens inside the in-flight guard so concurrent `401`s share a
+  /// single rotation instead of a late follower re-sending a token the backend
+  /// has already revoked.
+  Future<String?> _refreshOnce() async {
+    final refreshToken = await _refreshTokenGetter();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return null;
+    }
+    return _refreshCallback(refreshToken);
   }
 
   /// Limits preserved-auth refresh retries to safe methods unless a caller

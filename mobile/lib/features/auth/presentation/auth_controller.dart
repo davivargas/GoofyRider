@@ -89,17 +89,22 @@ class AuthController extends StateNotifier<AuthState> {
       rethrow;
     }
     if (refreshed == null) {
-      state = const AuthState(status: AuthStatus.unauthenticated);
+      // Transient failure (timeout, connection error, 429, 5xx). Keep the
+      // session as-is; the interceptor decides whether this request should
+      // reset auth via onAuthReset.
       return null;
     }
 
     final existing = state.session;
     if (existing != null) {
+      // The backend rotates the refresh token on every refresh, so read the
+      // freshly persisted one instead of replaying the pre-rotation token.
+      final rotatedRefreshToken = await _repository.currentRefreshToken();
       state = AuthState(
         status: AuthStatus.authenticated,
         session: AuthSession(
           accessToken: refreshed,
-          refreshToken: existing.refreshToken,
+          refreshToken: rotatedRefreshToken ?? existing.refreshToken,
           user: existing.user,
         ),
       );
