@@ -1,5 +1,4 @@
-# Flutter embedding and the native location bridge are reached by reflection.
--keep class io.flutter.** { *; }
--keep class com.example.goofyrider_mobile.** { *; }
--keep class com.google.android.gms.location.** { *; }
+# Flutter's gradle plugin and the Play Services aars ship their own consumer
+# keep rules; manifest-declared components are kept by AGP defaults. Add a
+# targeted -keep here only for a class that is actually reached by reflection.
 -dontwarn io.flutter.embedding.**
