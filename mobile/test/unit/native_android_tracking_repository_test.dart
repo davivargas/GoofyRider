@@ -10,10 +10,8 @@ import 'package:goofyrider_mobile/features/session/domain/tracking_mode_profiles
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const controlChannel =
-      MethodChannel('goofyrider/test/location_control');
-  const eventChannel =
-      EventChannel('goofyrider/test/location_events');
+  const controlChannel = MethodChannel('goofyrider/test/location_control');
+  const eventChannel = EventChannel('goofyrider/test/location_events');
 
   final methodCalls = <MethodCall>[];
 
@@ -35,8 +33,7 @@ void main() {
 
   test('setTrackingMode sends expected native payload on mode switches',
       () async {
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
     );
@@ -76,8 +73,7 @@ void main() {
           .staleSampleThresholdSeconds,
     );
 
-    final activePayload =
-        Map<String, dynamic>.from(byMode['active'] as Map);
+    final activePayload = Map<String, dynamic>.from(byMode['active'] as Map);
     final activeConfig =
         Map<String, dynamic>.from(activePayload['config'] as Map);
     expect(activeConfig['priority'], 'high_accuracy');
@@ -95,8 +91,7 @@ void main() {
 
   test('setTrackingMode falls back to geolocator delegate when bridge fails',
       () async {
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.granted,
       checkResult: LocationPermissionState.granted,
     );
@@ -110,8 +105,7 @@ void main() {
       return null;
     });
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -174,14 +168,12 @@ void main() {
       ),
     );
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
     );
 
-    final samples =
-        await repository.watchPosition().toList();
+    final samples = await repository.watchPosition().toList();
 
     expect(samples, hasLength(2));
 
@@ -213,8 +205,7 @@ void main() {
       speedMps: null,
       headingDeg: null,
     );
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.granted,
       checkResult: LocationPermissionState.granted,
       watchSamples: <LocationSample>[fallbackSample],
@@ -248,8 +239,7 @@ void main() {
       ),
     );
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -259,8 +249,7 @@ void main() {
       },
     );
 
-    final samples =
-        await repository.watchPosition().toList();
+    final samples = await repository.watchPosition().toList();
 
     expect(permissionsDelegate.watchPositionCallCount, 0);
     expect(fallbackReasons, isEmpty);
@@ -282,8 +271,7 @@ void main() {
       speedMps: null,
       headingDeg: null,
     );
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.granted,
       checkResult: LocationPermissionState.granted,
       watchSamples: <LocationSample>[fallbackSample],
@@ -301,8 +289,7 @@ void main() {
       ),
     );
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -312,11 +299,11 @@ void main() {
       },
     );
 
-    final samples =
-        await repository.watchPosition().take(1).toList();
+    final samples = await repository.watchPosition().take(1).toList();
 
     expect(permissionsDelegate.watchPositionCallCount, 1);
-    expect(fallbackReasons, <String>['native_stream_closed_before_first_event']);
+    expect(
+        fallbackReasons, <String>['native_stream_closed_before_first_event']);
     expect(fallbackError, isNull);
     expect(samples, hasLength(1));
     expect(samples.first.timestamp, fallbackSample.timestamp);
@@ -337,8 +324,7 @@ void main() {
       return null;
     });
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
     );
@@ -355,8 +341,7 @@ void main() {
   test(
       'ensurePermissions escalates foreground-only permission through native handoff',
       () async {
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.granted,
     );
@@ -373,8 +358,7 @@ void main() {
       return null;
     });
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -392,8 +376,7 @@ void main() {
 
   test('ensurePermissions keeps foreground-only state if native handoff fails',
       () async {
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.granted,
     );
@@ -407,8 +390,7 @@ void main() {
       return null;
     });
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -427,8 +409,7 @@ void main() {
   test(
       'ensurePermissions re-checks permission state after native settings handoff remains incomplete',
       () async {
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.grantedForegroundOnly,
     );
@@ -445,8 +426,7 @@ void main() {
       return null;
     });
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -466,8 +446,7 @@ void main() {
   test(
       'ensurePermissions opens app settings fallback when native settings deep-link is unavailable',
       () async {
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.grantedForegroundOnly,
       checkResult: LocationPermissionState.grantedForegroundOnly,
       openAppSettingsResult: true,
@@ -485,8 +464,7 @@ void main() {
       return null;
     });
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,
@@ -506,14 +484,12 @@ void main() {
   test(
       'ensurePermissions skips native handoff when delegate does not return foreground-only',
       () async {
-    final permissionsDelegate =
-        _FakeGeolocatorTrackingRepository(
+    final permissionsDelegate = _FakeGeolocatorTrackingRepository(
       ensureResult: LocationPermissionState.denied,
       checkResult: LocationPermissionState.granted,
     );
 
-    final repository =
-        NativeAndroidTrackingRepository(
+    final repository = NativeAndroidTrackingRepository(
       eventChannel: eventChannel,
       controlChannel: controlChannel,
       permissionsDelegate: permissionsDelegate,

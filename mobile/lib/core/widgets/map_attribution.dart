@@ -25,9 +25,7 @@ class MapAttribution extends StatelessWidget {
   }
 
   String _sanitizeForOverlay(String line) {
-    final sanitized = line
-        .replaceFirst(_leadingCopyrightPattern, '')
-        .trim();
+    final sanitized = line.replaceFirst(_leadingCopyrightPattern, '').trim();
     return sanitized.isEmpty ? line : sanitized;
   }
 }

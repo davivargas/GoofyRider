@@ -99,8 +99,7 @@ void main() {
         resortId: 'resort-2',
       );
 
-      final sessions =
-          await database.listSessions(ownerUserId: 'user-1');
+      final sessions = await database.listSessions(ownerUserId: 'user-1');
       final session = await database.getSessionByRemoteId(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
@@ -130,12 +129,10 @@ void main() {
         nextAttemptAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
       );
 
-      final hiddenIds =
-          await database.listPendingRemoteSessionDeleteIds(
+      final hiddenIds = await database.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final retryableIds =
-          await database.listPendingRemoteDeleteIds(
+      final retryableIds = await database.listPendingRemoteDeleteIds(
         ownerUserId: 'user-1',
       );
 
@@ -155,12 +152,10 @@ void main() {
         lastError: 'Authentication required.',
       );
 
-      final hiddenIds =
-          await database.listPendingRemoteSessionDeleteIds(
+      final hiddenIds = await database.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final retryableDeletes =
-          await database.listRetryablePendingRemoteDeletes(
+      final retryableDeletes = await database.listRetryablePendingRemoteDeletes(
         ownerUserId: 'user-1',
       );
 
@@ -168,8 +163,7 @@ void main() {
       expect(retryableDeletes, isEmpty);
     });
 
-    test(
-        'legacy pending delete schema upgrades before creating retry indexes',
+    test('legacy pending delete schema upgrades before creating retry indexes',
         () async {
       final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
@@ -231,14 +225,14 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final columns = await fileDatabase!.customSelect(
-        'PRAGMA table_info(pending_remote_session_deletes)',
-      ).get();
-      final columnNames = columns
-          .map((QueryRow row) => row.data['name'] as String)
-          .toSet();
-      final pendingIds =
-          await fileDatabase!.listPendingRemoteSessionDeleteIds(
+      final columns = await fileDatabase!
+          .customSelect(
+            'PRAGMA table_info(pending_remote_session_deletes)',
+          )
+          .get();
+      final columnNames =
+          columns.map((QueryRow row) => row.data['name'] as String).toSet();
+      final pendingIds = await fileDatabase!.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
       final migratedRows = await fileDatabase!.customSelect(
@@ -347,8 +341,7 @@ void main() {
       expect(legacyTableRows, isEmpty);
     });
 
-    test(
-        'legacy ride session schema adds owner column before owner indexes',
+    test('legacy ride session schema adds owner column before owner indexes',
         () async {
       final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
@@ -440,18 +433,20 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final columns = await fileDatabase!.customSelect(
-        'PRAGMA table_info(local_ride_sessions)',
-      ).get();
-      final columnNames = columns
-          .map((QueryRow row) => row.data['name'] as String)
-          .toSet();
-      final indexes = await fileDatabase!.customSelect(
-        'PRAGMA index_list(local_ride_sessions)',
-      ).get();
-      final indexNames = indexes
-          .map((QueryRow row) => row.data['name'] as String)
-          .toSet();
+      final columns = await fileDatabase!
+          .customSelect(
+            'PRAGMA table_info(local_ride_sessions)',
+          )
+          .get();
+      final columnNames =
+          columns.map((QueryRow row) => row.data['name'] as String).toSet();
+      final indexes = await fileDatabase!
+          .customSelect(
+            'PRAGMA index_list(local_ride_sessions)',
+          )
+          .get();
+      final indexNames =
+          indexes.map((QueryRow row) => row.data['name'] as String).toSet();
 
       expect(columnNames, contains('owner_user_id'));
       expect(
@@ -502,7 +497,8 @@ void main() {
       expect(userTwoResorts.single['is_favorite'], isFalse);
     });
 
-    test('legacy cached resorts migrate to owner-aware schema without shared favorites',
+    test(
+        'legacy cached resorts migrate to owner-aware schema without shared favorites',
         () async {
       final previousDontWarn =
           driftRuntimeOptions.dontWarnAboutMultipleDatabases;
@@ -560,14 +556,14 @@ void main() {
 
       fileDatabase = await DriftLocalDatabase.openAtPath(dbPath);
 
-      final columns = await fileDatabase!.customSelect(
-        'PRAGMA table_info(cached_resorts)',
-      ).get();
-      final columnNames = columns
-          .map((QueryRow row) => row.data['name'] as String)
-          .toSet();
-      final migratedResort =
-          await fileDatabase!.readCachedResort(
+      final columns = await fileDatabase!
+          .customSelect(
+            'PRAGMA table_info(cached_resorts)',
+          )
+          .get();
+      final columnNames =
+          columns.map((QueryRow row) => row.data['name'] as String).toSet();
+      final migratedResort = await fileDatabase!.readCachedResort(
         'resort-legacy',
         ownerUserId: 'user-2',
       );

@@ -53,11 +53,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       children: <Widget>[
                         const Wordmark(size: 44),
                         const SizedBox(height: 12),
-                        const MonoLabel('Create your account', size: 10, letterSpacing: 2.4),
+                        const MonoLabel('Create your account',
+                            size: 10, letterSpacing: 2.4),
                         const SizedBox(height: 44),
                         TextFormField(
                           controller: _nameController,
-                          decoration: const InputDecoration(labelText: 'DISPLAY NAME'),
+                          decoration:
+                              const InputDecoration(labelText: 'DISPLAY NAME'),
                           validator: (String? value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Display name is required.';
@@ -84,7 +86,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         TextFormField(
                           controller: _passwordController,
                           obscureText: true,
-                          decoration: const InputDecoration(labelText: 'PASSWORD'),
+                          decoration:
+                              const InputDecoration(labelText: 'PASSWORD'),
                           validator: (String? value) {
                             if (value == null || value.length < 8) {
                               return 'Use at least 8 characters.';
@@ -96,11 +99,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         if (authState.errorMessage != null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: Text(authState.errorMessage!, style: TextStyle(color: t.rec)),
+                            child: Text(authState.errorMessage!,
+                                style: TextStyle(color: t.rec)),
                           ),
-                        VoltButton(label: 'Create account', busy: authState.isBusy, onPressed: _onRegister),
+                        VoltButton(
+                            label: 'Create account',
+                            busy: authState.isBusy,
+                            onPressed: _onRegister),
                         const SizedBox(height: 12),
-                        GhostButton(label: 'Back to log in', onPressed: () => context.go(RoutePaths.login)),
+                        GhostButton(
+                            label: 'Back to log in',
+                            onPressed: () => context.go(RoutePaths.login)),
                       ],
                     ),
                   ),

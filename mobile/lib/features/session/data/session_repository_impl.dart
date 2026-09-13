@@ -24,11 +24,10 @@ class SessionRepositoryImpl implements SessionRepository {
   })  : _localDatabase = localDatabase,
         _api = api,
         _currentUserIdGetter = currentUserIdGetter,
-        _resortAttributionService =
-            SessionResortAttributionService(
-              localDatabase: localDatabase,
-              currentUserIdGetter: currentUserIdGetter,
-            ),
+        _resortAttributionService = SessionResortAttributionService(
+          localDatabase: localDatabase,
+          currentUserIdGetter: currentUserIdGetter,
+        ),
         _stateMachine = stateMachine;
 
   static final RegExp _uuidLikeIdPattern = RegExp(
@@ -103,8 +102,7 @@ class SessionRepositoryImpl implements SessionRepository {
     final session = await _requireSession(localSessionId);
     _stateMachine.transition(session.state, LocalSessionState.syncPending);
 
-    final points =
-        await _localDatabase.listPoints(localSessionId);
+    final points = await _localDatabase.listPoints(localSessionId);
     final effectiveDurationS =
         activeDurationS ?? _computeActiveDurationSeconds(points);
     final stats = _computeStatsFromTrackedPoints(
@@ -137,8 +135,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async {
-    final points =
-        await _localDatabase.listPoints(localSessionId);
+    final points = await _localDatabase.listPoints(localSessionId);
     final activeDurationS = _computeActiveDurationSeconds(points);
     return _computeStatsFromTrackedPoints(
       points: points,
@@ -155,8 +152,7 @@ class SessionRepositoryImpl implements SessionRepository {
       await _prepareSyncAttempt(localSessionId);
 
       final syncing = await _requireSession(localSessionId);
-      final remoteId =
-          await _ensureRemoteSessionId(localSessionId, syncing);
+      final remoteId = await _ensureRemoteSessionId(localSessionId, syncing);
       await _syncPointsForSession(
         localSessionId: localSessionId,
         remoteSessionId: remoteId,
@@ -172,8 +168,7 @@ class SessionRepositoryImpl implements SessionRepository {
     } on DioException catch (exception) {
       final message = mapDioException(exception).message;
       await _localDatabase.markSyncFailed(localSessionId, error: message);
-      final failed =
-          await _tryGetScopedSession(localSessionId);
+      final failed = await _tryGetScopedSession(localSessionId);
       if (failed != null) {
         return failed;
       }
@@ -197,13 +192,11 @@ class SessionRepositoryImpl implements SessionRepository {
       return const <LocalRideSession>[];
     }
     unawaited(_ensurePendingDeleteReconciliation(ownerUserId));
-    final pendingRemoteDeleteIds =
-        await _pendingRemoteDeleteIds(ownerUserId);
+    final pendingRemoteDeleteIds = await _pendingRemoteDeleteIds(ownerUserId);
 
-    var local =
-        await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final cachedRemote = (await _localDatabase
-            .readCachedRemoteSessions(ownerUserId: ownerUserId))
+    var local = await _localDatabase.listSessions(ownerUserId: ownerUserId);
+    final cachedRemote = (await _localDatabase.readCachedRemoteSessions(
+            ownerUserId: ownerUserId))
         .where((Map<String, dynamic> raw) =>
             _isVisibleRemoteSessionSummary(raw, pendingRemoteDeleteIds))
         .toList(growable: false);
@@ -231,8 +224,8 @@ class SessionRepositoryImpl implements SessionRepository {
         await _pendingRemoteDeleteIds(ownerUserId);
     final refreshedLocal =
         await _localDatabase.listSessions(ownerUserId: ownerUserId);
-    final refreshedRemote = (await _localDatabase
-            .readCachedRemoteSessions(ownerUserId: ownerUserId))
+    final refreshedRemote = (await _localDatabase.readCachedRemoteSessions(
+            ownerUserId: ownerUserId))
         .where((Map<String, dynamic> raw) => _isVisibleRemoteSessionSummary(
               raw,
               refreshedPendingRemoteDeleteIds,
@@ -252,8 +245,7 @@ class SessionRepositoryImpl implements SessionRepository {
       return;
     }
     await _ensurePendingDeleteReconciliation(ownerUserId);
-    final pendingRemoteDeleteIds =
-        await _pendingRemoteDeleteIds(ownerUserId);
+    final pendingRemoteDeleteIds = await _pendingRemoteDeleteIds(ownerUserId);
 
     try {
       final remote = await _api.listRemoteSessions();
@@ -301,10 +293,7 @@ class SessionRepositoryImpl implements SessionRepository {
         )
         .toList(growable: false);
 
-    final merged = <LocalRideSession>[
-      ...local,
-      ...remoteOnly
-    ];
+    final merged = <LocalRideSession>[...local, ...remoteOnly];
     merged.sort((LocalRideSession a, LocalRideSession b) =>
         b.startedAt.compareTo(a.startedAt));
     return merged;
@@ -407,8 +396,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<String> resolveSessionResortLabel(LocalRideSession session) async {
-    final resolved =
-        await _resortAttributionService.resolve(session);
+    final resolved = await _resortAttributionService.resolve(session);
     return resolved.label;
   }
 
@@ -546,8 +534,7 @@ class SessionRepositoryImpl implements SessionRepository {
     );
 
     var isolationFallbackBatches = 0;
-    final droppedDuringIsolation =
-        <_DroppedSyncPoint>[];
+    final droppedDuringIsolation = <_DroppedSyncPoint>[];
     for (var index = 0;
         index < sanitizedResult.uploadablePoints.length;
         index += SessionConstants.uploadBatchSize) {
@@ -555,10 +542,8 @@ class SessionRepositoryImpl implements SessionRepository {
         index + SessionConstants.uploadBatchSize,
         sanitizedResult.uploadablePoints.length,
       );
-      final batch =
-          sanitizedResult.uploadablePoints.sublist(index, end);
-      final uploadResult =
-          await _uploadPointBatchWithFallback(
+      final batch = sanitizedResult.uploadablePoints.sublist(index, end);
+      final uploadResult = await _uploadPointBatchWithFallback(
         localSessionId: localSessionId,
         remoteSessionId: remoteSessionId,
         batch: batch,
@@ -571,8 +556,7 @@ class SessionRepositoryImpl implements SessionRepository {
     }
 
     if (isolationFallbackBatches > 0 || droppedDuringIsolation.isNotEmpty) {
-      final dropReasonCounts =
-          _collectDropReasonCounts(droppedDuringIsolation);
+      final dropReasonCounts = _collectDropReasonCounts(droppedDuringIsolation);
       await _recordSyncDiagnosticBestEffort(
         localSessionId,
         eventType: 'sync_points_partial_drop',
@@ -715,8 +699,7 @@ class SessionRepositoryImpl implements SessionRepository {
     var sanitizedPointCount = 0;
 
     for (final point in points) {
-      final pointResult =
-          _sanitizeSinglePointForSync(point);
+      final pointResult = _sanitizeSinglePointForSync(point);
       if (pointResult.dropped != null) {
         droppedPoints.add(pointResult.dropped!);
         continue;
@@ -911,8 +894,7 @@ class SessionRepositoryImpl implements SessionRepository {
     required String remoteSessionId,
   }) async {
     final syncing = await _requireSession(localSessionId);
-    final payload =
-        _sanitizeCompletionPayloadForSync(syncing);
+    final payload = _sanitizeCompletionPayloadForSync(syncing);
     if (payload.sanitizedFields.isNotEmpty) {
       await _recordSyncDiagnosticBestEffort(
         localSessionId,
@@ -1164,8 +1146,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<LocalRideSession> _requireSession(int localSessionId) async {
-    final session =
-        await _tryGetScopedSession(localSessionId);
+    final session = await _tryGetScopedSession(localSessionId);
     if (session == null) {
       throw StateError('Session not found: $localSessionId');
     }
@@ -1349,8 +1330,7 @@ class SessionRepositoryImpl implements SessionRepository {
       ownerUserId: ownerUserId,
     );
 
-    for (final pendingDelete
-        in pendingRemoteDeletes) {
+    for (final pendingDelete in pendingRemoteDeletes) {
       final remoteId = pendingDelete.remoteId;
       try {
         await _api.deleteRemoteSession(remoteId);
@@ -1413,11 +1393,9 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   Future<void> _cacheEmbeddedResortSummary(
-    Map<String, dynamic>? resortSummary,
-    {
+    Map<String, dynamic>? resortSummary, {
     required String ownerUserId,
-    }
-  ) async {
+  }) async {
     if (resortSummary == null) {
       return;
     }
@@ -1455,8 +1433,7 @@ class SessionRepositoryImpl implements SessionRepository {
   ) async {
     final remoteId = session.remoteId!;
     try {
-      final remotePoints =
-          await _api.getRemoteSessionPoints(remoteId);
+      final remotePoints = await _api.getRemoteSessionPoints(remoteId);
       await _localDatabase.replaceSessionPoints(
         localSessionId: session.localId,
         points: _mapRemotePoints(
@@ -1474,13 +1451,12 @@ class SessionRepositoryImpl implements SessionRepository {
     required DateTime sessionStartedAt,
     required List<Map<String, dynamic>> remotePoints,
   }) {
-    final sorted =
-        List<Map<String, dynamic>>.from(remotePoints)
-          ..sort(
-            (Map<String, dynamic> a, Map<String, dynamic> b) =>
-                _remoteIntOrZero(a['t_offset_ms'])
-                    .compareTo(_remoteIntOrZero(b['t_offset_ms'])),
-          );
+    final sorted = List<Map<String, dynamic>>.from(remotePoints)
+      ..sort(
+        (Map<String, dynamic> a, Map<String, dynamic> b) =>
+            _remoteIntOrZero(a['t_offset_ms'])
+                .compareTo(_remoteIntOrZero(b['t_offset_ms'])),
+      );
 
     return sorted.map((Map<String, dynamic> raw) {
       final elapsedOffsetMs = _remoteIntOrZero(raw['t_offset_ms']);
@@ -1543,7 +1519,8 @@ class SessionRepositoryImpl implements SessionRepository {
     return true;
   }
 
-  List<LocalSessionPoint> _dedupeByElapsedOffset(List<LocalSessionPoint> points) {
+  List<LocalSessionPoint> _dedupeByElapsedOffset(
+      List<LocalSessionPoint> points) {
     final seenElapsedOffsets = <int>{};
     final uniquePoints = <LocalSessionPoint>[];
 
@@ -1592,8 +1569,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
     final robustMaxSpeedMps = _computeRobustMaxSpeed(accepted);
     final (int? gain, int? loss) = _computeElevation(accepted);
-    final avgSpeedMps =
-        durationS == 0 ? 0.0 : analysis.distanceM / durationS;
+    final avgSpeedMps = durationS == 0 ? 0.0 : analysis.distanceM / durationS;
     final maxSpeedMps = max(robustMaxSpeedMps, avgSpeedMps);
 
     return SessionStats(
@@ -1745,8 +1721,7 @@ class SessionRepositoryImpl implements SessionRepository {
   }
 
   String? _remoteSessionResortId(Map<String, dynamic> raw) {
-    final resortSummary =
-        raw['resort'] as Map<String, dynamic>?;
+    final resortSummary = raw['resort'] as Map<String, dynamic>?;
     return resortSummary?['id'] as String? ?? raw['resort_id'] as String?;
   }
 

@@ -268,8 +268,7 @@ void main() {
       () => localDatabase.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
-    )
-        .thenAnswer((_) async => <Map<String, dynamic>>[]);
+    ).thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
       () => localDatabase.listPendingRemoteSessionDeleteIds(
         ownerUserId: any(named: 'ownerUserId'),
@@ -358,9 +357,8 @@ void main() {
       if (onUploadBatch == null) {
         return;
       }
-      final batch =
-          (invocation.namedArguments[#points] as List<dynamic>)
-              .cast<Map<String, dynamic>>();
+      final batch = (invocation.namedArguments[#points] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
       await onUploadBatch(batch);
     });
     when(() => api.completeRemoteSession(
@@ -403,8 +401,7 @@ void main() {
     when(() => localDatabase.getSessionById(7, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => created);
 
-    final result =
-        await repository.startLocalSession(resortId: 'resort-1');
+    final result = await repository.startLocalSession(resortId: 'resort-1');
 
     expect(result.ownerUserId, _ownerUserId);
     verify(() => localDatabase.insertLocalSession(
@@ -543,8 +540,7 @@ void main() {
         points: captureAny(named: 'points'),
       ),
     ).captured;
-    final uploaded =
-        captured.single as List<Map<String, dynamic>>;
+    final uploaded = captured.single as List<Map<String, dynamic>>;
 
     expect(uploaded.length, 2);
     expect(
@@ -1035,8 +1031,7 @@ void main() {
     var currentAccessToken = 'expired-access-token';
     var refreshCallCount = 0;
     final dio = Dio();
-    final backend =
-        _SessionSyncRetryBackendInterceptor();
+    final backend = _SessionSyncRetryBackendInterceptor();
     dio.interceptors.add(
       AuthTokenInterceptor(
         dio: dio,
@@ -1122,8 +1117,7 @@ void main() {
       api: api,
       currentUserIdGetter: () => currentUserId,
     );
-    final scopedSessions =
-        Queue<LocalRideSession?>.from(
+    final scopedSessions = Queue<LocalRideSession?>.from(
       <LocalRideSession?>[
         _buildSession(
           localId: 1,
@@ -1472,8 +1466,7 @@ void main() {
 
   test('history uses scoped local rows and cached remote rows offline',
       () async {
-    final localSnapshots =
-        Queue<List<LocalRideSession>>.from(
+    final localSnapshots = Queue<List<LocalRideSession>>.from(
       <List<LocalRideSession>>[
         <LocalRideSession>[
           _buildSession(
@@ -1553,8 +1546,7 @@ void main() {
       ),
     ).thenAnswer((_) async {});
 
-    final history =
-        await repository.listLocalAndRemoteSessionHistory();
+    final history = await repository.listLocalAndRemoteSessionHistory();
 
     expect(history.map((LocalRideSession item) => item.remoteId), <String?>[
       'remote-2',
@@ -1576,8 +1568,7 @@ void main() {
       'avg_speed_mps': 8,
       'created_at': '2026-01-03T00:12:05Z',
     };
-    final localSnapshots =
-        Queue<List<LocalRideSession>>.from(
+    final localSnapshots = Queue<List<LocalRideSession>>.from(
       <List<LocalRideSession>>[
         const <LocalRideSession>[],
         <LocalRideSession>[
@@ -1592,8 +1583,7 @@ void main() {
         ],
       ],
     );
-    final remoteSnapshots =
-        Queue<List<Map<String, dynamic>>>.from(
+    final remoteSnapshots = Queue<List<Map<String, dynamic>>>.from(
       <List<Map<String, dynamic>>>[
         const <Map<String, dynamic>>[],
         <Map<String, dynamic>>[remoteSummary],
@@ -1630,8 +1620,7 @@ void main() {
       ),
     ).thenAnswer((_) async => 7);
 
-    final history =
-        await repository.listLocalAndRemoteSessionHistory();
+    final history = await repository.listLocalAndRemoteSessionHistory();
 
     expect(history, hasLength(1));
     expect(history.single.localId, 7);
@@ -1668,8 +1657,7 @@ void main() {
         hydrated,
       ],
     );
-    final pointSnapshots =
-        Queue<List<LocalSessionPoint>>.from(
+    final pointSnapshots = Queue<List<LocalSessionPoint>>.from(
       <List<LocalSessionPoint>>[
         const <LocalSessionPoint>[],
         <LocalSessionPoint>[
@@ -1751,8 +1739,7 @@ void main() {
         points: captureAny(named: 'points'),
       ),
     ).captured;
-    final restored =
-        captured.single as List<NewSessionPoint>;
+    final restored = captured.single as List<NewSessionPoint>;
     expect(restored, hasLength(3));
     expect(restored[0].acceptedForAnalytics, isTrue);
     expect(restored[1].acceptedForAnalytics, isTrue);
@@ -1775,8 +1762,7 @@ void main() {
         hydrated,
       ],
     );
-    final pointSnapshots =
-        Queue<List<LocalSessionPoint>>.from(
+    final pointSnapshots = Queue<List<LocalSessionPoint>>.from(
       <List<LocalSessionPoint>>[
         <LocalSessionPoint>[
           _buildPoint(
@@ -1890,8 +1876,7 @@ void main() {
         hydrated,
       ],
     );
-    final pointSnapshots =
-        Queue<List<LocalSessionPoint>>.from(
+    final pointSnapshots = Queue<List<LocalSessionPoint>>.from(
       <List<LocalSessionPoint>>[
         const <LocalSessionPoint>[],
         <LocalSessionPoint>[
@@ -1980,8 +1965,7 @@ void main() {
         points: captureAny(named: 'points'),
       ),
     ).captured;
-    final restored =
-        captured.single as List<NewSessionPoint>;
+    final restored = captured.single as List<NewSessionPoint>;
     expect(restored, hasLength(3));
     expect(restored[0].acceptedForAnalytics, isFalse);
     expect(restored[0].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 5));
@@ -2124,8 +2108,7 @@ void main() {
       ),
     ).thenAnswer((_) async => <String>{'remote-queued'});
 
-    final history =
-        await repository.listLocalAndRemoteSessionHistory();
+    final history = await repository.listLocalAndRemoteSessionHistory();
 
     expect(history, isEmpty);
   });
@@ -2197,8 +2180,7 @@ void main() {
       state: LocalSessionState.synced,
       remoteId: 'remote-6',
     );
-    final requestOptions =
-        RequestOptions(path: '/sessions/remote-6');
+    final requestOptions = RequestOptions(path: '/sessions/remote-6');
     final unauthorized = DioException(
       requestOptions: requestOptions,
       response: Response<dynamic>(
@@ -2303,8 +2285,7 @@ void main() {
         ),
       ],
     );
-    final requestOptions =
-        RequestOptions(path: '/sessions/remote-11');
+    final requestOptions = RequestOptions(path: '/sessions/remote-11');
     final notFound = DioException(
       requestOptions: requestOptions,
       response: Response<dynamic>(
@@ -2354,8 +2335,7 @@ void main() {
         ),
       ],
     );
-    final requestOptions =
-        RequestOptions(path: '/sessions/remote-12');
+    final requestOptions = RequestOptions(path: '/sessions/remote-12');
     final unauthorized = DioException(
       requestOptions: requestOptions,
       response: Response<dynamic>(

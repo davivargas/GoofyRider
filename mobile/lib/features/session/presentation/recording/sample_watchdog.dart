@@ -5,8 +5,7 @@ import '../../domain/tracking_mode_profiles.dart';
 import '../recording_view_state.dart';
 
 const Duration _sampleWatchdogRestartCooldown = Duration(seconds: 30);
-const Duration _sampleWatchdogInitialSampleRestartGrace =
-    Duration(seconds: 12);
+const Duration _sampleWatchdogInitialSampleRestartGrace = Duration(seconds: 12);
 
 /// Monitors the location stream for stale-sample conditions and triggers
 /// stream restarts when GPS updates stop arriving.
@@ -63,15 +62,13 @@ class SampleWatchdog {
       return;
     }
 
-    final referenceTime =
-        lastSampleReceivedAtUtc ?? currentStreamStartedAtUtc;
+    final referenceTime = lastSampleReceivedAtUtc ?? currentStreamStartedAtUtc;
     if (referenceTime == null) {
       return;
     }
 
-    final staleThreshold =
-        TrackingModeProfiles.forMode(activeTrackingMode)
-            .sampleWatchdogThreshold;
+    final staleThreshold = TrackingModeProfiles.forMode(activeTrackingMode)
+        .sampleWatchdogThreshold;
     final deadline = referenceTime.add(staleThreshold);
     final now = DateTime.now().toUtc();
     final delay = deadline.difference(now);
@@ -130,17 +127,15 @@ class SampleWatchdog {
       return const WatchdogAction.none();
     }
 
-    final referenceTime =
-        lastSampleReceivedAtUtc ?? currentStreamStartedAtUtc;
+    final referenceTime = lastSampleReceivedAtUtc ?? currentStreamStartedAtUtc;
     if (referenceTime == null) {
       return const WatchdogAction.none();
     }
 
     final now = DateTime.now().toUtc();
     final staleFor = now.difference(referenceTime);
-    final staleThreshold =
-        TrackingModeProfiles.forMode(activeTrackingMode)
-            .sampleWatchdogThreshold;
+    final staleThreshold = TrackingModeProfiles.forMode(activeTrackingMode)
+        .sampleWatchdogThreshold;
     final hasReceivedSample = lastSampleReceivedAtUtc != null;
 
     if (staleFor < staleThreshold) {
@@ -168,11 +163,11 @@ class SampleWatchdog {
       _writeState(
         _readState().copyWith(
           tracking: _readState().tracking.copyWith(
-            gpsSignal: const GpsSignalState(
-              bars: 0,
-              description: 'Searching',
-            ),
-          ),
+                gpsSignal: const GpsSignalState(
+                  bars: 0,
+                  description: 'Searching',
+                ),
+              ),
         ),
       );
       return WatchdogAction.waitingForInitialSample(
@@ -199,11 +194,11 @@ class SampleWatchdog {
     _writeState(
       _readState().copyWith(
         tracking: _readState().tracking.copyWith(
-          gpsSignal: const GpsSignalState(
-            bars: 0,
-            description: 'Searching',
-          ),
-        ),
+              gpsSignal: const GpsSignalState(
+                bars: 0,
+                description: 'Searching',
+              ),
+            ),
       ),
     );
 
@@ -240,7 +235,9 @@ enum WatchdogActionKind {
 
 /// Describes the action the coordinator should take after a watchdog check.
 class WatchdogAction {
-  const WatchdogAction.none() : kind = WatchdogActionKind.none, data = null;
+  const WatchdogAction.none()
+      : kind = WatchdogActionKind.none,
+        data = null;
 
   const WatchdogAction.reschedule({
     required TrackingMode activeTrackingMode,

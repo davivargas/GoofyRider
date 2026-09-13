@@ -89,10 +89,8 @@ class SessionApi {
         },
         options: Options(extra: _preserveAuthOnFailureExtra),
       );
-      final payload =
-          response.data as Map<String, dynamic>;
-      final items =
-          payload['items'] as List<dynamic>? ?? <dynamic>[];
+      final payload = response.data as Map<String, dynamic>;
+      final items = payload['items'] as List<dynamic>? ?? <dynamic>[];
       sessions.addAll(items.cast<Map<String, dynamic>>());
       total ??= (payload['total'] as num?)?.toInt();
 
@@ -130,8 +128,7 @@ class SessionApi {
       options: Options(extra: _preserveAuthOnFailureExtra),
     );
     final payload = response.data as Map<String, dynamic>;
-    final items =
-        payload['items'] as List<dynamic>? ?? <dynamic>[];
+    final items = payload['items'] as List<dynamic>? ?? <dynamic>[];
     return items.cast<Map<String, dynamic>>();
   }
 }

@@ -44,14 +44,17 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
           children: <Widget>[
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
-              child: Text('RESORTS', style: Theme.of(context).textTheme.headlineSmall),
+              child: Text('RESORTS',
+                  style: Theme.of(context).textTheme.headlineSmall),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
               child: TextField(
                 controller: _searchController,
                 onChanged: (String value) {
-                  _debouncer.run(() => ref.read(resortsControllerProvider.notifier).search(value));
+                  _debouncer.run(() => ref
+                      .read(resortsControllerProvider.notifier)
+                      .search(value));
                 },
                 decoration: InputDecoration(
                   hintText: 'Search resorts…',
@@ -61,30 +64,41 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
             ),
             Expanded(
               child: state.when(
-                loading: () => const AppLoadingView(label: 'Loading resorts...'),
+                loading: () =>
+                    const AppLoadingView(label: 'Loading resorts...'),
                 error: (Object error, StackTrace _) => AppErrorView(
                   message: error.toString(),
-                  onRetry: () => ref.read(resortsControllerProvider.notifier).refresh(),
+                  onRetry: () =>
+                      ref.read(resortsControllerProvider.notifier).refresh(),
                 ),
                 data: (ResortListResult result) {
                   if (result.items.isEmpty) {
                     return AppEmptyView(
                       title: 'No resorts found',
-                      subtitle: result.usedCache ? 'Offline cache is empty. Connect and retry.' : 'Try adjusting your search.',
+                      subtitle: result.usedCache
+                          ? 'Offline cache is empty. Connect and retry.'
+                          : 'Try adjusting your search.',
                     );
                   }
-                  final hasFavorite = result.items.any((ResortSummary r) => r.isFavorite);
+                  final hasFavorite =
+                      result.items.any((ResortSummary r) => r.isFavorite);
                   return RefreshIndicator(
-                    onRefresh: () => ref.read(resortsControllerProvider.notifier).refresh(),
+                    onRefresh: () =>
+                        ref.read(resortsControllerProvider.notifier).refresh(),
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.bottomClearance(context) + 24),
+                      padding: EdgeInsets.fromLTRB(
+                          24, 8, 24, AppTabBar.bottomClearance(context) + 24),
                       itemCount: result.items.length + 1,
                       itemBuilder: (BuildContext context, int index) {
                         if (index == 0) {
                           return Padding(
                             padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
-                            child: MonoLabel(hasFavorite ? 'Favorites first' : 'All resorts', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                            child: MonoLabel(
+                                hasFavorite ? 'Favorites first' : 'All resorts',
+                                size: 8,
+                                tone: MonoTone.muted,
+                                letterSpacing: 1.8),
                           );
                         }
                         return _ResortRow(resort: result.items[index - 1]);
@@ -117,19 +131,28 @@ class _ResortRow extends ConsumerWidget {
     ].join(' · ');
 
     return InkWell(
-      onTap: () => context.go(RoutePaths.resortDetail.replaceAll(':resortId', resort.id)),
+      onTap: () => context
+          .go(RoutePaths.resortDetail.replaceAll(':resortId', resort.id)),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+        decoration:
+            BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
         child: Row(
           children: <Widget>[
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(resort.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+                  Text(resort.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 4),
-                  MonoLabel('${resort.region}, ${resort.country}', size: 8, tone: MonoTone.muted, letterSpacing: 1.1, maxLines: 1),
+                  MonoLabel('${resort.region}, ${resort.country}',
+                      size: 8,
+                      tone: MonoTone.muted,
+                      letterSpacing: 1.1,
+                      maxLines: 1),
                 ],
               ),
             ),
@@ -137,8 +160,13 @@ class _ResortRow extends ConsumerWidget {
               const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: t.raised, borderRadius: BorderRadius.circular(6)),
-                child: MonoLabel(chip, size: 9, weight: FontWeight.w700, letterSpacing: 1, maxLines: 1),
+                decoration: BoxDecoration(
+                    color: t.raised, borderRadius: BorderRadius.circular(6)),
+                child: MonoLabel(chip,
+                    size: 9,
+                    weight: FontWeight.w700,
+                    letterSpacing: 1,
+                    maxLines: 1),
               ),
             ],
             IconButton(
@@ -147,7 +175,9 @@ class _ResortRow extends ConsumerWidget {
                 color: resort.isFavorite ? t.voltText : t.textMuted,
                 size: 18,
               ),
-              onPressed: () => ref.read(resortsControllerProvider.notifier).toggleFavorite(resort),
+              onPressed: () => ref
+                  .read(resortsControllerProvider.notifier)
+                  .toggleFavorite(resort),
             ),
           ],
         ),

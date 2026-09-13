@@ -20,13 +20,11 @@ class WeatherRepositoryImpl implements WeatherRepository {
   @override
   Future<ResortWeather?> getResortWeather(String resortId) async {
     try {
-      final payload =
-          await _api.getResortWeather(resortId);
+      final payload = await _api.getResortWeather(resortId);
       await _localDatabase.upsertCachedWeather(resortId, payload);
       return ResortWeather.fromJson(payload, fromCache: false, stale: false);
     } on DioException {
-      final cached =
-          await _localDatabase.readCachedWeather(resortId);
+      final cached = await _localDatabase.readCachedWeather(resortId);
       if (cached == null) {
         return null;
       }
@@ -37,8 +35,7 @@ class WeatherRepositoryImpl implements WeatherRepository {
 
   @override
   Future<ResortWeather?> refreshResortWeatherIfStale(String resortId) async {
-    final cached =
-        await _localDatabase.readCachedWeather(resortId);
+    final cached = await _localDatabase.readCachedWeather(resortId);
     if (cached != null) {
       final stale = isCachedWeatherStale(cached);
       if (!stale) {
@@ -47,8 +44,7 @@ class WeatherRepositoryImpl implements WeatherRepository {
     }
 
     try {
-      final payload =
-          await _api.getResortWeather(resortId);
+      final payload = await _api.getResortWeather(resortId);
       await _localDatabase.upsertCachedWeather(resortId, payload);
       return ResortWeather.fromJson(payload, fromCache: false, stale: false);
     } on DioException catch (exception) {

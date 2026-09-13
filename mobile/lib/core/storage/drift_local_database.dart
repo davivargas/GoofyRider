@@ -114,8 +114,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
   // ---------------------------------------------------------------------------
 
   Future<void> initialize() async {
-    final versionRows =
-        await customSelect('PRAGMA user_version').get();
+    final versionRows = await customSelect('PRAGMA user_version').get();
     final currentVersion = versionRows.isNotEmpty
         ? (versionRows.first.data.values.first as int? ?? 0)
         : 0;
@@ -554,8 +553,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
   }) =>
       remoteSessionCache.readCachedRemoteSessions(ownerUserId: ownerUserId);
 
-  @Deprecated(
-      'Use remoteSessionCache.readCachedRemoteSessionSummary instead')
+  @Deprecated('Use remoteSessionCache.readCachedRemoteSessionSummary instead')
   Future<Map<String, dynamic>?> readCachedRemoteSessionSummary({
     required String ownerUserId,
     required String remoteId,
@@ -565,8 +563,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
         remoteId: remoteId,
       );
 
-  @Deprecated(
-      'Use remoteSessionCache.deleteCachedRemoteSessionSummary instead')
+  @Deprecated('Use remoteSessionCache.deleteCachedRemoteSessionSummary instead')
   Future<void> deleteCachedRemoteSessionSummary({
     required String ownerUserId,
     required String remoteId,
@@ -633,8 +630,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
         nextAttemptAt: nextAttemptAt,
       );
 
-  @Deprecated(
-      'Use pendingDeletes.markPendingRemoteSessionDeleteFailed instead')
+  @Deprecated('Use pendingDeletes.markPendingRemoteSessionDeleteFailed instead')
   Future<void> markPendingRemoteSessionDeleteFailed({
     required String ownerUserId,
     required String remoteId,
@@ -656,8 +652,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
         remoteId: remoteId,
       );
 
-  @Deprecated(
-      'Use pendingDeletes.listPendingRemoteSessionDeleteIds instead')
+  @Deprecated('Use pendingDeletes.listPendingRemoteSessionDeleteIds instead')
   Future<Set<String>> listPendingRemoteSessionDeleteIds({
     required String ownerUserId,
   }) =>
@@ -671,8 +666,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
   }) =>
       pendingDeletes.listPendingRemoteDeleteIds(ownerUserId: ownerUserId);
 
-  @Deprecated(
-      'Use pendingDeletes.listRetryablePendingRemoteDeletes instead')
+  @Deprecated('Use pendingDeletes.listRetryablePendingRemoteDeletes instead')
   Future<List<PendingRemoteSessionDeleteEntry>>
       listRetryablePendingRemoteDeletes({
     required String ownerUserId,
@@ -876,7 +870,8 @@ class DriftLocalDatabase extends GeneratedDatabase {
       ''',
     ).get();
 
-    await customStatement('ALTER TABLE cached_resorts RENAME TO cached_resorts_legacy');
+    await customStatement(
+        'ALTER TABLE cached_resorts RENAME TO cached_resorts_legacy');
     await customStatement('''
       CREATE TABLE cached_resorts (
         owner_user_id TEXT NOT NULL DEFAULT '',
@@ -983,8 +978,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
   Future<void> _addColumnIfMissing(String table, String columnDef) async {
     final columnName = columnDef.split(' ').first;
-    final rows =
-        await customSelect('PRAGMA table_info($table)').get();
+    final rows = await customSelect('PRAGMA table_info($table)').get();
     final exists = rows.any(
       (QueryRow row) => row.data['name']?.toString() == columnName,
     );

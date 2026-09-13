@@ -188,10 +188,22 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
     final (Color fg, Color bg, Color border) = switch (variant) {
-      PillVariant.rec => (t.rec, t.bg.withValues(alpha: 0.85), t.rec.withValues(alpha: 0.5)),
+      PillVariant.rec => (
+          t.rec,
+          t.bg.withValues(alpha: 0.85),
+          t.rec.withValues(alpha: 0.5)
+        ),
       PillVariant.volt => (t.voltInk, t.volt, t.volt),
-      PillVariant.ice => (t.ice, Colors.transparent, t.ice.withValues(alpha: 0.35)),
-      PillVariant.ghost => (t.text, t.bg.withValues(alpha: 0.85), t.text.withValues(alpha: 0.12)),
+      PillVariant.ice => (
+          t.ice,
+          Colors.transparent,
+          t.ice.withValues(alpha: 0.35)
+        ),
+      PillVariant.ghost => (
+          t.text,
+          t.bg.withValues(alpha: 0.85),
+          t.text.withValues(alpha: 0.12)
+        ),
       PillVariant.muted => (t.textSecondary, Colors.transparent, t.line),
     };
     return Container(
@@ -205,7 +217,8 @@ class StatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (leading != null) ...<Widget>[leading!, const SizedBox(width: 6)],
-          MonoLabel(text, size: 9, weight: FontWeight.w700, letterSpacing: 1.1, color: fg),
+          MonoLabel(text,
+              size: 9, weight: FontWeight.w700, letterSpacing: 1.1, color: fg),
         ],
       ),
     );
@@ -234,7 +247,8 @@ class VoltButton extends StatelessWidget {
           ? SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: t.voltInk),
+              child:
+                  CircularProgressIndicator(strokeWidth: 2, color: t.voltInk),
             )
           : Text(label.toUpperCase()),
     );
@@ -318,7 +332,11 @@ class SegmentSwatch extends StatelessWidget {
 }
 
 String initialsFor(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((String p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((String p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) {
     return '?';
   }
@@ -349,7 +367,8 @@ class InitialsAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: ring ? t.surface : t.raised,
         shape: BoxShape.circle,
-        border: Border.all(color: ring ? t.voltText : t.line, width: ring ? 2 : 1),
+        border:
+            Border.all(color: ring ? t.voltText : t.line, width: ring ? 2 : 1),
       ),
       child: Text(
         initialsFor(name),
@@ -390,12 +409,15 @@ class PillToggle<T> extends StatelessWidget {
               onTap: () => onChanged(value),
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: value == selected ? t.volt : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: value == selected ? t.volt : t.text.withValues(alpha: 0.12),
+                    color: value == selected
+                        ? t.volt
+                        : t.text.withValues(alpha: 0.12),
                   ),
                 ),
                 child: MonoLabel(

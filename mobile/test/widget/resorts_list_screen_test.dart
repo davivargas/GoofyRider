@@ -58,7 +58,8 @@ void main() {
             ),
           ),
         ],
-        child: MaterialApp(theme: AppTheme.dark(), home: const ResortsListScreen()),
+        child: MaterialApp(
+            theme: AppTheme.dark(), home: const ResortsListScreen()),
       ),
     );
 
@@ -100,7 +101,8 @@ void main() {
             ),
           ),
         ],
-        child: MaterialApp(theme: AppTheme.dark(), home: const ResortsListScreen()),
+        child: MaterialApp(
+            theme: AppTheme.dark(), home: const ResortsListScreen()),
       ),
     );
 
@@ -143,7 +145,8 @@ void main() {
             ),
           ),
         ],
-        child: MaterialApp(theme: AppTheme.dark(), home: const ResortsListScreen()),
+        child: MaterialApp(
+            theme: AppTheme.dark(), home: const ResortsListScreen()),
       ),
     );
 

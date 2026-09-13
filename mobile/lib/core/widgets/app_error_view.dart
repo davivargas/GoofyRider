@@ -17,7 +17,9 @@ class AppErrorView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium),
             if (onRetry != null) ...<Widget>[
               const SizedBox(height: 16),
               VoltButton(label: 'Retry', onPressed: onRetry),

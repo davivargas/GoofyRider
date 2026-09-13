@@ -6,8 +6,7 @@ class WeatherApi {
   final Dio _dio;
 
   Future<Map<String, dynamic>> getResortWeather(String resortId) async {
-    final response =
-        await _dio.get<dynamic>('/weather/resorts/$resortId');
+    final response = await _dio.get<dynamic>('/weather/resorts/$resortId');
     return response.data as Map<String, dynamic>;
   }
 }

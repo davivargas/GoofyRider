@@ -72,8 +72,7 @@ class TrackingDiagnosticsDao {
     int localSessionId, {
     int limit = 120,
   }) async {
-    final safeLimit =
-        limit.clamp(1, _maxTrackingDiagnosticsPerSession).toInt();
+    final safeLimit = limit.clamp(1, _maxTrackingDiagnosticsPerSession).toInt();
     final rows = await _db.customSelect(
       '''
       SELECT *

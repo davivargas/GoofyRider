@@ -51,8 +51,7 @@ class SessionDao {
     String? remoteId,
     String? lastSyncError,
   }) async {
-    final canonicalState =
-        _canonicalPersistedState(newState);
+    final canonicalState = _canonicalPersistedState(newState);
     final now = DateTime.now().toUtc();
     await _db.customUpdate(
       '''

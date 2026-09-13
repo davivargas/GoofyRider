@@ -59,7 +59,8 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       body: ListView(
-        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24, 24, AppTabBar.bottomClearance(context) + 24),
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 24,
+            24, AppTabBar.bottomClearance(context) + 24),
         children: <Widget>[
           Row(
             children: <Widget>[
@@ -71,7 +72,12 @@ class ProfileScreen extends ConsumerWidget {
                   children: <Widget>[
                     Text(name, style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 3),
-                    MonoLabel(email, size: 9, tone: MonoTone.muted, letterSpacing: 0.8, uppercase: false, maxLines: 1),
+                    MonoLabel(email,
+                        size: 9,
+                        tone: MonoTone.muted,
+                        letterSpacing: 0.8,
+                        uppercase: false,
+                        maxLines: 1),
                   ],
                 ),
               ),
@@ -88,16 +94,31 @@ class ProfileScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    MonoLabel('Season ${shortSeasonLabel(s.label)}', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                    MonoLabel('Season ${shortSeasonLabel(s.label)}',
+                        size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 26,
                       runSpacing: 12,
                       children: <Widget>[
-                        StatBlock(value: '${s.daysRidden}', label: 'Days', size: StatSize.large),
-                        StatBlock(value: distanceUnit.formatFromMeters(s.totalVertM), label: 'Vert', size: StatSize.large),
-                        StatBlock(value: speedUnit.convertFromMetersPerSecond(s.topSpeedMps).toStringAsFixed(1), label: 'Top ${speedUnit.shortLabel}', size: StatSize.large),
-                        StatBlock(value: '${s.sessionCount}', label: 'Sessions', size: StatSize.large),
+                        StatBlock(
+                            value: '${s.daysRidden}',
+                            label: 'Days',
+                            size: StatSize.large),
+                        StatBlock(
+                            value: distanceUnit.formatFromMeters(s.totalVertM),
+                            label: 'Vert',
+                            size: StatSize.large),
+                        StatBlock(
+                            value: speedUnit
+                                .convertFromMetersPerSecond(s.topSpeedMps)
+                                .toStringAsFixed(1),
+                            label: 'Top ${speedUnit.shortLabel}',
+                            size: StatSize.large),
+                        StatBlock(
+                            value: '${s.sessionCount}',
+                            label: 'Sessions',
+                            size: StatSize.large),
                       ],
                     ),
                   ],
@@ -111,12 +132,16 @@ class ProfileScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const MonoLabel('Units', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                const MonoLabel('Units',
+                    size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
-                    Text('Speed', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary, fontWeight: FontWeight.w600)),
+                    Text('Speed',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: t.textSecondary,
+                            fontWeight: FontWeight.w600)),
                     PillToggle<SpeedUnit>(
                       options: const <(SpeedUnit, String)>[
                         (SpeedUnit.kilometersPerHour, 'KM/H'),
@@ -124,7 +149,9 @@ class ProfileScreen extends ConsumerWidget {
                         (SpeedUnit.metersPerSecond, 'M/S'),
                       ],
                       selected: speedUnit,
-                      onChanged: (SpeedUnit v) => ref.read(speedUnitPreferenceProvider.notifier).setSpeedUnit(v),
+                      onChanged: (SpeedUnit v) => ref
+                          .read(speedUnitPreferenceProvider.notifier)
+                          .setSpeedUnit(v),
                     ),
                   ],
                 ),
@@ -132,11 +159,19 @@ class ProfileScreen extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
-                    Text('Distance', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary, fontWeight: FontWeight.w600)),
+                    Text('Distance',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: t.textSecondary,
+                            fontWeight: FontWeight.w600)),
                     PillToggle<DistanceUnit>(
-                      options: const <(DistanceUnit, String)>[(DistanceUnit.meters, 'M'), (DistanceUnit.feet, 'FT')],
+                      options: const <(DistanceUnit, String)>[
+                        (DistanceUnit.meters, 'M'),
+                        (DistanceUnit.feet, 'FT')
+                      ],
                       selected: distanceUnit,
-                      onChanged: (DistanceUnit v) => ref.read(distanceUnitPreferenceProvider.notifier).setDistanceUnit(v),
+                      onChanged: (DistanceUnit v) => ref
+                          .read(distanceUnitPreferenceProvider.notifier)
+                          .setDistanceUnit(v),
                     ),
                   ],
                 ),
@@ -227,7 +262,8 @@ class ProfileScreen extends ConsumerWidget {
                   },
                 ),
               ),
-              const MonoLabel('v0.1.0 · Sync ok', size: 8, tone: MonoTone.faint),
+              const MonoLabel('v0.1.0 · Sync ok',
+                  size: 8, tone: MonoTone.faint),
             ],
           ),
         ],

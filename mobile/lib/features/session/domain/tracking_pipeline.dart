@@ -166,8 +166,7 @@ class TrackingPipelineEngine {
     );
 
     // Stage 2: Coordinate filtering
-    final filtered =
-        _coordinateFilter.filter(
+    final filtered = _coordinateFilter.filter(
       latitude: sample.latitude,
       longitude: sample.longitude,
       accuracyM: sample.accuracyM,
@@ -219,8 +218,7 @@ class TrackingPipelineEngine {
       sample: sample,
       quality: quality,
     );
-    final deltaSeconds =
-        _speedFusion.deltaSecondsFromLastAccepted(sample);
+    final deltaSeconds = _speedFusion.deltaSecondsFromLastAccepted(sample);
     final smoothingMotionState = _motionStateDetector.motionState;
     _motionStateDetector.updateMotionState(
       quality: quality,
@@ -335,5 +333,4 @@ class TrackingPipelineEngine {
       routeLongitude: acceptedForReplay ? filteredLongitude : null,
     );
   }
-
 }

@@ -366,7 +366,8 @@ void main() {
     expect(find.text('IDLE'), findsWidgets);
     expect(find.textContaining('TIME SPLIT'), findsOneWidget);
     expect(find.text('RUNS'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('TIMELINE'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(find.text('TIMELINE'), 200,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('TIMELINE'), findsOneWidget);
     expect(find.textContaining('00:02:00'), findsWidgets);
   });
@@ -400,8 +401,7 @@ void main() {
 
   testWidgets('session detail screen exposes sync action for unsynced sessions',
       (WidgetTester tester) async {
-    final repository =
-        FakeSessionRepository(_buildUnsyncedDetail());
+    final repository = FakeSessionRepository(_buildUnsyncedDetail());
 
     await tester.pumpWidget(
       ProviderScope(
@@ -436,8 +436,7 @@ void main() {
   testWidgets(
       'session detail delete action confirms, deletes, and pops back to history',
       (WidgetTester tester) async {
-    final repository =
-        FakeSessionRepository(_buildSegmentedDetail());
+    final repository = FakeSessionRepository(_buildSegmentedDetail());
 
     await tester.pumpWidget(
       ProviderScope(
@@ -450,8 +449,8 @@ void main() {
           theme: AppTheme.dark(),
           initialRoute: '/detail',
           routes: <String, WidgetBuilder>{
-            '/': (_) =>
-                const Scaffold(body: Center(child: Text('History placeholder'))),
+            '/': (_) => const Scaffold(
+                body: Center(child: Text('History placeholder'))),
             '/detail': (_) => const SessionDetailScreen(localSessionId: 1),
           },
         ),
@@ -495,8 +494,8 @@ void main() {
           theme: AppTheme.dark(),
           initialRoute: '/detail',
           routes: <String, WidgetBuilder>{
-            '/': (_) =>
-                const Scaffold(body: Center(child: Text('History placeholder'))),
+            '/': (_) => const Scaffold(
+                body: Center(child: Text('History placeholder'))),
             '/detail': (_) => const SessionDetailScreen(localSessionId: 1),
           },
         ),
@@ -520,8 +519,7 @@ void main() {
     );
   });
 
-  testWidgets(
-      'session detail delete failure shows AppFailure message',
+  testWidgets('session detail delete failure shows AppFailure message',
       (WidgetTester tester) async {
     final repository = FakeSessionRepository(
       _buildSegmentedDetail(),

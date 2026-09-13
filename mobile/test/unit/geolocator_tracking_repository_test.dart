@@ -32,8 +32,7 @@ void main() {
     final repository =
         GeolocatorTrackingRepository(nowUtc: () => streamStartUtc);
 
-    final samplesFuture =
-        repository.watchPosition().take(2).toList();
+    final samplesFuture = repository.watchPosition().take(2).toList();
 
     await Future<void>.delayed(Duration.zero);
     positionController.add(_positionAt(
@@ -68,8 +67,7 @@ void main() {
     fakePlatform.nextRequestPermissions.addAll(<LocationPermission>[
       LocationPermission.always,
     ]);
-    final repository =
-        GeolocatorTrackingRepository();
+    final repository = GeolocatorTrackingRepository();
 
     final state = await repository.ensurePermissions();
 
@@ -85,8 +83,7 @@ void main() {
       LocationPermission.whileInUse,
       LocationPermission.always,
     ]);
-    final repository =
-        GeolocatorTrackingRepository();
+    final repository = GeolocatorTrackingRepository();
 
     final state = await repository.ensurePermissions();
 
@@ -97,8 +94,7 @@ void main() {
   test('checkRecordingReadiness fails when permission is foreground-only',
       () async {
     fakePlatform.permission = LocationPermission.whileInUse;
-    final repository =
-        GeolocatorTrackingRepository();
+    final repository = GeolocatorTrackingRepository();
 
     final readiness = await repository.checkRecordingReadiness();
 
@@ -117,7 +113,8 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform
   LocationPermission permission = LocationPermission.always;
   bool serviceEnabled = true;
   int requestPermissionCalls = 0;
-  final List<LocationPermission> nextRequestPermissions = <LocationPermission>[];
+  final List<LocationPermission> nextRequestPermissions =
+      <LocationPermission>[];
 
   @override
   Future<LocationPermission> checkPermission() async {

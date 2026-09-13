@@ -47,8 +47,7 @@ class DebugExportService {
         await _localDatabase.readCachedResorts(ownerUserId: ownerUserId);
     final cachedWeatherMetadata =
         await _localDatabase.readCachedWeatherMetadata();
-    final cachedResortById =
-        _buildCachedResortIndex(cachedResorts);
+    final cachedResortById = _buildCachedResortIndex(cachedResorts);
 
     final payload = <String, dynamic>{
       'schema_version': _debugExportSchemaVersion,
@@ -69,7 +68,8 @@ class DebugExportService {
         'cached_resort_count': cachedResorts.length,
         'cached_weather_count': cachedWeatherMetadata.length,
       },
-      'unsynced_sessions': pendingSync.map(_sessionToJson).toList(growable: false),
+      'unsynced_sessions':
+          pendingSync.map(_sessionToJson).toList(growable: false),
       'cached_remote_sessions':
           cachedRemote.map(_sanitizeDynamic).toList(growable: false),
       'cached_resorts':
@@ -79,20 +79,17 @@ class DebugExportService {
       'sessions': <Map<String, dynamic>>[],
     };
 
-    final sessionMaps =
-        payload['sessions'] as List<Map<String, dynamic>>;
+    final sessionMaps = payload['sessions'] as List<Map<String, dynamic>>;
     for (var index = 0; index < orderedSessions.length; index++) {
       final session = orderedSessions[index];
-      final diagnostics =
-          await _localDatabase.listTrackingDiagnostics(
+      final diagnostics = await _localDatabase.listTrackingDiagnostics(
         session.localId,
         limit: _trackingDiagnosticsLimit,
       );
       final pointCandidates = await _readPointCandidates(
         session.localId,
       );
-      final pointSample =
-          _sampleSessionPoints(pointCandidates);
+      final pointSample = _sampleSessionPoints(pointCandidates);
       final includePointSample =
           session.isUnsynced || index < _pointSampleRecentSyncedSessionCount;
 
@@ -227,8 +224,7 @@ class DebugExportService {
   Map<String, Map<String, dynamic>> _buildCachedResortIndex(
     List<Map<String, dynamic>> cachedResorts,
   ) {
-    final index =
-        <String, Map<String, dynamic>>{};
+    final index = <String, Map<String, dynamic>>{};
     for (final resort in cachedResorts) {
       final id = _extractResortId(resort);
       if (id == null || id.isEmpty) {
@@ -254,7 +250,8 @@ class DebugExportService {
     return null;
   }
 
-  Future<List<LocalSessionPoint>> _readPointCandidates(int localSessionId) async {
+  Future<List<LocalSessionPoint>> _readPointCandidates(
+      int localSessionId) async {
     final accepted = await _localDatabase.listPoints(
       localSessionId,
       onlyAccepted: true,
@@ -274,10 +271,8 @@ class DebugExportService {
     final sampled = <LocalSessionPoint>[
       ...points.take(_pointSamplePerSide),
     ];
-    final seen =
-        sampled.map((LocalSessionPoint point) => point.id).toSet();
-    for (final point
-        in points.skip(points.length - _pointSamplePerSide)) {
+    final seen = sampled.map((LocalSessionPoint point) => point.id).toSet();
+    for (final point in points.skip(points.length - _pointSamplePerSide)) {
       if (seen.add(point.id)) {
         sampled.add(point);
       }

@@ -80,16 +80,14 @@ void main() {
         any(),
         ownerUserId: any(named: 'ownerUserId'),
       ),
-    )
-        .thenAnswer((_) async {});
+    ).thenAnswer((_) async {});
     when(() => localDatabase.readCachedWeather(any()))
         .thenAnswer((_) async => null);
     when(
       () => localDatabase.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
-    )
-        .thenAnswer((_) async => <Map<String, dynamic>>[]);
+    ).thenAnswer((_) async => <Map<String, dynamic>>[]);
   });
 
   test('searchResorts returns public payload when favorites lookup fails',
@@ -103,8 +101,7 @@ void main() {
       },
     );
 
-    final result =
-        await repository.searchResorts(query: 'whistler');
+    final result = await repository.searchResorts(query: 'whistler');
 
     expect(result.usedCache, isFalse);
     expect(result.isStale, isFalse);
@@ -160,8 +157,7 @@ void main() {
     );
     when(() => api.removeFavorite('whistler')).thenAnswer((_) async {});
 
-    final updated =
-        await baseRepository.toggleFavoriteResort(resort);
+    final updated = await baseRepository.toggleFavoriteResort(resort);
 
     expect(updated.isFavorite, isFalse);
     final captured = verify(
@@ -202,8 +198,7 @@ void main() {
       ],
     );
 
-    final favorites =
-        await baseRepository.listFavoriteResorts();
+    final favorites = await baseRepository.listFavoriteResorts();
 
     expect(favorites, hasLength(1));
     expect(favorites.single.id, 'whistler');

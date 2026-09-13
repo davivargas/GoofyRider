@@ -14,7 +14,8 @@ void main() {
 
   setUp(() async {
     database = await DriftLocalDatabase.openInMemory();
-    tempDirectory = await Directory.systemTemp.createTemp('goofyrider_debug_export_test');
+    tempDirectory =
+        await Directory.systemTemp.createTemp('goofyrider_debug_export_test');
   });
 
   tearDown(() async {
@@ -24,7 +25,8 @@ void main() {
     }
   });
 
-  test('export writes rich snapshot with masked email and capped points', () async {
+  test('export writes rich snapshot with masked email and capped points',
+      () async {
     final sessionId = await database.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
@@ -122,8 +124,7 @@ void main() {
 
     final exportedSession =
         (payload['sessions'] as List<dynamic>).first as Map<String, dynamic>;
-    final pointSample =
-        exportedSession['point_sample'] as Map<String, dynamic>;
+    final pointSample = exportedSession['point_sample'] as Map<String, dynamic>;
     expect(pointSample['included'], isTrue);
     expect(pointSample['accepted_points_preferred'], isTrue);
     expect(pointSample['total_points_available'], 120);

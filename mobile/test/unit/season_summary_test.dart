@@ -52,7 +52,8 @@ void main() {
   });
 
   test('empty history gives zeros', () {
-    final summary = buildSeasonSummary(const <LocalRideSession>[], now: DateTime(2026, 9, 10));
+    final summary = buildSeasonSummary(const <LocalRideSession>[],
+        now: DateTime(2026, 9, 10));
     expect(summary.sessionCount, 0);
     expect(summary.daysRidden, 0);
     expect(summary.totalVertM, 0);

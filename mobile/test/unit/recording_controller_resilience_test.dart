@@ -34,8 +34,7 @@ class ControlledLocationRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
-    final completer =
-        ensurePermissionsCompleter;
+    final completer = ensurePermissionsCompleter;
     if (completer != null) {
       return completer.future;
     }
@@ -625,8 +624,7 @@ void main() {
       const Duration(seconds: 8),
     );
     expect(
-      TrackingModeProfiles.forMode(TrackingMode.active)
-          .sampleWatchdogThreshold,
+      TrackingModeProfiles.forMode(TrackingMode.active).sampleWatchdogThreshold,
       const Duration(seconds: 4),
     );
     expect(
@@ -652,8 +650,7 @@ void main() {
         _buildAcceptedPoint(offsetMs: 3000, sessionStart: startedAt),
       ],
     );
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -673,8 +670,7 @@ void main() {
 
   test('caps live route size during long recording sessions', () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -704,7 +700,8 @@ void main() {
     }
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    expect(controller.state.tracking.route.length, SessionConstants.maxLiveRoutePoints);
+    expect(controller.state.tracking.route.length,
+        SessionConstants.maxLiveRoutePoints);
     expect(repository.appendedPoints.length, sampleCount);
 
     controller.dispose();
@@ -713,8 +710,7 @@ void main() {
 
   test('blocks recording until all-time permission is granted', () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository(
+    final locationRepository = ControlledLocationRepository(
       permissionState: LocationPermissionState.grantedForegroundOnly,
     );
     final controller = RecordingController(
@@ -741,8 +737,7 @@ void main() {
     final repository = FakeSessionRepository(
       startLocalSessionCompleter: startGate,
     );
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -777,16 +772,15 @@ void main() {
     );
 
     await controller.openLocationPermissionSettings();
-    expect(
-        controller.state.permission.errorMessage, contains('Could not open app settings'));
+    expect(controller.state.permission.errorMessage,
+        contains('Could not open app settings'));
 
     controller.dispose();
   });
 
   test('finish does not stay stuck when stream cancellation hangs', () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        HangingCancelLocationRepository();
+    final locationRepository = HangingCancelLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -822,8 +816,7 @@ void main() {
   test('pauses recording cleanly when permission is downgraded mid-session',
       () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -879,8 +872,7 @@ void main() {
   test('blocks recording when device location settings are not ready',
       () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository(
+    final locationRepository = ControlledLocationRepository(
       readinessError: 'Enable high-accuracy location before recording.',
     );
     final controller = RecordingController(
@@ -904,8 +896,7 @@ void main() {
 
   test('defers background sync while a ride is actively recording', () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -934,8 +925,7 @@ void main() {
       () async {
     final repository = FakeSessionRepository();
     repository.syncSessionThrowIds.add(12);
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -952,8 +942,8 @@ void main() {
     expect(repository.listPendingSyncSessionsCalls, greaterThanOrEqualTo(1));
     expect(repository.syncSessionCalls, 3);
     expect(repository.syncedSessionIds, <int>[11, 12, 13]);
-    expect(
-        controller.state.sync.lastSyncMessage, 'Sync pass: 2/3 synced, 1 failed.');
+    expect(controller.state.sync.lastSyncMessage,
+        'Sync pass: 2/3 synced, 1 failed.');
 
     controller.dispose();
     await locationRepository.close();
@@ -961,10 +951,8 @@ void main() {
 
   test('continues recording after a transient local point persistence failure',
       () async {
-    final repository =
-        FlakyPersistenceSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
+    final repository = FlakyPersistenceSessionRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -1033,8 +1021,7 @@ void main() {
 
   test('watchdog waits for delayed initial sample before restarting', () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,
@@ -1089,8 +1076,7 @@ void main() {
       'ignores a queued reconnect from a finished session after a new recording starts',
       () async {
     final repository = FakeSessionRepository();
-    final locationRepository =
-        ControlledLocationRepository();
+    final locationRepository = ControlledLocationRepository();
     final controller = RecordingController(
       sessionRepository: repository,
       locationTrackingRepository: locationRepository,

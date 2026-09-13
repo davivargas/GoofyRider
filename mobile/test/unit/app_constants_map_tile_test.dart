@@ -4,8 +4,7 @@ import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 void main() {
   group('AppConstants.resolveMapTileProviderConfig', () {
     test('returns Mapbox config when both defines are present', () {
-      final config =
-          AppConstants.resolveMapTileProviderConfig(
+      final config = AppConstants.resolveMapTileProviderConfig(
         styleId: 'mapbox/outdoors-v12',
         accessToken: 'pk.test-token',
         isReleaseBuild: false,
@@ -26,11 +25,9 @@ void main() {
       );
     });
 
-    test(
-        'returns dev fallback in debug build when Mapbox defines are absent',
+    test('returns dev fallback in debug build when Mapbox defines are absent',
         () {
-      final config =
-          AppConstants.resolveMapTileProviderConfig(
+      final config = AppConstants.resolveMapTileProviderConfig(
         styleId: '',
         accessToken: '',
         isReleaseBuild: false,

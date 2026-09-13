@@ -93,8 +93,7 @@ void main() {
     );
   }
 
-  testWidgets(
-      'detail favorite toggle updates to app bar filled amber heart',
+  testWidgets('detail favorite toggle updates to app bar filled amber heart',
       (WidgetTester tester) async {
     final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));
@@ -116,8 +115,7 @@ void main() {
     expect(icon.color, AppTokens.dark.voltText);
   });
 
-  testWidgets(
-      'detail favorite toggle updates back to app bar border heart',
+  testWidgets('detail favorite toggle updates back to app bar border heart',
       (WidgetTester tester) async {
     final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));

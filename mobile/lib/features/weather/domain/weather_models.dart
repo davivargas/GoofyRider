@@ -21,9 +21,8 @@ class ResortWeather {
   }) {
     final current =
         (json['current'] as Map<String, dynamic>? ?? <String, dynamic>{});
-    final forecast =
-        (json['forecast_summary'] as Map<String, dynamic>? ??
-            <String, dynamic>{});
+    final forecast = (json['forecast_summary'] as Map<String, dynamic>? ??
+        <String, dynamic>{});
 
     return ResortWeather(
       resortId: json['resort_id'] as String,

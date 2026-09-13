@@ -251,8 +251,7 @@ class MotionStateDetector {
     if (_lastStableActivityType != SessionActivityType.descent) {
       return SessionActivityType.idle;
     }
-    final stopDurationS =
-        sampleTimeUtc.difference(_stoppedSinceUtc!).inSeconds;
+    final stopDurationS = sampleTimeUtc.difference(_stoppedSinceUtc!).inSeconds;
     if (stopDurationS >= SessionConstants.fallMaxStopDurationSeconds) {
       return SessionActivityType.idle;
     }

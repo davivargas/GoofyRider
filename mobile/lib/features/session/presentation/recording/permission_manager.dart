@@ -37,8 +37,7 @@ class PermissionManager {
     required Future<void> Function(LocationPermissionState) onPermissionLoss,
     required Future<void> Function() refreshGpsSignal,
   }) async {
-    final permission =
-        await _locationTrackingRepository.checkPermissions();
+    final permission = await _locationTrackingRepository.checkPermissions();
     if (_readState().phase == RecordScreenPhase.recording &&
         permission != LocationPermissionState.granted) {
       await onPermissionLoss(permission);
@@ -48,10 +47,10 @@ class PermissionManager {
     _writeState(
       _readState().copyWith(
         permission: _readState().permission.copyWith(
-          permissionState: permission,
-          clearError: permission == LocationPermissionState.granted,
-          errorMessage: permissionMessage(permission),
-        ),
+              permissionState: permission,
+              clearError: permission == LocationPermissionState.granted,
+              errorMessage: permissionMessage(permission),
+            ),
       ),
     );
     await refreshGpsSignal();
@@ -80,8 +79,7 @@ class PermissionManager {
         ),
       );
 
-      final permission =
-          await _locationTrackingRepository.ensurePermissions();
+      final permission = await _locationTrackingRepository.ensurePermissions();
 
       if (previousPhase == RecordScreenPhase.recording &&
           permission != LocationPermissionState.granted) {
@@ -102,10 +100,10 @@ class PermissionManager {
         _readState().copyWith(
           phase: nextPhase,
           permission: _readState().permission.copyWith(
-            permissionState: permission,
-            clearError: permission == LocationPermissionState.granted,
-            errorMessage: permissionMessage(permission),
-          ),
+                permissionState: permission,
+                clearError: permission == LocationPermissionState.granted,
+                errorMessage: permissionMessage(permission),
+              ),
         ),
       );
       await refreshGpsSignal();
@@ -120,22 +118,21 @@ class PermissionManager {
       _writeState(
         _readState().copyWith(
           permission: _readState().permission.copyWith(
-            errorMessage: _openSettingsFailedMessage,
-          ),
+                errorMessage: _openSettingsFailedMessage,
+              ),
         ),
       );
     }
   }
 
   Future<void> openLocationServiceSettings() async {
-    final opened =
-        await _locationTrackingRepository.openLocationSettings();
+    final opened = await _locationTrackingRepository.openLocationSettings();
     if (!opened) {
       _writeState(
         _readState().copyWith(
           permission: _readState().permission.copyWith(
-            errorMessage: _openLocationSettingsFailedMessage,
-          ),
+                errorMessage: _openLocationSettingsFailedMessage,
+              ),
         ),
       );
     }

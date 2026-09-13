@@ -36,7 +36,8 @@ class FakeLocationRepository implements LocationTrackingRepository {
   Future<bool> openLocationSettings() async => true;
 
   @override
-  Stream<LocationSample> watchPosition() => const Stream<LocationSample>.empty();
+  Stream<LocationSample> watchPosition() =>
+      const Stream<LocationSample>.empty();
 
   @override
   Future<void> setTrackingMode(TrackingMode mode) async {}
@@ -51,7 +52,8 @@ class FakeSessionRepository implements SessionRepository {
   final List<LocalRideSession> sessions;
 
   @override
-  Future<void> appendLocationPoint(int localSessionId, NewSessionPoint point) async {}
+  Future<void> appendLocationPoint(
+      int localSessionId, NewSessionPoint point) async {}
 
   @override
   Future<SessionStats> computeSessionStats(int localSessionId) async =>
@@ -86,7 +88,8 @@ class FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async => sessions;
+  Future<List<LocalRideSession>> listLocalAndRemoteSessionHistory() async =>
+      sessions;
 
   @override
   Future<List<LocalRideSession>> listPendingSyncSessions() async => sessions;
@@ -167,8 +170,7 @@ void main() {
   testWidgets('history screen renders season header and resolved resort label',
       (WidgetTester tester) async {
     final session = buildSession();
-    final repository =
-        FakeSessionRepository(<LocalRideSession>[session]);
+    final repository = FakeSessionRepository(<LocalRideSession>[session]);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -213,8 +215,7 @@ void main() {
       'history screen keeps sync state visible and no per-card overflow actions',
       (WidgetTester tester) async {
     final session = buildSession();
-    final repository =
-        FakeSessionRepository(<LocalRideSession>[session]);
+    final repository = FakeSessionRepository(<LocalRideSession>[session]);
 
     await tester.pumpWidget(
       ProviderScope(

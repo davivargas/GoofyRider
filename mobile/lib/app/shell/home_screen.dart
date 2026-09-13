@@ -41,14 +41,20 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
-          await ref.read(recordingControllerProvider.notifier).retryPendingSyncs();
+          await ref
+              .read(recordingControllerProvider.notifier)
+              .retryPendingSyncs();
           ref.invalidate(favoriteResortsProvider);
           ref.invalidate(historyProvider);
           ref.invalidate(unsyncedSessionCountProvider);
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 18, 24, AppTabBar.bottomClearance(context) + 24),
+          padding: EdgeInsets.fromLTRB(
+              24,
+              MediaQuery.paddingOf(context).top + 18,
+              24,
+              AppTabBar.bottomClearance(context) + 24),
           children: <Widget>[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -59,8 +65,11 @@ class HomeScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 26),
             history.when(
-              loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
-              error: (Object error, StackTrace _) => SurfaceCard(child: Text('Unable to load history: $error')),
+              loading: () => const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator())),
+              error: (Object error, StackTrace _) =>
+                  SurfaceCard(child: Text('Unable to load history: $error')),
               data: (List<LocalRideSession> sessions) => _SeasonHero(
                 sessions: sessions,
                 distanceUnit: distanceUnit,
@@ -102,33 +111,47 @@ class HomeScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const MonoLabel('No sessions yet', size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                        const MonoLabel('No sessions yet',
+                            size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
                         const SizedBox(height: 10),
-                        Text('Ready for your next run?', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Ready for your next run?',
+                            style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 14),
-                        VoltButton(label: 'Start recording', onPressed: () => context.go(RoutePaths.record)),
+                        VoltButton(
+                            label: 'Start recording',
+                            onPressed: () => context.go(RoutePaths.record)),
                       ],
                     ),
                   );
                 }
                 final latest = sessions.reduce(
-                  (LocalRideSession a, LocalRideSession b) => a.startedAt.isAfter(b.startedAt) ? a : b,
+                  (LocalRideSession a, LocalRideSession b) =>
+                      a.startedAt.isAfter(b.startedAt) ? a : b,
                 );
-                return _LastSessionCard(session: latest, distanceUnit: distanceUnit, speedUnit: speedUnit);
+                return _LastSessionCard(
+                    session: latest,
+                    distanceUnit: distanceUnit,
+                    speedUnit: speedUnit);
               },
             ),
             const SizedBox(height: 26),
             const MonoLabel('Your mountains', size: 9, letterSpacing: 1.8),
             const SizedBox(height: 12),
             favorites.when(
-              loading: () => const SizedBox(height: 110, child: Center(child: CircularProgressIndicator())),
-              error: (Object error, StackTrace _) => SurfaceCard(child: Text('Unable to load favorites: $error')),
+              loading: () => const SizedBox(
+                  height: 110,
+                  child: Center(child: CircularProgressIndicator())),
+              error: (Object error, StackTrace _) =>
+                  SurfaceCard(child: Text('Unable to load favorites: $error')),
               data: (List<ResortSummary> resorts) {
                 if (resorts.isEmpty) {
                   return SurfaceCard(
                     child: Text(
                       'No favorites yet. Add some from the Resorts tab.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: t.textSecondary),
                     ),
                   );
                 }
@@ -153,7 +176,10 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _SeasonHero extends StatelessWidget {
-  const _SeasonHero({required this.sessions, required this.distanceUnit, required this.speedUnit});
+  const _SeasonHero(
+      {required this.sessions,
+      required this.distanceUnit,
+      required this.speedUnit});
 
   final List<LocalRideSession> sessions;
   final DistanceUnit distanceUnit;
@@ -162,11 +188,16 @@ class _SeasonHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = buildSeasonSummary(sessions, now: DateTime.now());
-    final vert = summary.totalVertM > 0 ? distanceUnit.convertFromMeters(summary.totalVertM).round().toString() : '--';
+    final vert = summary.totalVertM > 0
+        ? distanceUnit.convertFromMeters(summary.totalVertM).round().toString()
+        : '--';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        MonoLabel('Season ${shortSeasonLabel(summary.label)} · ${summary.daysRidden} days ridden', size: 9, letterSpacing: 1.8),
+        MonoLabel(
+            'Season ${shortSeasonLabel(summary.label)} · ${summary.daysRidden} days ridden',
+            size: 9,
+            letterSpacing: 1.8),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -174,7 +205,8 @@ class _SeasonHero extends StatelessWidget {
           children: <Widget>[
             Text(vert, style: Theme.of(context).textTheme.displayLarge),
             const SizedBox(width: 10),
-            MonoLabel('${distanceUnit.shortLabel} vert', size: 10, tone: MonoTone.volt, letterSpacing: 1.6),
+            MonoLabel('${distanceUnit.shortLabel} vert',
+                size: 10, tone: MonoTone.volt, letterSpacing: 1.6),
           ],
         ),
         const SizedBox(height: 18),
@@ -182,10 +214,24 @@ class _SeasonHero extends StatelessWidget {
           spacing: 26,
           runSpacing: 14,
           children: <Widget>[
-            StatBlock(value: speedUnit.convertFromMetersPerSecond(summary.topSpeedMps).toStringAsFixed(1), label: 'Top ${speedUnit.shortLabel}', size: StatSize.small),
-            StatBlock(value: _kilometers(summary.totalDistanceM, distanceUnit), label: _distanceLabel(distanceUnit), size: StatSize.small),
-            StatBlock(value: '${summary.sessionCount}', label: 'Sessions', size: StatSize.small),
-            StatBlock(value: formatSecondsAsDuration(summary.rideTimeS), label: 'Ride time', size: StatSize.small),
+            StatBlock(
+                value: speedUnit
+                    .convertFromMetersPerSecond(summary.topSpeedMps)
+                    .toStringAsFixed(1),
+                label: 'Top ${speedUnit.shortLabel}',
+                size: StatSize.small),
+            StatBlock(
+                value: _kilometers(summary.totalDistanceM, distanceUnit),
+                label: _distanceLabel(distanceUnit),
+                size: StatSize.small),
+            StatBlock(
+                value: '${summary.sessionCount}',
+                label: 'Sessions',
+                size: StatSize.small),
+            StatBlock(
+                value: formatSecondsAsDuration(summary.rideTimeS),
+                label: 'Ride time',
+                size: StatSize.small),
           ],
         ),
       ],
@@ -200,10 +246,14 @@ String _kilometers(double meters, DistanceUnit unit) {
   return (meters / 1000).toStringAsFixed(1);
 }
 
-String _distanceLabel(DistanceUnit unit) => unit == DistanceUnit.feet ? 'MI dist' : 'KM dist';
+String _distanceLabel(DistanceUnit unit) =>
+    unit == DistanceUnit.feet ? 'MI dist' : 'KM dist';
 
 class _LastSessionCard extends ConsumerWidget {
-  const _LastSessionCard({required this.session, required this.distanceUnit, required this.speedUnit});
+  const _LastSessionCard(
+      {required this.session,
+      required this.distanceUnit,
+      required this.speedUnit});
 
   final LocalRideSession session;
   final DistanceUnit distanceUnit;
@@ -215,7 +265,8 @@ class _LastSessionCard extends ConsumerWidget {
     return SurfaceCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       onTap: session.localId > 0
-          ? () => context.go(RoutePaths.sessionDetail.replaceAll(':sessionId', session.localId.toString()))
+          ? () => context.go(RoutePaths.sessionDetail
+              .replaceAll(':sessionId', session.localId.toString()))
           : null,
       child: Row(
         children: <Widget>[
@@ -231,7 +282,11 @@ class _LastSessionCard extends ConsumerWidget {
                   uppercase: false,
                 ),
                 const SizedBox(height: 5),
-                Text(session.resortId ?? 'Unknown resort', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 18)),
+                Text(session.resortId ?? 'Unknown resort',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontSize: 18)),
                 const SizedBox(height: 5),
                 MonoLabel(
                   '${session.startedAt.toTimeLabel()} · ${formatSecondsAsDuration(session.activeDurationS)} ride · ${distanceUnit.formatFromMeters(session.distanceM)} · ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)} max',
@@ -243,7 +298,8 @@ class _LastSessionCard extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          StatusPill(synced ? '● Synced' : '○ Local only', variant: synced ? PillVariant.ice : PillVariant.muted),
+          StatusPill(synced ? '● Synced' : '○ Local only',
+              variant: synced ? PillVariant.ice : PillVariant.muted),
         ],
       ),
     );
@@ -266,13 +322,18 @@ class _FavoriteResortCard extends ConsumerWidget {
 
     return SurfaceCard(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      onTap: () => context.go(RoutePaths.resortDetail.replaceAll(':resortId', resort.id)),
+      onTap: () => context
+          .go(RoutePaths.resortDetail.replaceAll(':resortId', resort.id)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(resort.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+          Text(resort.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
-          MonoLabel('$temp · $conditions', size: 9, letterSpacing: 0.6, maxLines: 1),
+          MonoLabel('$temp · $conditions',
+              size: 9, letterSpacing: 0.6, maxLines: 1),
           if (snow != null) ...<Widget>[
             const SizedBox(height: 8),
             Container(
@@ -297,7 +358,8 @@ class _FavoriteResortCard extends ConsumerWidget {
   }
 }
 
-String _resolveConditionsText(AsyncValue<ResortWeather?> weather, ResortSummary resort) {
+String _resolveConditionsText(
+    AsyncValue<ResortWeather?> weather, ResortSummary resort) {
   final liveText = weather.valueOrNull?.conditionsText;
   if (liveText != null && liveText.trim().isNotEmpty) {
     return liveText;
@@ -309,7 +371,8 @@ String _resolveConditionsText(AsyncValue<ResortWeather?> weather, ResortSummary 
   return 'Conditions unavailable';
 }
 
-String _resolveTemperatureText(AsyncValue<ResortWeather?> weather, ResortSummary resort) {
+String _resolveTemperatureText(
+    AsyncValue<ResortWeather?> weather, ResortSummary resort) {
   final liveTemp = weather.valueOrNull?.tempC;
   if (liveTemp != null) {
     return '${liveTemp.toStringAsFixed(1)}°C';

@@ -23,8 +23,7 @@ class SessionHistorySeasonSection {
 List<SessionHistorySeasonSection> buildSessionHistorySections(
   List<SessionHistoryEntryViewModel> items,
 ) {
-  final grouped =
-      <String, List<SessionHistoryEntryViewModel>>{};
+  final grouped = <String, List<SessionHistoryEntryViewModel>>{};
   for (final item in items) {
     final label = seasonLabelForDate(item.session.startedAt);
     grouped
@@ -34,13 +33,11 @@ List<SessionHistorySeasonSection> buildSessionHistorySections(
 
   final sections = grouped.entries.map(
     (MapEntry<String, List<SessionHistoryEntryViewModel>> entry) {
-      final sortedItems =
-          List<SessionHistoryEntryViewModel>.from(entry.value)
-            ..sort(
-              (SessionHistoryEntryViewModel a,
-                      SessionHistoryEntryViewModel b) =>
-                  b.session.startedAt.compareTo(a.session.startedAt),
-            );
+      final sortedItems = List<SessionHistoryEntryViewModel>.from(entry.value)
+        ..sort(
+          (SessionHistoryEntryViewModel a, SessionHistoryEntryViewModel b) =>
+              b.session.startedAt.compareTo(a.session.startedAt),
+        );
       return SessionHistorySeasonSection(
         label: entry.key,
         items: sortedItems,

@@ -20,7 +20,8 @@ class _TimelineAnalysisCache {
     return _cache[_key(localSessionId, pointCount)];
   }
 
-  void put(int localSessionId, int pointCount, SessionTimelineAnalysis analysis) {
+  void put(
+      int localSessionId, int pointCount, SessionTimelineAnalysis analysis) {
     final key = _key(localSessionId, pointCount);
     if (_cache.containsKey(key)) return;
     if (_keys.length >= _maxEntries) {
@@ -166,9 +167,8 @@ SessionTimelineAnalysis analyzeSessionTimeline({
 
   // Layer-2 post-finish reclassification: idle segments bracketed by descent
   // on both sides get flipped to descent when they look like an on-slope stop.
-  final reclassifiedIdleDurationMs = applyIdleReclassification
-      ? _mergeMidRunIdleIntoDescent(builders)
-      : 0;
+  final reclassifiedIdleDurationMs =
+      applyIdleReclassification ? _mergeMidRunIdleIntoDescent(builders) : 0;
   final mergedBuilders = applyIdleReclassification
       ? _mergeAdjacentContiguousSameType(builders)
       : builders;
@@ -314,8 +314,7 @@ class _FallRuleState {
     if (_lastStableActivityType != SessionActivityType.descent) {
       return SessionActivityType.idle;
     }
-    final stopDurationS =
-        sampleTimeUtc.difference(_stoppedSinceUtc!).inSeconds;
+    final stopDurationS = sampleTimeUtc.difference(_stoppedSinceUtc!).inSeconds;
     if (stopDurationS >= SessionConstants.fallMaxStopDurationSeconds) {
       return SessionActivityType.idle;
     }

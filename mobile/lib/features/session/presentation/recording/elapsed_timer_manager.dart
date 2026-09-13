@@ -37,8 +37,7 @@ class ElapsedTimerManager {
   void pauseElapsedClock() {
     final activeStartedAt = activeSegmentStartedAtUtc;
     if (activeStartedAt != null) {
-      final delta =
-          DateTime.now().toUtc().difference(activeStartedAt);
+      final delta = DateTime.now().toUtc().difference(activeStartedAt);
       if (!delta.isNegative) {
         elapsedBeforeActive += delta;
       }
@@ -55,8 +54,7 @@ class ElapsedTimerManager {
       return elapsedBeforeActive;
     }
 
-    final activeDelta =
-        DateTime.now().toUtc().difference(activeStartedAt);
+    final activeDelta = DateTime.now().toUtc().difference(activeStartedAt);
     if (activeDelta.isNegative) {
       return elapsedBeforeActive;
     }

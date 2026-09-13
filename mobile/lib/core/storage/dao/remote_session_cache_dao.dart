@@ -86,8 +86,7 @@ class RemoteSessionCacheDao {
       ],
     );
 
-    final persisted =
-        await _db.sessions.getSessionByRemoteId(
+    final persisted = await _db.sessions.getSessionByRemoteId(
       ownerUserId: ownerUserId,
       remoteId: remoteId,
     );

@@ -16,9 +16,15 @@ class AppEmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
+            Text(title,
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            MonoLabel(subtitle, size: 9, uppercase: false, letterSpacing: 0.4, textAlign: TextAlign.center),
+            MonoLabel(subtitle,
+                size: 9,
+                uppercase: false,
+                letterSpacing: 0.4,
+                textAlign: TextAlign.center),
           ],
         ),
       ),

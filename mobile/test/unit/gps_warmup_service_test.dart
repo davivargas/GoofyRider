@@ -40,7 +40,8 @@ class _FakeLocationRepository implements LocationTrackingRepository {
   Future<LocationSample?> getCurrentLocationSample() async => null;
 
   @override
-  Stream<LocationSample> watchPosition() => const Stream<LocationSample>.empty();
+  Stream<LocationSample> watchPosition() =>
+      const Stream<LocationSample>.empty();
 
   @override
   Future<void> setTrackingMode(TrackingMode mode) async {}
@@ -111,8 +112,7 @@ void main() {
       await service.dispose();
     });
 
-    test('onAppForeground is a no-op when permission is not granted',
-        () async {
+    test('onAppForeground is a no-op when permission is not granted', () async {
       final repo = _FakeLocationRepository(
         permission: LocationPermissionState.denied,
       );

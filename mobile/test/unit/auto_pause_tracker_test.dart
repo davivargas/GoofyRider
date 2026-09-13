@@ -10,8 +10,7 @@ void main() {
 
     test(
         'accumulates stillness and triggers auto-pause once 5 minutes of '
-        'low-speed samples have elapsed inside the drift radius',
-        () {
+        'low-speed samples have elapsed inside the drift radius', () {
       final tracker = AutoPauseTracker();
 
       // Minute 0 — first still sample anchors the window.
@@ -50,8 +49,7 @@ void main() {
 
     test(
         'a motion sample resets the stillness window so the tracker has to '
-        're-accumulate the full 5 minutes',
-        () {
+        're-accumulate the full 5 minutes', () {
       final tracker = AutoPauseTracker();
 
       tracker.observe(
@@ -65,8 +63,7 @@ void main() {
         sampleTimeUtc: start.add(const Duration(minutes: 2)),
         latitude: anchorLat,
         longitude: anchorLon,
-        speedMps:
-            SessionConstants.stoppedSpeedThresholdMetersPerSecond + 0.1,
+        speedMps: SessionConstants.stoppedSpeedThresholdMetersPerSecond + 0.1,
       );
       expect(moving.isStill, isFalse);
       expect(tracker.isTrackingStillness, isFalse);
@@ -90,8 +87,7 @@ void main() {
 
     test(
         'drifting past the max radius re-anchors the window instead of '
-        'accumulating stillness across the walked distance',
-        () {
+        'accumulating stillness across the walked distance', () {
       final tracker = AutoPauseTracker();
 
       tracker.observe(
@@ -124,8 +120,7 @@ void main() {
 
     test(
         'small drift inside the radius keeps accumulating stillness — '
-        'handheld GPS wander at a coffee break should still auto-pause',
-        () {
+        'handheld GPS wander at a coffee break should still auto-pause', () {
       final tracker = AutoPauseTracker();
 
       tracker.observe(
@@ -144,8 +139,7 @@ void main() {
       expect(trigger.triggered, isTrue);
     });
 
-    test('reset clears the stillness window so the next sample re-anchors',
-        () {
+    test('reset clears the stillness window so the next sample re-anchors', () {
       final tracker = AutoPauseTracker();
 
       tracker.observe(
@@ -172,8 +166,7 @@ void main() {
 
     test(
         'honors a custom threshold passed via the constructor so tests can '
-        'drive the trigger without burning 5 real minutes of sample data',
-        () {
+        'drive the trigger without burning 5 real minutes of sample data', () {
       final tracker = AutoPauseTracker(stillnessThresholdSeconds: 30);
 
       tracker.observe(

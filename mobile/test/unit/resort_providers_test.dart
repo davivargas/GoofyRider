@@ -40,8 +40,7 @@ class _FakeResortRepository implements ResortRepository {
     String? region,
   }) async {
     searchCalls++;
-    final items =
-        _resortsById.values.toList(growable: false);
+    final items = _resortsById.values.toList(growable: false);
     return ResortListResult(
       items: items,
       total: items.length,
@@ -57,8 +56,7 @@ class _FakeResortRepository implements ResortRepository {
     if (completer != null) {
       await completer.future;
     }
-    final updated =
-        resort.copyWith(isFavorite: !resort.isFavorite);
+    final updated = resort.copyWith(isFavorite: !resort.isFavorite);
     _resortsById[resort.id] = updated;
     return updated;
   }
@@ -92,8 +90,7 @@ void main() {
       'ResortsController.toggleFavorite patches list and invalidates favorites and detail providers',
       () async {
     final initial = _buildResort(isFavorite: false);
-    final repository =
-        _FakeResortRepository(resorts: <ResortSummary>[initial]);
+    final repository = _FakeResortRepository(resorts: <ResortSummary>[initial]);
     final container = ProviderContainer(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),
@@ -141,8 +138,7 @@ void main() {
       'ResortDetailController.toggleFavorite updates detail state, list state, and invalidates favorites',
       () async {
     final initial = _buildResort(isFavorite: false);
-    final repository =
-        _FakeResortRepository(resorts: <ResortSummary>[initial]);
+    final repository = _FakeResortRepository(resorts: <ResortSummary>[initial]);
     final container = ProviderContainer(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),
@@ -174,8 +170,7 @@ void main() {
         .toggleFavorite();
     await _flush();
 
-    final afterFavorites =
-        await container.read(favoriteResortsProvider.future);
+    final afterFavorites = await container.read(favoriteResortsProvider.future);
 
     expect(
       container
@@ -198,9 +193,8 @@ void main() {
       'ResortDetailController exposes in-flight toggle state while request runs',
       () async {
     final initial = _buildResort(isFavorite: false);
-    final repository =
-        _FakeResortRepository(resorts: <ResortSummary>[initial])
-          ..toggleCompleter = Completer<void>();
+    final repository = _FakeResortRepository(resorts: <ResortSummary>[initial])
+      ..toggleCompleter = Completer<void>();
     final container = ProviderContainer(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),

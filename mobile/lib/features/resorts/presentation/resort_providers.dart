@@ -86,8 +86,7 @@ class ResortsController extends StateNotifier<AsyncValue<ResortListResult>> {
     }
 
     var hasMatch = false;
-    final replaced =
-        current.items.map((ResortSummary item) {
+    final replaced = current.items.map((ResortSummary item) {
       if (item.id != updated.id) {
         return item;
       }
@@ -114,8 +113,7 @@ class ResortsController extends StateNotifier<AsyncValue<ResortListResult>> {
     final previous = state;
 
     try {
-      final updated =
-          await _repository.toggleFavoriteResort(resort);
+      final updated = await _repository.toggleFavoriteResort(resort);
       applyFavoriteUpdate(updated);
       _ref.invalidate(favoriteResortsProvider);
       _ref.invalidate(resortDetailControllerProvider(updated.id));
@@ -176,8 +174,7 @@ class ResortDetailController extends StateNotifier<AsyncValue<ResortSummary>> {
     _ref.read(resortDetailToggleInFlightProvider(_resortId).notifier).state =
         true;
     try {
-      final updated =
-          await _repository.toggleFavoriteResort(current);
+      final updated = await _repository.toggleFavoriteResort(current);
       state = AsyncValue.data(updated);
       _ref
           .read(resortsControllerProvider.notifier)

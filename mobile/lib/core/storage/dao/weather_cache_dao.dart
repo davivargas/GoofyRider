@@ -67,8 +67,7 @@ class WeatherCacheDao {
 
     return rows.map((QueryRow row) {
       final payloadJson = row.data['payload_json'] as String;
-      final payload =
-          jsonDecode(payloadJson) as Map<String, dynamic>;
+      final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
       return <String, dynamic>{
         'resort_id': row.data['resort_id'],
         'cached_fetched_at': row.data['fetched_at'],

@@ -53,8 +53,8 @@ class BackgroundSyncManager {
         _writeState(
           _readState().copyWith(
             sync: _readState().sync.copyWith(
-              lastSyncMessage: 'Sync deferred until recording finishes.',
-            ),
+                  lastSyncMessage: 'Sync deferred until recording finishes.',
+                ),
           ),
         );
       }
@@ -80,15 +80,13 @@ class BackgroundSyncManager {
     _backgroundSyncInFlight = true;
     _backgroundSyncCycleCompleter = Completer<void>();
     try {
-      final pending =
-          await _sessionRepository.listPendingSyncSessions();
+      final pending = await _sessionRepository.listPendingSyncSessions();
 
       var syncedCount = 0;
       var failedCount = 0;
       for (final session in pending) {
         try {
-          final result =
-              await _sessionRepository.syncSession(session.localId);
+          final result = await _sessionRepository.syncSession(session.localId);
           if (result.state == LocalSessionState.synced) {
             syncedCount += 1;
           } else if (result.state == LocalSessionState.syncFailed) {
@@ -107,15 +105,15 @@ class BackgroundSyncManager {
       _writeState(
         _readState().copyWith(
           sync: _readState().sync.copyWith(
-            historyRevision: _readState().sync.historyRevision + 1,
-            lastSyncMessage: showDebugStatus
-                ? _syncDebugMessage(
-                    totalCount: pending.length,
-                    syncedCount: syncedCount,
-                    failedCount: failedCount,
-                  )
-                : _readState().sync.lastSyncMessage,
-          ),
+                historyRevision: _readState().sync.historyRevision + 1,
+                lastSyncMessage: showDebugStatus
+                    ? _syncDebugMessage(
+                        totalCount: pending.length,
+                        syncedCount: syncedCount,
+                        failedCount: failedCount,
+                      )
+                    : _readState().sync.lastSyncMessage,
+              ),
         ),
       );
     } catch (_) {
@@ -123,8 +121,8 @@ class BackgroundSyncManager {
         _writeState(
           _readState().copyWith(
             sync: _readState().sync.copyWith(
-              lastSyncMessage: 'Sync pass failed.',
-            ),
+                  lastSyncMessage: 'Sync pass failed.',
+                ),
           ),
         );
       }

@@ -26,7 +26,13 @@ class AppTabBar extends StatelessWidget {
   /// How far the record puck protrudes above the visible bar.
   static const double puckOverhang = 22;
 
-  static const List<String> labels = <String>['HOME', 'RESORTS', 'RECORD', 'SEASONS', 'PROFILE'];
+  static const List<String> labels = <String>[
+    'HOME',
+    'RESORTS',
+    'RECORD',
+    'SEASONS',
+    'PROFILE'
+  ];
 
   /// Distance from the bottom of a shell screen's body to the top edge of the
   /// visible bar.
@@ -37,8 +43,11 @@ class AppTabBar extends StatelessWidget {
   /// transparent puck strip is subtracted. Outside the shell (no bar) this is 0.
   static double bottomClearance(BuildContext context) {
     final double padding = MediaQuery.paddingOf(context).bottom;
-    return padding <= 0 ? 0 : (padding - puckOverhang).clamp(0, double.infinity);
+    return padding <= 0
+        ? 0
+        : (padding - puckOverhang).clamp(0, double.infinity);
   }
+
   static const List<IconData> _icons = <IconData>[
     Icons.home_outlined,
     Icons.landscape_outlined,
@@ -82,7 +91,8 @@ class AppTabBar extends StatelessWidget {
             right: 0,
             bottom: 0,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(6, puckOverhang + 10, 6, 12 + bottomInset),
+              padding: EdgeInsets.fromLTRB(
+                  6, puckOverhang + 10, 6, 12 + bottomInset),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: List<Widget>.generate(labels.length, (int index) {
@@ -122,14 +132,18 @@ class AppTabBar extends StatelessWidget {
                     color: t.volt,
                     shape: BoxShape.circle,
                     boxShadow: <BoxShadow>[
-                      BoxShadow(color: t.volt.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 8)),
+                      BoxShadow(
+                          color: t.volt.withValues(alpha: 0.35),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8)),
                       BoxShadow(color: t.barBg, spreadRadius: 5),
                     ],
                   ),
                   child: Container(
                     width: 16,
                     height: 16,
-                    decoration: BoxDecoration(color: t.voltInk, shape: BoxShape.circle),
+                    decoration:
+                        BoxDecoration(color: t.voltInk, shape: BoxShape.circle),
                   ),
                 ),
               ),
@@ -138,7 +152,8 @@ class AppTabBar extends StatelessWidget {
         ),
       );
     } else {
-      glyphArea = SizedBox(height: 22, child: Icon(_icons[index], size: 22, color: color));
+      glyphArea = SizedBox(
+          height: 22, child: Icon(_icons[index], size: 22, color: color));
     }
     return Semantics(
       button: true,
@@ -152,7 +167,8 @@ class AppTabBar extends StatelessWidget {
           children: <Widget>[
             glyphArea,
             const SizedBox(height: 5),
-            MonoLabel(labels[index], size: 8, weight: FontWeight.w600, color: color),
+            MonoLabel(labels[index],
+                size: 8, weight: FontWeight.w600, color: color),
             const SizedBox(height: 5),
             Container(
               key: ValueKey<String>('tab-dot-$index'),

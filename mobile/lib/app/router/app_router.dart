@@ -32,8 +32,8 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
     refreshListenable: refresh,
     redirect: (BuildContext context, GoRouterState state) {
       final authState = ref.read(authControllerProvider);
-      final isAuthRoute =
-          state.matchedLocation == RoutePaths.login || state.matchedLocation == RoutePaths.register;
+      final isAuthRoute = state.matchedLocation == RoutePaths.login ||
+          state.matchedLocation == RoutePaths.register;
 
       if (authState.status == AuthStatus.unknown) {
         return isAuthRoute ? null : RoutePaths.login;
@@ -48,7 +48,8 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
       }
 
       final onboardingSeen = ref.read(locationOnboardingSeenProvider);
-      final isOnboarding = state.matchedLocation == RoutePaths.onboardingLocation;
+      final isOnboarding =
+          state.matchedLocation == RoutePaths.onboardingLocation;
       if (authState.status == AuthStatus.authenticated &&
           onboardingSeen == false &&
           !isOnboarding) {
@@ -63,15 +64,18 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
     routes: <RouteBase>[
       GoRoute(
         path: RoutePaths.onboardingLocation,
-        builder: (BuildContext context, GoRouterState state) => const LocationOnboardingScreen(),
+        builder: (BuildContext context, GoRouterState state) =>
+            const LocationOnboardingScreen(),
       ),
       GoRoute(
         path: RoutePaths.login,
-        builder: (BuildContext context, GoRouterState state) => const LoginScreen(),
+        builder: (BuildContext context, GoRouterState state) =>
+            const LoginScreen(),
       ),
       GoRoute(
         path: RoutePaths.register,
-        builder: (BuildContext context, GoRouterState state) => const RegisterScreen(),
+        builder: (BuildContext context, GoRouterState state) =>
+            const RegisterScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (
@@ -86,7 +90,8 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
             routes: <RouteBase>[
               GoRoute(
                 path: RoutePaths.home,
-                builder: (BuildContext context, GoRouterState state) => const HomeScreen(),
+                builder: (BuildContext context, GoRouterState state) =>
+                    const HomeScreen(),
               ),
             ],
           ),
@@ -94,7 +99,8 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
             routes: <RouteBase>[
               GoRoute(
                 path: RoutePaths.resorts,
-                builder: (BuildContext context, GoRouterState state) => const ResortsListScreen(),
+                builder: (BuildContext context, GoRouterState state) =>
+                    const ResortsListScreen(),
                 routes: <RouteBase>[
                   GoRoute(
                     path: 'detail/:resortId',
@@ -122,14 +128,16 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
             routes: <RouteBase>[
               GoRoute(
                 path: RoutePaths.history,
-                builder: (BuildContext context, GoRouterState state) => const HistoryScreen(),
+                builder: (BuildContext context, GoRouterState state) =>
+                    const HistoryScreen(),
                 routes: <RouteBase>[
                   GoRoute(
                     path: 'detail/:sessionId',
                     builder: (BuildContext context, GoRouterState state) {
                       final localSessionId =
                           int.parse(state.pathParameters['sessionId']!);
-                      return SessionDetailScreen(localSessionId: localSessionId);
+                      return SessionDetailScreen(
+                          localSessionId: localSessionId);
                     },
                   ),
                 ],
@@ -140,7 +148,8 @@ final appRouterProvider = Provider<GoRouter>((Ref ref) {
             routes: <RouteBase>[
               GoRoute(
                 path: RoutePaths.profile,
-                builder: (BuildContext context, GoRouterState state) => const ProfileScreen(),
+                builder: (BuildContext context, GoRouterState state) =>
+                    const ProfileScreen(),
               ),
             ],
           ),

@@ -74,8 +74,7 @@ class AutoPauseTracker {
       return const AutoPauseDecision.moving();
     }
 
-    final stillnessDurationS =
-        sampleTimeUtc.difference(startedAt).inSeconds;
+    final stillnessDurationS = sampleTimeUtc.difference(startedAt).inSeconds;
     return AutoPauseDecision.still(
       stillnessDurationS: stillnessDurationS,
       triggered: stillnessDurationS >= stillnessThresholdSeconds,

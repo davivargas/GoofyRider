@@ -43,7 +43,8 @@ void main() {
     expect(taps, 0);
   });
 
-  testWidgets('PillToggle reports selection changes', (WidgetTester tester) async {
+  testWidgets('PillToggle reports selection changes',
+      (WidgetTester tester) async {
     String? picked;
     await tester.pumpWidget(
       _host(
@@ -61,7 +62,8 @@ void main() {
     expect(picked, 'b');
   });
 
-  testWidgets('SegmentSwatch maps descent to volt', (WidgetTester tester) async {
+  testWidgets('SegmentSwatch maps descent to volt',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       _host(const SegmentSwatch(type: SessionActivityType.descent)),
     );

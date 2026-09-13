@@ -103,8 +103,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
     }
 
     final permission = await Geolocator.checkPermission();
-    final permissionState =
-        _toPermissionState(permission);
+    final permissionState = _toPermissionState(permission);
     if (permissionState != LocationPermissionState.granted &&
         permissionState != LocationPermissionState.grantedForegroundOnly) {
       return null;

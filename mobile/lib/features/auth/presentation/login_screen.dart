@@ -50,7 +50,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: <Widget>[
                         const Wordmark(size: 44),
                         const SizedBox(height: 12),
-                        const MonoLabel('Track every line.', size: 10, letterSpacing: 2.4),
+                        const MonoLabel('Track every line.',
+                            size: 10, letterSpacing: 2.4),
                         const SizedBox(height: 44),
                         TextFormField(
                           controller: _emailController,
@@ -70,7 +71,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         TextFormField(
                           controller: _passwordController,
                           obscureText: true,
-                          decoration: const InputDecoration(labelText: 'PASSWORD'),
+                          decoration:
+                              const InputDecoration(labelText: 'PASSWORD'),
                           validator: (String? value) {
                             if (value == null || value.isEmpty) {
                               return 'Password is required.';
@@ -184,5 +186,6 @@ class _DashedLinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DashedLinePainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(_DashedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

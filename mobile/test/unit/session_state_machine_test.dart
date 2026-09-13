@@ -6,31 +6,32 @@ void main() {
   const machine = SessionStateMachine();
 
   test('allows recording -> paused -> recording', () {
-    final paused =
-        machine.transition(LocalSessionState.recording, LocalSessionState.paused);
-    final resumed =
-        machine.transition(paused, LocalSessionState.recording);
+    final paused = machine.transition(
+        LocalSessionState.recording, LocalSessionState.paused);
+    final resumed = machine.transition(paused, LocalSessionState.recording);
 
     expect(paused, LocalSessionState.paused);
     expect(resumed, LocalSessionState.recording);
   });
 
   test('allows syncFailed -> syncing', () {
-    final syncing =
-        machine.transition(LocalSessionState.syncFailed, LocalSessionState.syncing);
+    final syncing = machine.transition(
+        LocalSessionState.syncFailed, LocalSessionState.syncing);
     expect(syncing, LocalSessionState.syncing);
   });
 
   test('rejects synced -> recording', () {
     expect(
-      () => machine.transition(LocalSessionState.synced, LocalSessionState.recording),
+      () => machine.transition(
+          LocalSessionState.synced, LocalSessionState.recording),
       throwsStateError,
     );
   });
 
   test('rejects locallyCompleted -> recording', () {
     expect(
-      () => machine.transition(LocalSessionState.locallyCompleted, LocalSessionState.recording),
+      () => machine.transition(
+          LocalSessionState.locallyCompleted, LocalSessionState.recording),
       throwsStateError,
     );
   });

@@ -31,35 +31,62 @@ class AppTheme {
     final mono = TextStyle(fontFamily: AppFonts.mono, color: t.textSecondary);
     final textTheme = TextTheme(
       displayLarge: archivo.copyWith(
-          fontSize: 68, fontWeight: FontWeight.w800, letterSpacing: -2, height: 0.95),
+          fontSize: 68,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -2,
+          height: 0.95),
       displayMedium: archivo.copyWith(
-          fontSize: 58, fontWeight: FontWeight.w800, letterSpacing: -1.7, height: 0.95),
+          fontSize: 58,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -1.7,
+          height: 0.95),
       displaySmall: archivo.copyWith(
-          fontSize: 40, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, letterSpacing: -0.4),
-      headlineLarge: archivo.copyWith(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.7),
-      headlineMedium: archivo.copyWith(fontSize: 24, fontWeight: FontWeight.w700),
+          fontSize: 40,
+          fontWeight: FontWeight.w800,
+          fontStyle: FontStyle.italic,
+          letterSpacing: -0.4),
+      headlineLarge: archivo.copyWith(
+          fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.7),
+      headlineMedium:
+          archivo.copyWith(fontSize: 24, fontWeight: FontWeight.w700),
       headlineSmall: archivo.copyWith(
-          fontSize: 22, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic),
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          fontStyle: FontStyle.italic),
       titleLarge: archivo.copyWith(fontSize: 20, fontWeight: FontWeight.w800),
       titleMedium: archivo.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
       titleSmall: archivo.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-      bodyLarge: archivo.copyWith(fontSize: 15, fontWeight: FontWeight.w400, height: 1.5),
-      bodyMedium: archivo.copyWith(fontSize: 13, fontWeight: FontWeight.w400, height: 1.5),
-      bodySmall: archivo.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: t.textMuted),
+      bodyLarge: archivo.copyWith(
+          fontSize: 15, fontWeight: FontWeight.w400, height: 1.5),
+      bodyMedium: archivo.copyWith(
+          fontSize: 13, fontWeight: FontWeight.w400, height: 1.5),
+      bodySmall: archivo.copyWith(
+          fontSize: 11, fontWeight: FontWeight.w400, color: t.textMuted),
       labelLarge: mono.copyWith(
-          fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: t.text),
-      labelMedium: mono.copyWith(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.4),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
+          color: t.text),
+      labelMedium: mono.copyWith(
+          fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.4),
       labelSmall: mono.copyWith(
-          fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 1.1, color: t.textMuted),
+          fontSize: 8,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.1,
+          color: t.textMuted),
     );
 
-    final shape14 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    final shape14 =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
     OutlineInputBorder inputBorder(Color color) => OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: color),
         );
     final fieldLabel = mono.copyWith(
-        fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.7, color: t.textMuted);
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.7,
+        color: t.textMuted);
 
     return ThemeData(
       useMaterial3: true,
@@ -94,7 +121,8 @@ class AppTheme {
         hintStyle: fieldLabel,
         labelStyle: fieldLabel,
         floatingLabelStyle: fieldLabel.copyWith(color: t.voltText),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: inputBorder(t.line),
         enabledBorder: inputBorder(t.line),
         focusedBorder: inputBorder(t.voltText),
@@ -155,7 +183,8 @@ class AppTheme {
         shape: shape14,
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: t.volt),
-      listTileTheme: ListTileThemeData(textColor: t.text, iconColor: t.textSecondary),
+      listTileTheme:
+          ListTileThemeData(textColor: t.text, iconColor: t.textSecondary),
       chipTheme: ChipThemeData(
         backgroundColor: t.raised,
         selectedColor: t.volt,

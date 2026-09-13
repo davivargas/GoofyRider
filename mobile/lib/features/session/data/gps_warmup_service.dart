@@ -21,9 +21,11 @@ class GpsWarmupService {
   })  : _locationTrackingRepository = locationTrackingRepository,
         _logger = logger,
         _stopDebounce = stopDebounce,
-        _positionStreamFactory = positionStreamFactory ?? _defaultPositionStreamFactory;
+        _positionStreamFactory =
+            positionStreamFactory ?? _defaultPositionStreamFactory;
 
-  static Stream<Position> _defaultPositionStreamFactory(LocationSettings settings) {
+  static Stream<Position> _defaultPositionStreamFactory(
+      LocationSettings settings) {
     return Geolocator.getPositionStream(locationSettings: settings);
   }
 
@@ -35,7 +37,8 @@ class GpsWarmupService {
   final LocationTrackingRepository _locationTrackingRepository;
   final AppLogger _logger;
   final Duration _stopDebounce;
-  final Stream<Position> Function(LocationSettings settings) _positionStreamFactory;
+  final Stream<Position> Function(LocationSettings settings)
+      _positionStreamFactory;
 
   final StreamController<LocationSample> _samplesController =
       StreamController<LocationSample>.broadcast();
@@ -139,8 +142,7 @@ class GpsWarmupService {
   }
 
   Future<void> _start() async {
-    final permission =
-        await _locationTrackingRepository.checkPermissions();
+    final permission = await _locationTrackingRepository.checkPermissions();
     if (permission != LocationPermissionState.granted &&
         permission != LocationPermissionState.grantedForegroundOnly) {
       if (!_permissionDeniedLogged) {

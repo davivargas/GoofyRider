@@ -54,8 +54,7 @@ class ResortRepositoryImpl implements ResortRepository {
         isStale: false,
       );
     } on DioException {
-      final cached =
-          await _localDatabase.readCachedResorts(
+      final cached = await _localDatabase.readCachedResorts(
         ownerUserId: _currentUserIdOrNull,
       );
       final resorts = cached
@@ -84,13 +83,11 @@ class ResortRepositoryImpl implements ResortRepository {
       final payload = await _api.getResortDetail(resortId);
       final isFavorite = await _isFavoriteBestEffort(resortId);
 
-      final resort =
-          ResortSummary.fromJson(payload, isFavorite: isFavorite);
+      final resort = ResortSummary.fromJson(payload, isFavorite: isFavorite);
       await _cacheResortPayload(resort.id, resort.toJson());
       return (await _withCachedWeather(<ResortSummary>[resort])).first;
     } on DioException catch (exception) {
-      final cached =
-          await _localDatabase.readCachedResort(
+      final cached = await _localDatabase.readCachedResort(
         resortId,
         ownerUserId: _currentUserIdOrNull,
       );
@@ -109,8 +106,7 @@ class ResortRepositoryImpl implements ResortRepository {
       } else {
         await _api.addFavorite(resort.id);
       }
-      final updated =
-          resort.copyWith(isFavorite: !resort.isFavorite);
+      final updated = resort.copyWith(isFavorite: !resort.isFavorite);
       await _cacheResortPayload(updated.id, updated.toJson());
       return updated;
     } on DioException catch (exception) {
@@ -126,8 +122,7 @@ class ResortRepositoryImpl implements ResortRepository {
     }
 
     try {
-      final payload =
-          await _api.listFavoriteResorts();
+      final payload = await _api.listFavoriteResorts();
       final resorts = payload
           .map((Map<String, dynamic> json) =>
               ResortSummary.fromJson(json, isFavorite: true))
@@ -142,8 +137,7 @@ class ResortRepositoryImpl implements ResortRepository {
 
       return await _withCachedWeather(resorts);
     } on DioException {
-      final cached =
-          await _localDatabase.readCachedResorts(
+      final cached = await _localDatabase.readCachedResorts(
         ownerUserId: ownerUserId,
       );
       return cached
@@ -157,8 +151,7 @@ class ResortRepositoryImpl implements ResortRepository {
     Set<String> favoriteIds, {
     required String ownerUserId,
   }) async {
-    final cached =
-        await _localDatabase.readCachedResorts(
+    final cached = await _localDatabase.readCachedResorts(
       ownerUserId: ownerUserId,
     );
     for (final raw in cached) {
@@ -214,8 +207,7 @@ class ResortRepositoryImpl implements ResortRepository {
     final enriched = <ResortSummary>[];
 
     for (final resort in resorts) {
-      final weatherRaw =
-          await _localDatabase.readCachedWeather(resort.id);
+      final weatherRaw = await _localDatabase.readCachedWeather(resort.id);
       if (weatherRaw == null) {
         enriched.add(resort);
         continue;

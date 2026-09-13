@@ -472,16 +472,12 @@ void main() {
           motionState: 'stopped_idle',
           distanceDeltaM: 0,
         ),
-      for (int i = 10 + stopDurationSeconds;
-          i < 20 + stopDurationSeconds;
-          i++)
+      for (int i = 10 + stopDurationSeconds; i < 20 + stopDurationSeconds; i++)
         _point(
           start: start,
           offsetSeconds: i,
-          latitude: 49.00072 +
-              ((i - (9 + stopDurationSeconds)) * 0.00008),
-          longitude: -123.00072 -
-              ((i - (9 + stopDurationSeconds)) * 0.00008),
+          latitude: 49.00072 + ((i - (9 + stopDurationSeconds)) * 0.00008),
+          longitude: -123.00072 - ((i - (9 + stopDurationSeconds)) * 0.00008),
           altitudeM: 1782 - ((i - (9 + stopDurationSeconds)) * 2.0),
           motionState: 'active_descent',
           distanceDeltaM: 9,
@@ -529,16 +525,12 @@ void main() {
           motionState: 'stopped_idle',
           distanceDeltaM: 0,
         ),
-      for (int i = 10 + stopDurationSeconds;
-          i < 20 + stopDurationSeconds;
-          i++)
+      for (int i = 10 + stopDurationSeconds; i < 20 + stopDurationSeconds; i++)
         _point(
           start: start,
           offsetSeconds: i,
-          latitude: 49.00072 +
-              ((i - (9 + stopDurationSeconds)) * 0.00008),
-          longitude: -123.00072 -
-              ((i - (9 + stopDurationSeconds)) * 0.00008),
+          latitude: 49.00072 + ((i - (9 + stopDurationSeconds)) * 0.00008),
+          longitude: -123.00072 - ((i - (9 + stopDurationSeconds)) * 0.00008),
           altitudeM: 1782 - ((i - (9 + stopDurationSeconds)) * 2.0),
           motionState: 'active_descent',
           distanceDeltaM: 9,
@@ -626,10 +618,8 @@ void main() {
         _point(
           start: start,
           offsetSeconds: i,
-          latitude: 49.00072 +
-              ((i - (9 + stopSamples)) * 0.00003),
-          longitude: -123.00072 +
-              ((i - (9 + stopSamples)) * 0.00001),
+          latitude: 49.00072 + ((i - (9 + stopSamples)) * 0.00003),
+          longitude: -123.00072 + ((i - (9 + stopSamples)) * 0.00001),
           altitudeM: 1782 + ((i - (9 + stopSamples)) * 1.2),
           speedMps: 3.2,
           headingDeg: 30,
@@ -675,10 +665,8 @@ void main() {
         _point(
           start: start,
           offsetSeconds: i,
-          latitude: 49.00072 +
-              ((i - (9 + stopSamples)) * 0.00008),
-          longitude: -123.00072 -
-              ((i - (9 + stopSamples)) * 0.00008),
+          latitude: 49.00072 + ((i - (9 + stopSamples)) * 0.00008),
+          longitude: -123.00072 - ((i - (9 + stopSamples)) * 0.00008),
           altitudeM: 1734 - ((i - (9 + stopSamples)) * 2.0),
           motionState: 'active_descent',
           distanceDeltaM: 9,

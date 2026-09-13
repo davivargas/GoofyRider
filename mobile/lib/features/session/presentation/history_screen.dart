@@ -48,7 +48,8 @@ class HistoryScreen extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text('SEASONS', style: Theme.of(context).textTheme.headlineSmall),
+                  Text('SEASONS',
+                      style: Theme.of(context).textTheme.headlineSmall),
                   unsyncedCount.maybeWhen(
                     data: (int count) => count > 0
                         ? IconButton(
@@ -64,7 +65,8 @@ class HistoryScreen extends ConsumerWidget {
             ),
             Expanded(
               child: history.when(
-                loading: () => const AppLoadingView(label: 'Loading sessions...'),
+                loading: () =>
+                    const AppLoadingView(label: 'Loading sessions...'),
                 error: (Object error, StackTrace _) => AppErrorView(
                   message: error.toString(),
                   onRetry: () {
@@ -73,22 +75,37 @@ class HistoryScreen extends ConsumerWidget {
                   },
                 ),
                 data: (List<SessionHistorySeasonSection> sections) {
-                  final totalSessions = sections.fold<int>(0, (int c, SessionHistorySeasonSection s) => c + s.items.length);
+                  final totalSessions = sections.fold<int>(
+                      0,
+                      (int c, SessionHistorySeasonSection s) =>
+                          c + s.items.length);
                   if (totalSessions == 0) {
-                    return const AppEmptyView(title: 'No sessions yet', subtitle: 'Record your first run to start your logbook.');
+                    return const AppEmptyView(
+                        title: 'No sessions yet',
+                        subtitle:
+                            'Record your first run to start your logbook.');
                   }
                   return RefreshIndicator(
                     onRefresh: () async => _runSyncPass(ref),
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(24, 8, 24, AppTabBar.bottomClearance(context) + 24),
+                      padding: EdgeInsets.fromLTRB(
+                          24, 8, 24, AppTabBar.bottomClearance(context) + 24),
                       children: <Widget>[
-                        for (final SessionHistorySeasonSection section in sections) ...<Widget>[
-                          _SeasonHeader(section: section, distanceUnit: distanceUnit, speedUnit: speedUnit),
-                          for (final SessionHistoryEntryViewModel item in section.items)
+                        for (final SessionHistorySeasonSection section
+                            in sections) ...<Widget>[
+                          _SeasonHeader(
+                              section: section,
+                              distanceUnit: distanceUnit,
+                              speedUnit: speedUnit),
+                          for (final SessionHistoryEntryViewModel item
+                              in section.items)
                             Padding(
                               padding: const EdgeInsets.only(top: 10),
-                              child: _HistorySessionCard(item: item, speedUnit: speedUnit, distanceUnit: distanceUnit),
+                              child: _HistorySessionCard(
+                                  item: item,
+                                  speedUnit: speedUnit,
+                                  distanceUnit: distanceUnit),
                             ),
                         ],
                       ],
@@ -105,7 +122,10 @@ class HistoryScreen extends ConsumerWidget {
 }
 
 class _SeasonHeader extends StatelessWidget {
-  const _SeasonHeader({required this.section, required this.distanceUnit, required this.speedUnit});
+  const _SeasonHeader(
+      {required this.section,
+      required this.distanceUnit,
+      required this.speedUnit});
 
   final SessionHistorySeasonSection section;
   final DistanceUnit distanceUnit;
@@ -114,13 +134,22 @@ class _SeasonHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final sessions = section.items.map((SessionHistoryEntryViewModel i) => i.session).toList(growable: false);
-    final days = sessions.map((LocalRideSession s) {
-      final d = s.startedAt.toLocal();
-      return '${d.year}-${d.month}-${d.day}';
-    }).toSet().length;
-    final vert = sessions.fold<int>(0, (int a, LocalRideSession s) => a + (s.elevationLossM ?? 0));
-    final top = sessions.fold<double>(0, (double a, LocalRideSession s) => s.maxSpeedMps > a ? s.maxSpeedMps : a);
+    final sessions = section.items
+        .map((SessionHistoryEntryViewModel i) => i.session)
+        .toList(growable: false);
+    final days = sessions
+        .map((LocalRideSession s) {
+          final d = s.startedAt.toLocal();
+          return '${d.year}-${d.month}-${d.day}';
+        })
+        .toSet()
+        .length;
+    final vert = sessions.fold<int>(
+        0, (int a, LocalRideSession s) => a + (s.elevationLossM ?? 0));
+    final top = sessions.fold<double>(
+        0,
+        (double a, LocalRideSession s) =>
+            s.maxSpeedMps > a ? s.maxSpeedMps : a);
     return Padding(
       padding: const EdgeInsets.only(top: 20),
       child: Row(
@@ -152,7 +181,10 @@ class _SeasonHeader extends StatelessWidget {
 }
 
 class _HistorySessionCard extends StatelessWidget {
-  const _HistorySessionCard({required this.item, required this.speedUnit, required this.distanceUnit});
+  const _HistorySessionCard(
+      {required this.item,
+      required this.speedUnit,
+      required this.distanceUnit});
 
   final SessionHistoryEntryViewModel item;
   final SpeedUnit speedUnit;
@@ -174,7 +206,8 @@ class _HistorySessionCard extends StatelessWidget {
       radius: 16,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       onTap: session.localId > 0
-          ? () => context.go(RoutePaths.sessionDetail.replaceAll(':sessionId', session.localId.toString()))
+          ? () => context.go(RoutePaths.sessionDetail
+              .replaceAll(':sessionId', session.localId.toString()))
           : null,
       child: Row(
         children: <Widget>[
@@ -182,8 +215,13 @@ class _HistorySessionCard extends StatelessWidget {
             width: 44,
             child: Column(
               children: <Widget>[
-                Text('${local.day}', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 14)),
-                MonoLabel(DateFormat('MMM').format(local), size: 8, tone: MonoTone.muted, letterSpacing: 1),
+                Text('${local.day}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontSize: 14)),
+                MonoLabel(DateFormat('MMM').format(local),
+                    size: 8, tone: MonoTone.muted, letterSpacing: 1),
               ],
             ),
           ),
@@ -193,7 +231,10 @@ class _HistorySessionCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(item.resortLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+                Text(item.resortLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 4),
                 MonoLabel(
                   '${formatSecondsAsDuration(session.activeDurationS)} · ${distanceUnit.formatFromMeters(session.distanceM)} · ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)} max',
@@ -205,7 +246,11 @@ class _HistorySessionCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          MonoLabel(syncLabel, size: 7, weight: FontWeight.w700, letterSpacing: 1.1, color: syncColor),
+          MonoLabel(syncLabel,
+              size: 7,
+              weight: FontWeight.w700,
+              letterSpacing: 1.1,
+              color: syncColor),
         ],
       ),
     );

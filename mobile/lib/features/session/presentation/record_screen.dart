@@ -709,8 +709,10 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           Expanded(
             child: Text(
               'Paused while stopped. Tap resume when you start moving again.',
-              style:
-                  Theme.of(context).textTheme.bodySmall?.copyWith(color: t.text),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: t.text),
             ),
           ),
         ],
@@ -847,13 +849,13 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     }
     _lastShownErrorMessage = error;
 
-    final controller =
-        ref.read(recordingControllerProvider.notifier);
+    final controller = ref.read(recordingControllerProvider.notifier);
     final canOpenPermissionSettings = state.permission.permissionState ==
             LocationPermissionState.grantedForegroundOnly ||
-        state.permission.permissionState == LocationPermissionState.deniedForever;
-    final canOpenLocationSettings =
-        state.permission.permissionState == LocationPermissionState.serviceDisabled;
+        state.permission.permissionState ==
+            LocationPermissionState.deniedForever;
+    final canOpenLocationSettings = state.permission.permissionState ==
+        LocationPermissionState.serviceDisabled;
 
     final SnackBarAction? action;
     if (canOpenPermissionSettings) {
@@ -890,8 +892,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     }
 
     _recoveryPromptVisible = true;
-    final controller =
-        ref.read(recordingControllerProvider.notifier);
+    final controller = ref.read(recordingControllerProvider.notifier);
 
     final selected = await showModalBottomSheet<String>(
       context: context,
@@ -931,8 +932,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
 
   void _startGpsSignalRefreshLoop() {
     _gpsSignalRefreshTicker?.cancel();
-    final controller =
-        ref.read(recordingControllerProvider.notifier);
+    final controller = ref.read(recordingControllerProvider.notifier);
     controller.refreshGpsSignal();
     _gpsSignalRefreshTicker = Timer.periodic(const Duration(seconds: 15), (_) {
       final state = ref.read(recordingControllerProvider);

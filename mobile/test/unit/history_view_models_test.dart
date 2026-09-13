@@ -46,9 +46,11 @@ void main() {
       ],
     );
 
-    expect(sections.map((SessionHistorySeasonSection section) => section.label), <String>[
-      '2025/2026',
-      '2024/2025',
-    ]);
+    expect(
+        sections.map((SessionHistorySeasonSection section) => section.label),
+        <String>[
+          '2025/2026',
+          '2024/2025',
+        ]);
   });
 }

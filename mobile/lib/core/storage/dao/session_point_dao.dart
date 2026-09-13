@@ -204,8 +204,7 @@ class SessionPointDao {
     int localSessionId, {
     bool onlyAccepted = false,
   }) async {
-    final acceptedClause =
-        onlyAccepted ? 'AND accepted_for_analytics = 1' : '';
+    final acceptedClause = onlyAccepted ? 'AND accepted_for_analytics = 1' : '';
     final rows = await _db.customSelect(
       '''
       SELECT *

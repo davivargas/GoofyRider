@@ -24,7 +24,8 @@ void main() {
     }
     await tester.tap(find.text('SEASONS'));
     expect(tapped, 3);
-    expect(find.byKey(const ValueKey<String>('tab-record-puck')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey<String>('tab-record-puck')), findsOneWidget);
     await tester.tap(find.text('RECORD'));
     expect(tapped, 2);
 
@@ -44,13 +45,16 @@ void main() {
         ),
       ),
     );
-    final dot = tester.widget<Container>(find.byKey(const ValueKey<String>('tab-dot-1')));
+    final dot = tester
+        .widget<Container>(find.byKey(const ValueKey<String>('tab-dot-1')));
     expect((dot.decoration! as BoxDecoration).color, AppTokens.dark.volt);
-    final idle = tester.widget<Container>(find.byKey(const ValueKey<String>('tab-dot-0')));
+    final idle = tester
+        .widget<Container>(find.byKey(const ValueKey<String>('tab-dot-0')));
     expect((idle.decoration! as BoxDecoration).color, Colors.transparent);
   });
 
-  testWidgets('bottomClearance measures to the visible bar top, not the puck strip',
+  testWidgets(
+      'bottomClearance measures to the visible bar top, not the puck strip',
       (WidgetTester tester) async {
     late double insideShell;
     late double outsideShell;

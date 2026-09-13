@@ -70,8 +70,7 @@ class SessionResortAttributionService {
     if (session.localId <= 0) {
       return null;
     }
-    final point =
-        await _localDatabase.latestAcceptedPoint(session.localId);
+    final point = await _localDatabase.latestAcceptedPoint(session.localId);
     if (point == null) {
       return null;
     }
@@ -85,8 +84,7 @@ class SessionResortAttributionService {
     List<LocalSessionPoint> points, {
     List<ResortSummary>? cachedResorts,
   }) async {
-    final resorts =
-        cachedResorts ?? await _readCachedResorts();
+    final resorts = cachedResorts ?? await _readCachedResorts();
     if (resorts.isEmpty) {
       return null;
     }
@@ -126,8 +124,8 @@ class SessionResortAttributionService {
   }
 
   Future<List<ResortSummary>> _readCachedResorts() async {
-    final cached =
-        await _localDatabase.readCachedResorts(ownerUserId: _currentUserIdOrNull);
+    final cached = await _localDatabase.readCachedResorts(
+        ownerUserId: _currentUserIdOrNull);
     return cached.map(_mapCachedResort).toList(growable: false);
   }
 

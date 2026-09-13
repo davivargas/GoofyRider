@@ -28,7 +28,9 @@ class _LocationOnboardingScreenState
     }
     setState(() => _busy = true);
     if (requestPermission) {
-      await ref.read(locationTrackingRepositoryProvider).ensureForegroundPermission();
+      await ref
+          .read(locationTrackingRepositoryProvider)
+          .ensureForegroundPermission();
     }
     await ref.read(locationOnboardingSeenProvider.notifier).markSeen();
     if (requestPermission) {
@@ -76,19 +78,24 @@ class _LocationOnboardingScreenState
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    const MonoLabel('STEP 1 OF 2', size: 9, tone: MonoTone.volt, letterSpacing: 1.8),
+                    const MonoLabel('STEP 1 OF 2',
+                        size: 9, tone: MonoTone.volt, letterSpacing: 1.8),
                     const SizedBox(height: 12),
                     Text(
                       'YOUR LINE,\nDRAWN LIVE.',
-                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                            fontStyle: FontStyle.italic,
-                            height: 1.05,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineLarge?.copyWith(
+                                fontStyle: FontStyle.italic,
+                                height: 1.05,
+                              ),
                     ),
                     const SizedBox(height: 14),
                     Text(
                       'Location powers speed, vertical and your route on the mountain. It stays on your device until you choose to sync.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: t.textSecondary),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: t.textSecondary),
                     ),
                     const SizedBox(height: 24),
                     VoltButton(
@@ -98,16 +105,28 @@ class _LocationOnboardingScreenState
                     ),
                     const SizedBox(height: 4),
                     TextButton(
-                      onPressed: _busy ? null : () => _finish(requestPermission: false),
+                      onPressed: _busy
+                          ? null
+                          : () => _finish(requestPermission: false),
                       child: const Text('NOT NOW'),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
-                        Container(width: 18, height: 4, decoration: BoxDecoration(color: t.volt, borderRadius: BorderRadius.circular(2))),
+                        Container(
+                            width: 18,
+                            height: 4,
+                            decoration: BoxDecoration(
+                                color: t.volt,
+                                borderRadius: BorderRadius.circular(2))),
                         const SizedBox(width: 6),
-                        Container(width: 8, height: 4, decoration: BoxDecoration(color: t.idle, borderRadius: BorderRadius.circular(2))),
+                        Container(
+                            width: 8,
+                            height: 4,
+                            decoration: BoxDecoration(
+                                color: t.idle,
+                                borderRadius: BorderRadius.circular(2))),
                       ],
                     ),
                   ],
@@ -149,8 +168,18 @@ class _LinePainter extends CustomPainter {
     );
     final end = Offset(150 * w, 460 * h);
     canvas.drawCircle(end, 8, Paint()..color = t.volt);
-    canvas.drawCircle(end, 18, Paint()..color = t.volt.withValues(alpha: 0.35)..style = PaintingStyle.stroke);
-    canvas.drawCircle(end, 30, Paint()..color = t.volt.withValues(alpha: 0.15)..style = PaintingStyle.stroke);
+    canvas.drawCircle(
+        end,
+        18,
+        Paint()
+          ..color = t.volt.withValues(alpha: 0.35)
+          ..style = PaintingStyle.stroke);
+    canvas.drawCircle(
+        end,
+        30,
+        Paint()
+          ..color = t.volt.withValues(alpha: 0.15)
+          ..style = PaintingStyle.stroke);
   }
 
   @override

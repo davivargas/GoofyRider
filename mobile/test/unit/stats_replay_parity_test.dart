@@ -95,8 +95,7 @@ _LiveRunResult _runLive(List<LocationSample> samples) {
 void main() {
   test(
       'stats-replay parity: live accumulator and replay segmentation agree '
-      'on per-bucket totals for a multi-phase trace',
-      () {
+      'on per-bucket totals for a multi-phase trace', () {
     final start = DateTime.utc(2026, 4, 1, 9, 0, 0);
     final samples = <LocationSample>[];
 
@@ -218,8 +217,7 @@ void main() {
 
   test(
       'stats-replay parity: long fall beyond 90 s threshold buckets live '
-      'and replay identically',
-      () {
+      'and replay identically', () {
     final start = DateTime.utc(2026, 4, 2, 9, 0, 0);
     final samples = <LocationSample>[];
 

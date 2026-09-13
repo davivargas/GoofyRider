@@ -18,8 +18,7 @@ class ResortCacheDao {
     Map<String, dynamic> payload, {
     String? ownerUserId,
   }) async {
-    final effectiveOwnerUserId =
-        _normalizeCachedResortOwnerUserId(ownerUserId);
+    final effectiveOwnerUserId = _normalizeCachedResortOwnerUserId(ownerUserId);
     final payloadToPersist = _prepareCachedResortPayload(
       payload,
       allowFavoriteState: effectiveOwnerUserId.isNotEmpty,
@@ -56,8 +55,7 @@ class ResortCacheDao {
     String resortId, {
     String? ownerUserId,
   }) async {
-    final effectiveOwnerUserId =
-        _normalizeCachedResortOwnerUserId(ownerUserId);
+    final effectiveOwnerUserId = _normalizeCachedResortOwnerUserId(ownerUserId);
     final List<QueryRow> rows;
     if (effectiveOwnerUserId.isEmpty) {
       rows = await _db.customSelect(
@@ -100,8 +98,7 @@ class ResortCacheDao {
   Future<List<Map<String, dynamic>>> readCachedResorts({
     String? ownerUserId,
   }) async {
-    final effectiveOwnerUserId =
-        _normalizeCachedResortOwnerUserId(ownerUserId);
+    final effectiveOwnerUserId = _normalizeCachedResortOwnerUserId(ownerUserId);
     final List<QueryRow> rows;
     if (effectiveOwnerUserId.isEmpty) {
       rows = await _db.customSelect(
@@ -130,15 +127,13 @@ class ResortCacheDao {
       ],
     ).get();
 
-    final deduped =
-        <String, Map<String, dynamic>>{};
+    final deduped = <String, Map<String, dynamic>>{};
     for (final row in rows) {
       final resortId = row.data['resort_id'] as String;
       deduped.putIfAbsent(resortId, () => _mapCachedResortRow(row));
     }
 
-    final cached =
-        deduped.values.toList(growable: false);
+    final cached = deduped.values.toList(growable: false);
     cached.sort((Map<String, dynamic> a, Map<String, dynamic> b) {
       final aFetchedAt = a['cached_fetched_at'] as String? ?? '';
       final bFetchedAt = b['cached_fetched_at'] as String? ?? '';
@@ -172,8 +167,7 @@ class ResortCacheDao {
   }
 
   Map<String, dynamic> _mapCachedResortRow(QueryRow row) {
-    final ownerUserId =
-        (row.data['owner_user_id'] as String? ?? '').trim();
+    final ownerUserId = (row.data['owner_user_id'] as String? ?? '').trim();
     final payload =
         jsonDecode(row.data['payload_json'] as String) as Map<String, dynamic>;
     if (ownerUserId.isEmpty) {

@@ -37,15 +37,13 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
 
   @override
   Future<LocationPermissionState> ensurePermissions() async {
-    final initialState =
-        await _permissionsDelegate.ensurePermissions();
+    final initialState = await _permissionsDelegate.ensurePermissions();
     if (initialState != LocationPermissionState.grantedForegroundOnly) {
       return initialState;
     }
 
     try {
-      final response =
-          await _controlChannel.invokeMapMethod<Object?, Object?>(
+      final response = await _controlChannel.invokeMapMethod<Object?, Object?>(
         'ensureBackgroundLocationPermission',
       );
       final status = response?['status'] as String?;
@@ -94,8 +92,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
   /// geolocator-based readiness path when the bridge is unavailable.
   Future<String?> checkRecordingReadiness() async {
     try {
-      final response =
-          await _controlChannel.invokeMapMethod<Object?, Object?>(
+      final response = await _controlChannel.invokeMapMethod<Object?, Object?>(
         'checkLocationSettings',
       );
       if (response?['ok'] == true) {

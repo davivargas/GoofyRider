@@ -134,8 +134,7 @@ class StatisticsAccumulator {
       durationS: activeDurationS,
       distanceM: _distanceMeters,
       maxSpeedMps: maxSpeedMps,
-      avgSpeedMps:
-          activeDurationS == 0 ? 0 : _distanceMeters / activeDurationS,
+      avgSpeedMps: activeDurationS == 0 ? 0 : _distanceMeters / activeDurationS,
       elevationGainM: elevationGainMeters == 0 ? null : elevationGainMeters,
       elevationLossM: elevationLossMeters == 0 ? null : elevationLossMeters,
       descentDurationS: _millisecondsToSeconds(_descentDurationMs),

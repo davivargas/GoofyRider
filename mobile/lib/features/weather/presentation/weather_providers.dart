@@ -19,5 +19,7 @@ final weatherRepositoryProvider = Provider<WeatherRepository>(
 );
 
 final resortWeatherProvider = FutureProvider.family<ResortWeather?, String>(
-  (ref, resortId) => ref.watch(weatherRepositoryProvider).refreshResortWeatherIfStale(resortId),
+  (ref, resortId) => ref
+      .watch(weatherRepositoryProvider)
+      .refreshResortWeatherIfStale(resortId),
 );

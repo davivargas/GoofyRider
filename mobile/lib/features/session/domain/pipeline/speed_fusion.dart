@@ -180,8 +180,7 @@ class SpeedFusion {
       return;
     }
 
-    _speedWindow
-        .add(SpeedWindowSample(time: sampleTime, speedMps: speedMps));
+    _speedWindow.add(SpeedWindowSample(time: sampleTime, speedMps: speedMps));
 
     while (_speedWindow.isNotEmpty &&
         sampleTime.difference(_speedWindow.first.time).inSeconds >
