@@ -316,6 +316,64 @@ void main() {
     verify(() => tokenStorage.clear()).called(1);
   });
 
+  test('restoreSession keeps the rotated refresh token after refreshing',
+      () async {
+    final authApi = MockAuthApi();
+    final tokenStorage = MockTokenStorage();
+    final repository = AuthRepositoryImpl(
+      authApi: authApi,
+      tokenStorage: tokenStorage,
+      deviceLabelProvider: FakeDeviceLabelProvider(),
+    );
+    const storedTokens = StoredTokens(
+      accessToken: 'access-0',
+      refreshToken: 'refresh-0',
+      userId: 'user-1',
+      email: 'test@example.com',
+      displayName: 'Tester',
+    );
+    final meRequest = RequestOptions(path: '/auth/me');
+    final expiredAccess = DioException(
+      requestOptions: meRequest,
+      response: Response<dynamic>(
+        requestOptions: meRequest,
+        statusCode: 401,
+      ),
+      type: DioExceptionType.badResponse,
+    );
+
+    when(() => tokenStorage.read()).thenAnswer((_) async => storedTokens);
+    when(() => tokenStorage.write(any<StoredTokens>()))
+        .thenAnswer((_) async {});
+    when(() => tokenStorage.clear()).thenAnswer((_) async {});
+    when(() => authApi.me(accessToken: 'access-0')).thenThrow(expiredAccess);
+    when(() => authApi.refresh(
+          refreshToken: 'refresh-0',
+          deviceLabel: any(named: 'deviceLabel'),
+        )).thenAnswer(
+      (_) async => const TokenPairResponse(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+      ),
+    );
+    when(() => authApi.me(accessToken: 'access-1'))
+        .thenAnswer((_) async => userProfileResponse());
+
+    final session = await repository.restoreSession();
+
+    expect(session, isNotNull);
+    expect(session!.accessToken, 'access-1');
+    expect(session.refreshToken, 'refresh-1');
+
+    final written =
+        verify(() => tokenStorage.write(captureAny<StoredTokens>())).captured;
+    expect(written, isNotEmpty);
+    final lastWrite = written.last as StoredTokens;
+    expect(lastWrite.refreshToken, 'refresh-1');
+    expect(lastWrite.accessToken, 'access-1');
+    verifyNever(() => tokenStorage.clear());
+  });
+
   test('login sends the resolved device label', () async {
     final authApi = MockAuthApi();
     final tokenStorage = MockTokenStorage();

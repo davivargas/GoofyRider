@@ -76,14 +76,14 @@ class AuthRepositoryImpl implements AuthRepository {
         return _sessionFromStoredTokens(storedTokens);
       }
 
-      final String? newAccessToken;
+      final TokenPairResponse? rotated;
       try {
-        newAccessToken = await refreshAccessToken(storedTokens.refreshToken);
+        rotated = await _refreshTokenPair(storedTokens.refreshToken);
       } on AuthFailure {
         await _tokenStorage.clear();
         return null;
       }
-      if (newAccessToken == null) {
+      if (rotated == null) {
         if (allowOfflineFallback) {
           return storedTokens.hasCachedUserProfile
               ? _sessionFromStoredTokens(storedTokens)
@@ -95,15 +95,16 @@ class AuthRepositoryImpl implements AuthRepository {
 
       try {
         return await _hydrateSessionFromAccessToken(
-          accessToken: newAccessToken,
-          refreshToken: storedTokens.refreshToken,
+          accessToken: rotated.accessToken,
+          refreshToken: rotated.refreshToken,
         );
       } on DioException catch (refreshException) {
         if (_isConnectivityIssue(refreshException) &&
             storedTokens.hasCachedUserProfile) {
           return _sessionFromStoredTokens(
             storedTokens,
-            accessToken: newAccessToken,
+            accessToken: rotated.accessToken,
+            refreshToken: rotated.refreshToken,
           );
         }
         if (_isConnectivityIssue(refreshException)) {
@@ -130,17 +131,26 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<String?> refreshAccessToken(String refreshToken) async {
+    return (await _refreshTokenPair(refreshToken))?.accessToken;
+  }
+
+  /// Rotates the refresh token and persists the new pair.
+  ///
+  /// The backend revokes the presented refresh token, so callers must keep the
+  /// returned pair and never re-send the token they passed in. Returns null on
+  /// a transient failure; throws [AuthFailure] when the backend rejects the
+  /// token with 401 (which also revokes the whole token family server-side).
+  Future<TokenPairResponse?> _refreshTokenPair(String refreshToken) async {
     try {
       final payload = await _authApi.refresh(
         refreshToken: refreshToken,
         deviceLabel: await _deviceLabelProvider.resolve(),
       );
-      final accessToken = payload.accessToken;
       final existing = await _tokenStorage.read();
       if (existing != null) {
         await _tokenStorage.write(
           StoredTokens(
-            accessToken: accessToken,
+            accessToken: payload.accessToken,
             refreshToken: payload.refreshToken,
             userId: existing.userId,
             email: existing.email,
@@ -148,7 +158,7 @@ class AuthRepositoryImpl implements AuthRepository {
           ),
         );
       }
-      return accessToken;
+      return payload;
     } on DioException catch (exception) {
       if (exception.response?.statusCode == 401) {
         throw const AuthFailure('Session expired. Please sign in again.');
@@ -235,10 +245,11 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthSession _sessionFromStoredTokens(
     StoredTokens tokens, {
     String? accessToken,
+    String? refreshToken,
   }) {
     return AuthSession(
       accessToken: accessToken ?? tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      refreshToken: refreshToken ?? tokens.refreshToken,
       user: UserProfile(
         id: tokens.userId!,
         email: tokens.email!,
