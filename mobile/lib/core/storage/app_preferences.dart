@@ -49,13 +49,19 @@ class AppPreferences {
     if (_store.getBool(_legacyMigratedKey) ?? false) {
       return;
     }
+    // Only latch the migrated flag when every legacy key was actually read;
+    // otherwise a transient secure-storage failure would drop the values for
+    // good.
+    var migrationComplete = true;
     for (final entry in _legacyKeys.entries) {
       String? value;
       try {
         value = await legacy.read(key: entry.key);
       } on PlatformException {
+        migrationComplete = false;
         continue;
       } on MissingPluginException {
+        migrationComplete = false;
         continue;
       }
       if (value == null) {
@@ -74,7 +80,9 @@ class AppPreferences {
         // Same.
       }
     }
-    await _store.setBool(_legacyMigratedKey, true);
+    if (migrationComplete) {
+      await _store.setBool(_legacyMigratedKey, true);
+    }
   }
 }
 

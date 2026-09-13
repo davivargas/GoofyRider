@@ -289,6 +289,17 @@ fingerprint rather than relying on source-level secrecy.
 1. Create an upload keystore and `android/key.properties` (see
    `android/key.properties.example`). Without it the release APK is signed
    with the debug key and must not be distributed.
+
+   ```bash
+   keytool -genkey -v -keystore ~/fall-line-upload.jks \
+     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+
+   Keep the `.jks` outside the repository and give `storeFile` an absolute
+   path (forward slashes work on Windows). `key.properties`, `*.jks`, and
+   `*.keystore` are gitignored, but a keystore stored outside the checkout
+   cannot be committed by accident at all.
+
 2. Build with obfuscation and keep the symbol files for crash decoding:
 
    ```bash

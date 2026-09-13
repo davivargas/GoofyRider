@@ -47,3 +47,9 @@ app.*.map.json
 # Local Mapbox credentials (see mapbox.json.example)
 mapbox.json
 !mapbox.json.example
+
+# Upload keystores and signing credentials (never commit these)
+*.jks
+*.keystore
+key.properties
+!android/key.properties.example

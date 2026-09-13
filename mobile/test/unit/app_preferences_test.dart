@@ -50,6 +50,32 @@ void main() {
     expect(prefs.getBool(AppPreferences.locationOnboardingSeenKey), isFalse);
   });
 
+  test('a failed legacy read leaves migration pending for the next load',
+      () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final failing = MockSecureStorage();
+    when(() => failing.read(key: any(named: 'key')))
+        .thenThrow(PlatformException(code: 'unavailable'));
+
+    final first = await AppPreferences.load(legacyStorage: failing);
+    expect(first.getString(AppPreferences.speedUnitKey), isNull);
+
+    final working = MockSecureStorage();
+    when(() => working.read(key: 'goofyrider_speed_unit'))
+        .thenAnswer((_) async => 'mph');
+    when(() => working.read(key: 'goofyrider_distance_unit'))
+        .thenAnswer((_) async => 'mi');
+    when(() => working.read(key: 'gps_warmup.foreground_permission_requested'))
+        .thenAnswer((_) async => 'true');
+    when(() => working.delete(key: any(named: 'key'))).thenAnswer((_) async {});
+
+    final second = await AppPreferences.load(legacyStorage: working);
+
+    expect(second.getString(AppPreferences.speedUnitKey), 'mph');
+    expect(second.getString(AppPreferences.distanceUnitKey), 'mi');
+    expect(second.getBool(AppPreferences.locationOnboardingSeenKey), isTrue);
+  });
+
   test('in-memory preferences round trip', () async {
     final prefs = AppPreferences.inMemory();
     await prefs.setString('k', 'v');

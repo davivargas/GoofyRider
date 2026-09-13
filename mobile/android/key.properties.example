@@ -2,7 +2,11 @@
 # Copy to android/key.properties (gitignored) and fill in your upload keystore.
 # Generate one with:
 #   keytool -genkey -v -keystore ~/fall-line-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
-storeFile=../../fall-line-upload.jks
+# Keep the keystore OUTSIDE this repository and point storeFile at an absolute
+# path. Forward slashes work on Windows too.
+#   Windows: storeFile=C:/Users/you/fall-line-upload.jks
+#   Linux/macOS: storeFile=/home/you/fall-line-upload.jks
+storeFile=C:/Users/you/fall-line-upload.jks
 storePassword=change-me
 keyAlias=upload
 keyPassword=change-me
