@@ -5,8 +5,10 @@ It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 
 ## Quickstart for reviewers
 
-This project bundles a pre-populated `goofyrider/.env` and
-`goofyrider/mobile/mapbox.json` so no keys need to be obtained.
+Copy `goofyrider/.env.example` to `goofyrider/.env` and
+`goofyrider/mobile/mapbox.json.example` to `goofyrider/mobile/mapbox.json`,
+then fill in your own SkiAPI key and Mapbox public token. Never commit or
+share the filled-in files.
 Follow the steps in order on a single machine.
 
 ### 1. Install prerequisites
@@ -66,8 +68,8 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1 --dart-define-fro
 
 - `10.0.2.2` is the special address Android emulators use to reach the
   host machine's `localhost`, which is where the backend is now listening.
-- `--dart-define-from-file=mapbox.json` passes the pre-populated Mapbox
-  tile credentials. Omit it and map tiles fall back to OpenStreetMap.
+- `--dart-define-from-file=mapbox.json` passes your Mapbox tile credentials.
+  Omit it and map tiles fall back to OpenStreetMap in debug builds only.
 - The first build can take several minutes while Gradle downloads the
   Android build tooling.
 
@@ -281,6 +283,23 @@ or `<your-username>/<your-style-id>` — Mapbox's style tile API rejects
 bare style ids. Mapbox public tokens (`pk.*`) are not truly secret; lock
 them down in the Mapbox dashboard with your Android package name and SHA-1
 fingerprint rather than relying on source-level secrecy.
+
+#### Release build
+
+1. Create an upload keystore and `android/key.properties` (see
+   `android/key.properties.example`). Without it the release APK is signed
+   with the debug key and must not be distributed.
+2. Build with obfuscation and keep the symbol files for crash decoding:
+
+   ```bash
+   flutter build apk --release --obfuscate --split-debug-info=build/symbols \
+     --dart-define=API_BASE_URL=https://<your-host>/v1 \
+     --dart-define-from-file=mapbox.json
+   ```
+
+Release builds only talk HTTPS (see
+`android/app/src/main/res/xml/network_security_config.xml`); plain
+`http://` base URLs work in debug builds only.
 
 ## Testing
 
