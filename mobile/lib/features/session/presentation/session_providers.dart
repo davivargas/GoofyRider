@@ -32,14 +32,13 @@ final locationTrackingRepositoryProvider = Provider<LocationTrackingRepository>(
 
 final gpsWarmupPermissionPreferenceProvider =
     Provider<GpsWarmupPermissionPreference>(
-  (ref) => GpsWarmupPermissionPreference(),
+  (ref) => GpsWarmupPermissionPreference(ref.watch(appPreferencesProvider)),
 );
 
 final gpsWarmupServiceProvider = Provider<GpsWarmupService>(
   (ref) {
     final service = GpsWarmupService(
-      locationTrackingRepository:
-          ref.watch(locationTrackingRepositoryProvider),
+      locationTrackingRepository: ref.watch(locationTrackingRepositoryProvider),
       logger: ref.watch(loggerProvider),
     );
     ref.onDispose(() {
@@ -92,12 +91,10 @@ final historyProvider = FutureProvider.autoDispose(
 
 final historySectionsProvider =
     FutureProvider.autoDispose<List<SessionHistorySeasonSection>>((ref) async {
-  final sessions =
-      await ref.watch(historyProvider.future);
+  final sessions = await ref.watch(historyProvider.future);
   final repository = ref.watch(sessionRepositoryProvider);
 
-  final items =
-      <SessionHistoryEntryViewModel>[];
+  final items = <SessionHistoryEntryViewModel>[];
   for (final session in sessions) {
     final resortLabel = await repository.resolveSessionResortLabel(
       session,
@@ -119,10 +116,12 @@ final sessionDetailProvider = FutureProvider.family.autoDispose(
 
 /// Human-readable resort label for a session detail, so screens never render a
 /// raw resort UUID.
-final sessionResortLabelProvider =
-    FutureProvider.family.autoDispose<String, int>((ref, int localSessionId) async {
+final sessionResortLabelProvider = FutureProvider.family
+    .autoDispose<String, int>((ref, int localSessionId) async {
   final detail = await ref.watch(sessionDetailProvider(localSessionId).future);
-  return ref.watch(sessionRepositoryProvider).resolveSessionResortLabel(detail.session);
+  return ref
+      .watch(sessionRepositoryProvider)
+      .resolveSessionResortLabel(detail.session);
 });
 
 final unsyncedSessionCountProvider = FutureProvider.autoDispose(

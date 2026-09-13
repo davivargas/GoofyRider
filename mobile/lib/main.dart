@@ -8,6 +8,7 @@ import 'app/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
 import 'core/logging/app_logger.dart';
 import 'core/providers.dart';
+import 'core/storage/app_preferences.dart';
 import 'core/storage/drift_local_database.dart';
 import 'core/widgets/app_error_view.dart';
 import 'features/auth/domain/auth_models.dart';
@@ -21,16 +22,21 @@ Future<void> main() async => runAppWith();
 
 Future<void> runAppWith({
   DatabaseLoader loader = DriftLocalDatabase.open,
+  Future<AppPreferences> Function() preferencesLoader = AppPreferences.load,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     final database = await loader();
-    final activeMapTileProviderConfig = AppConstants.activeMapTileProviderConfig;
+    final preferences = await preferencesLoader();
+    final activeMapTileProviderConfig =
+        AppConstants.activeMapTileProviderConfig;
     runApp(
       ProviderScope(
         overrides: <Override>[
           driftLocalDatabaseProvider.overrideWithValue(database),
-          activeMapTileProviderConfigProvider.overrideWithValue(activeMapTileProviderConfig),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(activeMapTileProviderConfig),
+          appPreferencesProvider.overrideWithValue(preferences),
         ],
         child: const GoofyRiderApp(),
       ),
@@ -43,7 +49,8 @@ Future<void> runAppWith({
     );
     runApp(
       BootstrapErrorApp(
-        onRetry: () => runAppWith(loader: loader),
+        onRetry: () =>
+            runAppWith(loader: loader, preferencesLoader: preferencesLoader),
         errorDetails: error.toString(),
       ),
     );

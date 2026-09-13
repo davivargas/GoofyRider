@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
 import 'package:goofyrider_mobile/main.dart';
 
 void main() {
@@ -13,6 +14,7 @@ void main() {
         attempts += 1;
         throw StateError('disk unavailable #$attempts');
       },
+      preferencesLoader: () async => AppPreferences.inMemory(),
     );
     await tester.pumpAndSettle();
 
@@ -31,6 +33,7 @@ void main() {
         attempts += 1;
         throw StateError('disk unavailable #$attempts');
       },
+      preferencesLoader: () async => AppPreferences.inMemory(),
     );
     await tester.pumpAndSettle();
 

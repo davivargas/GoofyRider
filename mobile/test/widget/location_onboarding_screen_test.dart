@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:goofyrider_mobile/app/theme/app_theme.dart';
+import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
 import 'package:goofyrider_mobile/features/session/data/gps_warmup_permission_preference.dart';
 import 'package:goofyrider_mobile/features/session/data/gps_warmup_service.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
@@ -12,6 +13,8 @@ import 'package:goofyrider_mobile/features/session/presentation/onboarding/locat
 import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
 
 class _FakePreference extends GpsWarmupPermissionPreference {
+  _FakePreference() : super(AppPreferences.inMemory());
+
   bool marked = false;
 
   @override
@@ -87,8 +90,12 @@ Widget _host({
   final router = GoRouter(
     initialLocation: '/onboarding/location',
     routes: <RouteBase>[
-      GoRoute(path: '/onboarding/location', builder: (_, __) => const LocationOnboardingScreen()),
-      GoRoute(path: '/home', builder: (_, __) => const Scaffold(body: Text('HOME SCREEN'))),
+      GoRoute(
+          path: '/onboarding/location',
+          builder: (_, __) => const LocationOnboardingScreen()),
+      GoRoute(
+          path: '/home',
+          builder: (_, __) => const Scaffold(body: Text('HOME SCREEN'))),
     ],
   );
   return ProviderScope(
@@ -106,7 +113,8 @@ void main() {
       (WidgetTester tester) async {
     final preference = _FakePreference();
     final repository = _FakeLocationRepository();
-    final warmup = _CountingWarmupService(locationTrackingRepository: repository);
+    final warmup =
+        _CountingWarmupService(locationTrackingRepository: repository);
     await tester.pumpWidget(
       _host(preference: preference, repository: repository, warmup: warmup),
     );
@@ -126,7 +134,8 @@ void main() {
       (WidgetTester tester) async {
     final preference = _FakePreference();
     final repository = _FakeLocationRepository();
-    final warmup = _CountingWarmupService(locationTrackingRepository: repository);
+    final warmup =
+        _CountingWarmupService(locationTrackingRepository: repository);
     await tester.pumpWidget(
       _host(preference: preference, repository: repository, warmup: warmup),
     );

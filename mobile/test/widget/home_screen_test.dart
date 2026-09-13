@@ -5,6 +5,7 @@ import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/app/shell/home_screen.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
+import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
 import 'package:goofyrider_mobile/core/utils/date_time_formatting.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
@@ -147,10 +148,12 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
@@ -184,10 +187,12 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
@@ -215,10 +220,12 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
           favoriteResortsProvider
@@ -241,8 +248,7 @@ void main() {
   testWidgets(
       'home favorite cards update after favorites provider invalidation',
       (WidgetTester tester) async {
-    final favoritesStateProvider =
-        StateProvider<List<ResortSummary>>(
+    final favoritesStateProvider = StateProvider<List<ResortSummary>>(
       (Ref ref) => <ResortSummary>[
         _buildResort(id: 'resort-1', name: 'Whistler Blackcomb'),
       ],
@@ -251,10 +257,12 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         authControllerProvider.overrideWith((_) => _FakeAuthController()),
-        distanceUnitPreferenceProvider
-            .overrideWith((_) => DistanceUnitPreferenceController()),
-        speedUnitPreferenceProvider
-            .overrideWith((_) => SpeedUnitPreferenceController()),
+        distanceUnitPreferenceProvider.overrideWith((_) =>
+            DistanceUnitPreferenceController(
+                preferences: AppPreferences.inMemory())),
+        speedUnitPreferenceProvider.overrideWith((_) =>
+            SpeedUnitPreferenceController(
+                preferences: AppPreferences.inMemory())),
         historyProvider.overrideWith((_) async => <LocalRideSession>[]),
         favoriteResortsProvider
             .overrideWith((Ref ref) async => ref.watch(favoritesStateProvider)),
@@ -295,10 +303,12 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           authControllerProvider.overrideWith((_) => _FakeAuthController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith((_) async => <LocalRideSession>[]),
           favoriteResortsProvider.overrideWith(
             (_) async => <ResortSummary>[

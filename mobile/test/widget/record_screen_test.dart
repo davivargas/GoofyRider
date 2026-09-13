@@ -8,6 +8,7 @@ import 'package:goofyrider_mobile/app/theme/app_theme.dart';
 import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
 import 'package:goofyrider_mobile/core/utils/distance_unit.dart';
 import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
@@ -198,7 +199,7 @@ class FakeSessionRepository implements SessionRepository {
 class _FakeDistanceUnitPreferenceController
     extends DistanceUnitPreferenceController {
   _FakeDistanceUnitPreferenceController(DistanceUnit unit)
-      : super() {
+      : super(preferences: AppPreferences.inMemory()) {
     state = unit;
   }
 }
@@ -279,7 +280,8 @@ void main() {
     expect(find.text('TAP FOR MAP ↗'), findsNothing);
   });
 
-  testWidgets('record screen has no layout overflow at phone size in both layouts',
+  testWidgets(
+      'record screen has no layout overflow at phone size in both layouts',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
@@ -324,8 +326,7 @@ void main() {
   testWidgets('record screen renders vertical and altitude cards in meters',
       (WidgetTester tester) async {
     final fakeRepository = FakeSessionRepository();
-    final fakeLocationRepository =
-        FakeLocationRepository();
+    final fakeLocationRepository = FakeLocationRepository();
     final fakeController = _FakeRecordingController(
       sessionRepository: fakeRepository,
       locationTrackingRepository: fakeLocationRepository,
@@ -382,8 +383,7 @@ void main() {
   testWidgets('record screen renders vertical and altitude cards in feet',
       (WidgetTester tester) async {
     final fakeRepository = FakeSessionRepository();
-    final fakeLocationRepository =
-        FakeLocationRepository();
+    final fakeLocationRepository = FakeLocationRepository();
     final fakeController = _FakeRecordingController(
       sessionRepository: fakeRepository,
       locationTrackingRepository: fakeLocationRepository,

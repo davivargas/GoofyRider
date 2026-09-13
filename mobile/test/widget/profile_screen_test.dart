@@ -6,6 +6,7 @@ import 'package:goofyrider_mobile/core/constants/app_constants.dart';
 import 'package:goofyrider_mobile/core/providers.dart';
 import 'package:goofyrider_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:goofyrider_mobile/core/providers/speed_unit_preference_provider.dart';
+import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
 import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
 import 'package:goofyrider_mobile/features/auth/presentation/auth_controller.dart';
@@ -74,12 +75,14 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
-          authControllerProvider
-              .overrideWith((_) => _FakeAuthController(initialState: authState)),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
+          authControllerProvider.overrideWith(
+              (_) => _FakeAuthController(initialState: authState)),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
@@ -88,7 +91,8 @@ void main() {
               required String? userEmail,
               required speedUnit,
               required distanceUnit,
-            }) async => r'C:\tmp\goofyrider_debug.json',
+            }) async =>
+                r'C:\tmp\goofyrider_debug.json',
           ),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
@@ -99,7 +103,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Debug info exported to'), findsOneWidget);
-    expect(find.textContaining(r'C:\tmp\goofyrider_debug.json'), findsOneWidget);
+    expect(
+        find.textContaining(r'C:\tmp\goofyrider_debug.json'), findsOneWidget);
   });
 
   testWidgets('export debug info shows sign-in snackbar when signed out',
@@ -112,10 +117,12 @@ void main() {
               initialState: const AuthState(status: AuthStatus.unauthenticated),
             ),
           ),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
@@ -124,7 +131,8 @@ void main() {
               required String? userEmail,
               required speedUnit,
               required distanceUnit,
-            }) async => r'C:\tmp\should_not_be_used.json',
+            }) async =>
+                r'C:\tmp\should_not_be_used.json',
           ),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
@@ -155,12 +163,14 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
-          authControllerProvider
-              .overrideWith((_) => _FakeAuthController(initialState: authState)),
-          speedUnitPreferenceProvider
-              .overrideWith((_) => SpeedUnitPreferenceController()),
-          distanceUnitPreferenceProvider
-              .overrideWith((_) => DistanceUnitPreferenceController()),
+          authControllerProvider.overrideWith(
+              (_) => _FakeAuthController(initialState: authState)),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
@@ -169,7 +179,8 @@ void main() {
               required String? userEmail,
               required speedUnit,
               required distanceUnit,
-            }) async => throw Exception('disk full'),
+            }) async =>
+                throw Exception('disk full'),
           ),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
