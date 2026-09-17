@@ -14,11 +14,24 @@ from __future__ import annotations
 from collections.abc import Iterable
 from collections.abc import Sequence
 from dataclasses import dataclass
-from dataclasses import field
 from datetime import datetime
 import math
-import uuid
 
+from app.services.analysis.types import IGNORE
+from app.services.analysis.types import IMPORT_SOURCE as _IMPORT_SOURCE
+from app.services.analysis.types import LIFT
+from app.services.analysis.types import LIVE_SOURCE as _LIVE_SOURCE
+from app.services.analysis.types import RUN
+from app.services.analysis.types import ActionRecord
+from app.services.analysis.types import AnalysisResult
+from app.services.analysis.types import AnalyzerInput
+from app.services.analysis.types import OverrideRecord
+from app.services.analysis.types import OverrideSpan
+from app.services.analysis.types import PresetAction
+from app.services.analysis.types import RawPoint
+from app.services.analysis.types import ResortLift
+from app.services.analysis.types import SessionMetadataInput
+from app.services.analysis.types import SessionSummaryFields
 from app.services.exceptions import ValidationError
 
 # -----------------------------------------------------------------------------
@@ -127,141 +140,6 @@ ACCURACY_REJECT_M = 30.0
 
 # Mean Earth radius — standard constant for haversine distance.
 _EARTH_RADIUS_M = 6_371_000.0
-
-RUN = "run"
-LIFT = "lift"
-IGNORE = "ignore"
-_LIVE_SOURCE = "live_analyzer"
-_IMPORT_SOURCE = "slopes_import"
-
-
-@dataclass(frozen=True)
-class RawPoint:
-    t_offset_ms: int
-    recorded_at: datetime
-    latitude: float
-    longitude: float
-    altitude_m: float | None
-    speed_mps: float | None
-    accuracy_m: float | None = None
-    vertical_accuracy_m: float | None = None
-
-
-@dataclass(frozen=True)
-class SessionMetadataInput:
-    record_start: datetime
-    record_end: datetime
-    resort_id: uuid.UUID | None
-    source: str
-
-
-@dataclass(frozen=True)
-class PresetAction:
-    action_type: str
-    sequence_index: int
-    started_at: datetime
-    ended_at: datetime
-    duration_s: float
-    distance_m: float
-    avg_speed_mps: float
-    max_speed_mps: float
-    min_speed_mps: float | None = None
-    vertical_m: float | None = None
-    min_altitude_m: float | None = None
-    max_altitude_m: float | None = None
-    min_lat: float | None = None
-    max_lat: float | None = None
-    min_long: float | None = None
-    max_long: float | None = None
-    top_speed_lat: float | None = None
-    top_speed_long: float | None = None
-    top_speed_alt_m: float | None = None
-    time_of_day: int | None = None
-    external_track_id: str | None = None
-
-
-@dataclass(frozen=True)
-class OverrideSpan:
-    started_at: datetime
-    ended_at: datetime
-    motion_state: str
-    created_by: str
-
-
-@dataclass(frozen=True)
-class ResortLift:
-    name: str
-    polyline: Sequence[tuple[float, float]]
-    lift_type: str | None = None
-
-
-@dataclass(frozen=True)
-class ActionRecord:
-    action_type: str
-    sequence_index: int
-    started_at: datetime
-    ended_at: datetime
-    duration_s: float
-    distance_m: float
-    avg_speed_mps: float
-    max_speed_mps: float
-    min_speed_mps: float | None
-    vertical_m: float | None
-    min_altitude_m: float | None
-    max_altitude_m: float | None
-    min_lat: float | None
-    max_lat: float | None
-    min_long: float | None
-    max_long: float | None
-    top_speed_lat: float | None
-    top_speed_long: float | None
-    top_speed_alt_m: float | None
-    time_of_day: int | None
-    external_track_id: str | None
-    source: str
-
-
-@dataclass(frozen=True)
-class OverrideRecord:
-    started_at: datetime
-    ended_at: datetime
-    motion_state: str
-    created_by: str
-
-
-@dataclass(frozen=True)
-class SessionSummaryFields:
-    total_duration_s: float
-    descent_duration_s: float
-    lift_duration_s: float
-    descent_distance_m: float
-    lift_distance_m: float
-    descent_vertical_m: float
-    lift_vertical_m: float
-    max_speed_mps: float | None
-    avg_descent_speed_mps: float | None
-    peak_altitude_m: float | None
-    center_lat: float | None
-    center_long: float | None
-    altitude_offset_m: float
-
-
-@dataclass(frozen=True)
-class AnalyzerInput:
-    points: list[RawPoint]
-    metadata: SessionMetadataInput
-    preset_actions: list[PresetAction] | None = None
-    preset_overrides: list[OverrideSpan] | None = None
-    resort_lifts: Sequence[ResortLift] = field(default_factory=tuple)
-
-
-@dataclass(frozen=True)
-class AnalysisResult:
-    summary: SessionSummaryFields
-    actions: list[ActionRecord]
-    overrides: list[OverrideRecord]
-    analyzer_version: str
-
 
 class SessionAnalyzer:
     """Pure analyzer. Call `analyze(input)` to produce an `AnalysisResult`.
