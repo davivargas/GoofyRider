@@ -2167,6 +2167,14 @@ Remove the now-unused imports (`OverrideSpan`, `ResortLift`) if ruff reports the
 - [ ] **Step 6: Run the affected suites**
 
 Run: `python -m pytest tests/unit/analysis tests/unit/test_session_analyzer.py tests/unit/test_session_service.py -q`
+Then run the two QA files that complete and analyze sessions through the real analyzer, against the dedicated test database only (never print `.env`):
+
+```bash
+export DATABASE_URL="$(grep '^DATABASE_URL=' ../.env | cut -d= -f2- | sed 's#/goofyrider$#/goofyrider_test#')"
+python -m pytest tests/qa/test_sessions_qa.py tests/qa/test_sessions_analyze_override_qa.py -q
+```
+Their synthetic sessions are 200 one-second points descending at 8 m/s, which the new analyzer classifies as a run, so they must pass unchanged.
+
 Expected: all pass. `test_session_service.py` uses fakes around the analyzer; if one of its tests builds fewer than 25 synthetic points and expects a run, lengthen its point list to 90 samples with the same slope and note it in the report.
 
 - [ ] **Step 7: Gates and commit**
