@@ -178,7 +178,8 @@ and adds a parse test on each side. A CI check compares the two copies.
    a moving gap longer than 30 s is not bridged, the frame records
    `gap = True` for those seconds and the decoder treats them as `unknown`.
 6. Altitude fusion. With pressure: barometric altitude
-   `44330 * (1 - (p / 1013.25) ** 0.1903)` plus an offset that tracks GPS
+   `44330 * (1 - (p / 1013.25) ** 0.1903)` plus an offset that starts at the mean
+   GPS-minus-barometer difference of the first 30 s and then tracks GPS
    altitude with an exponential filter of time constant 300 s, weighted by
    `1 / max(vertical_accuracy_m, 3)`. Without pressure: exponential smoother
    over GPS altitude with a 10 s window and the same weighting. Vertical rate
@@ -301,8 +302,8 @@ Validity rules, applied per span before runs are assembled:
 - A descent span is invalid when any of these hold: 10 or more seconds
   above 28 m/s (vehicle); altitude change under 3 m with a mean speed above
   8 m/s for at least 15 s (zip line, snowmobile, frozen altitude); it starts
-  below the lowest base altitude of any lift ridden in the session plus 10 m
-  (leaving the resort); most of it lies outside the resort area.
+  below the lowest base altitude of any lift ridden uphill in the session
+  plus 10 m (leaving the resort; a gondola download does not define a base); most of it lies outside the resort area.
 
 Run assembly:
 
