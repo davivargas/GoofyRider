@@ -57,6 +57,8 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
     start = kept[0].recorded_at.replace(microsecond=0)
     offsets = [(p.recorded_at - start).total_seconds() for p in kept]
     n = int(offsets[-1]) + 1
+    if n < 2:
+        return None
     lat = [kept[0].latitude] * n
     lon = [kept[0].longitude] * n
     alt = [point_alts[0]] * n

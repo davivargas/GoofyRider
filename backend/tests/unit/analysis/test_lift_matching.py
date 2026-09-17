@@ -106,3 +106,13 @@ def test_resort_area_pads_the_lift_bounding_box() -> None:
     min_lat, max_lat, _, _ = area
     assert min_lat < 49.4 and max_lat > 49.4 + 800 * DEG_LAT_PER_M
     assert resort_area([], CONFIG) is None
+
+
+def test_lift_with_a_zero_length_polyline_is_ignored() -> None:
+    broken = ResortLift(
+        name="Broken",
+        polyline=((49.4, -123.0), (49.4, -123.0)),
+        lift_type="chair",
+        osm_aerialway="chair_lift",
+    )
+    assert anchor(_frame(climb(0, 190)), [broken], CONFIG) == []

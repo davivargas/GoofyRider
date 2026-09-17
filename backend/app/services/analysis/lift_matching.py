@@ -135,6 +135,8 @@ def _spans_for_lift(
 ) -> list[tuple[int, int]]:
     indices = [i for i, flag in enumerate(riding) if flag]
     length = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in pairwise(line))
+    if length <= 0.0:
+        return []
     low_gain = lift.lift_type in _LOW_GAIN_LIFT_TYPES
     can_download = lift.osm_aerialway in _DOWNLOAD_AERIALWAYS
     spans: list[tuple[int, int]] = []

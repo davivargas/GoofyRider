@@ -142,3 +142,7 @@ def test_speed_smoothing_canonical_reference() -> None:
         0.6,
     ]
     assert smooth_speeds_centered_mean(raw) == pytest.approx(expected, abs=1e-9)
+
+
+def test_sub_second_recording_yields_no_frame() -> None:
+    assert condition([point(0.0), point(0.4, north_m=1.0)], CONFIG) is None
