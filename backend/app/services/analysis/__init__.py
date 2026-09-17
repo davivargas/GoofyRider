@@ -1,6 +1,8 @@
 """Session analysis pipeline. See docs/superpowers/specs/2026-09-13-gps-segmentation-design.md."""
 
+from app.services.analysis.analyzer import SessionAnalyzer
 from app.services.analysis.config import AnalyzerConfig
+from app.services.analysis.signal import smooth_speeds_centered_mean
 from app.services.analysis.types import IGNORE
 from app.services.analysis.types import LIFT
 from app.services.analysis.types import RUN
@@ -28,6 +30,8 @@ __all__ = [
     "PresetAction",
     "RawPoint",
     "ResortLift",
+    "SessionAnalyzer",
     "SessionMetadataInput",
     "SessionSummaryFields",
+    "smooth_speeds_centered_mean",
 ]
