@@ -21,9 +21,13 @@ Goals, in priority order:
 Decisions taken during brainstorming:
 
 - Lift catalog: yes, imported from OSM `aerialway` ways via the Overpass API.
-- Break model: actions stay `run` and `lift` only. Long breaks split runs and
-  are reported as two summary fields, `break_count` and `break_duration_s`.
-  Short stops are absorbed into runs, as Slopes does.
+- Break model: actions stay `run` and `lift` only. What follows a stop decides
+  what the stop was. A stop followed by more descent is part of the run: short
+  stops are absorbed, stops of 120 s or more are masked out of the run stats
+  and counted as breaks, and the run is not split. A stop followed by a lift
+  ends the run where the stop began. Breaks are reported as two summary
+  fields, `break_count` and `break_duration_s`. Sessions imported from Slopes
+  keep the actions Slopes recorded (the existing preset path).
 - Success bar: per-second state agreement with Slopes of at least 95% and
   exact run and lift counts on at least 12 of 14 archives; the other two are
   named in the expected-scores file with a reason.
@@ -64,7 +68,7 @@ Data flow for a live session:
 ```
 RawPoint[] --signal.condition()--> FeatureFrame (1 Hz arrays)
 FeatureFrame + ResortLift[] --lift_matching.anchor()--> LiftSpan[]
-FeatureFrame + LiftSpan[] --hmm.decode()--> StateSpan[] (descent | short_stop | long_break | unknown | lift)
+FeatureFrame + LiftSpan[] --hmm.decode()--> StateSpan[] (descent | stop | unknown | lift)
 StateSpan[] + overrides --actions.build()--> ActionRecord[], SummaryFields(break_count, break_duration_s, ...)
 ```
 
@@ -160,8 +164,14 @@ and adds a parse test on each side. A CI check compares the two copies.
    below 3 m/s; otherwise speed is recomputed from consecutive positions.
    Top-speed reporting keeps the existing 2x spike ratio against a 1 m/s
    reference floor.
-5. Resampling to 1 Hz by linear interpolation of position, altitude, and
-   speed for gaps up to 10 s. Longer gaps are not bridged; the frame records
+5. Resampling to 1 Hz. Slopes and the planned adaptive sampling both thin
+   samples while the rider is still (corpus: median interval 3 s, 95th
+   percentile 21 s, over half of each session inside gaps longer than 10 s,
+   nearly all of it stationary). A gap between two kept points is therefore
+   bridged according to its implied speed (distance over time): below
+   0.8 m/s the gap is filled as stationary at the first point; from 0.8 m/s
+   the gap is filled by linear interpolation when it is at most 30 s long;
+   a moving gap longer than 30 s is not bridged, the frame records
    `gap = True` for those seconds and the decoder treats them as `unknown`.
 6. Altitude fusion. With pressure: barometric altitude
    `44330 * (1 - (p / 1013.25) ** 0.1903)` plus an offset that tracks GPS
@@ -177,8 +187,10 @@ and adds a parse test on each side. A CI check compares the two copies.
 each second to the nearest original point index (for top-speed location and
 override application).
 
-Slopes archives carry neither accuracy nor pressure, so the corpus exercises
-the fallback branches; that matches a phone without a barometer.
+Slopes archives carry horizontal and vertical accuracy (GPS.csv columns 7
+and 8) but no speed accuracy and no pressure, so the corpus exercises the
+accuracy gates and the no-barometer altitude branch; that matches a phone
+without a barometer.
 
 ## 6. Lift matching
 
@@ -207,8 +219,10 @@ Sessions without `resort_id`, or with an empty catalog, skip this stage.
 `hmm.decode(frame, anchored, config) -> list[StateSpan]` runs Viterbi over
 each stretch between anchored lift spans.
 
-States: `descent`, `short_stop`, `long_break`, `unknown`, and `lift`
-(the `lift` state is enabled only when no catalog is available).
+States: `descent`, `stop`, `unknown`, and `lift` (the `lift` state is enabled
+only when no catalog is available). Short versus long stops and in-run
+versus between-action stops are not HMM states; section 8 derives them from
+duration and neighbours.
 
 Emission log-likelihoods are piecewise-constant functions of the features,
 defined in `config.py` as tables so they can be swept:
@@ -216,38 +230,60 @@ defined in `config.py` as tables so they can be swept:
 | State | speed (m/s) | vrate (m/s) | heading_var | gap |
 |---|---|---|---|---|
 | descent | > 2.0 likely, 0.8 to 2.0 possible | < -0.3 likely, -0.3 to 0.3 possible | any | must be False |
-| short_stop | < 0.8 likely | -0.3 to 0.3 | any | must be False |
-| long_break | < 1.5 likely (walking allowed) | -0.3 to 0.3 | high likely | must be False |
+| stop | < 0.8 likely, 0.8 to 1.5 possible (shuffling, walking) | -0.3 to 0.3 | any | must be False |
 | lift (fallback) | 1.0 to 10.0 | > 0.3 likely | low likely | must be False |
 | unknown | any | any | any | must be True |
 
-Transitions carry duration priors: `short_stop` has an expected dwell of
-30 s and a hard cap of 90 s (after 90 s the only allowed successors are
-`long_break` or `descent`); `long_break` has a minimum dwell of 120 s;
-`descent` to `descent` across an `unknown` stretch under 10 s costs nothing;
-`unknown` to any state is free. Self-transition probabilities are set so
-the expected dwell of `descent` is 120 s and of `lift` 240 s.
+Transition probabilities encode expected dwell times (descent 120 s, stop
+60 s, fallback lift 240 s) and make `descent` to `lift` without an
+intervening `stop` unlikely but possible. `unknown` to any state is free.
 
 ## 8. Action building and summary
 
 `actions.build(spans, frame, overrides, config) -> (list[ActionRecord], BreakStats)`.
 
-- `short_stop` spans merge into the adjacent `descent` on both sides.
-- A `long_break` ends the run before it and starts a new run after it;
-  `break_count += 1` and `break_duration_s += span duration`.
+Stop spans are classified by what surrounds them:
+
+| Before | After | Meaning | Effect |
+|---|---|---|---|
+| descent | descent | stop inside a run | merged into the run; if 120 s or longer its seconds are masked out of the run stats and it counts as a break |
+| descent | lift, or end of session | run ended at the stop | run ends at the stop start; the stop belongs to no action; counts as a break if 120 s or longer |
+| lift, or start of session | descent | getting ready | run starts when the stop ends; counts as a break if 120 s or longer |
+| lift | lift | transfer between lifts | belongs to no action; counts as a break if 120 s or longer |
+
+When a catalog exists, a stop that lies within 80 m of a lift base terminal
+is treated as "before a lift" even if a short descent follows (skiing the
+last metres into the lift line), so the run ends at that stop.
+
+Other rules:
+
+- A stop inside a run longer than `max_in_run_break_s` (default 3600) splits
+  the run, as a guard against sessions left recording.
 - `unknown` spans neither count as breaks nor split runs, unless longer than
   600 s, in which case the run is split without a break.
 - Descent spans shorter than 20 s or with less than 15 m of vertical drop
-  are dropped.
+  that are not merged into a longer run are dropped.
 - Anchored and fallback lift spans become `lift` actions.
-- Sequence indices, distances, average and top speed, top-speed location,
-  and altitude fields are computed as today from the original points mapped
-  to each span. `MIN_ACTION_DURATION_S` (2 s) remains as a final guard.
+- Masked seconds are excluded from a run's `duration_s`, distance, and
+  average and minimum speed; `started_at` and `ended_at` still span the
+  whole run. This differs from today, where masked samples still count
+  toward wall-clock duration.
+- Sequence indices, top speed, top-speed location, and altitude fields are
+  computed as today from the original points mapped to each span.
+  `MIN_ACTION_DURATION_S` (2 s) remains as a final guard.
+
+`break_count` and `break_duration_s` cover every stop of 120 s or longer
+between the start of the first action and the end of the last action.
 
 `SessionSummaryFields` gains `break_count: int` and `break_duration_s: float`.
 `SessionSummary` (schema) and `ride_sessions` (model, default 0, in revision
 `0015_analyzer_output_fields` with the `lift_name` column of section 6) gain
 the same two fields. `SessionActionRead` is unchanged.
+
+For the corpus comparison, Slopes counts a run from its first to its last
+moving second including the stops inside it, which is what `started_at` and
+`ended_at` give; the per-second agreement in section 9 therefore labels the
+whole `started_at` to `ended_at` span of each run as `run`.
 
 ## 9. Evaluation
 
@@ -283,9 +319,11 @@ Lowering a recorded score requires editing the file in the same commit.
   without GPS drift.
 - `lift_matching`: a synthetic two-vertex lift with tracks that ride it,
   cross it, and ski parallel 80 m away.
-- `hmm`: hand-built frames yielding a 40 s stop inside a run, a 5-minute
-  lodge stop, and a fallback lift.
-- `actions`: break stats, noise dropping, unknown-gap splitting.
+- `hmm`: hand-built frames yielding a descent with a 40 s stop, a 5-minute
+  stop, a sparse stationary gap, and a fallback lift.
+- `actions`: each row of the stop-context table, lift-terminal proximity,
+  masking of long in-run breaks, break stats, noise dropping, unknown-gap
+  splitting.
 - QA: points batch accepts and stores `pressure_hpa`; session detail returns
   the break fields; lift import script against the recorded fixture.
 - Mobile: Drift migration test, point and summary mapper tests, contract
