@@ -28,9 +28,13 @@ Decisions taken during brainstorming:
   ends the run where the stop began. Breaks are reported as two summary
   fields, `break_count` and `break_duration_s`. Sessions imported from Slopes
   keep the actions Slopes recorded (the existing preset path).
-- Success bar: per-second state agreement with Slopes of at least 95% and
-  exact run and lift counts on at least 12 of 14 archives; the other two are
-  named in the expected-scores file with a reason.
+- Success bar, set from a spike over all fourteen archives (section 9.5):
+  corpus mean per-second agreement with Slopes of at least 88% and no archive
+  under 75%; at least 94% of Slopes lifts found and at least 93% of our lifts
+  matching a Slopes lift; at least 90% of Slopes runs found; exact run and
+  lift counts on at least 8 of 14 archives. The achieved score of every
+  archive is recorded and may only go up. Slopes labels that are plainly
+  wrong are corrected in a reviewed overrides file.
 - Signal scope: backend conditioning plus a native barometer sample on each
   fix. No change to the mobile pipeline beyond carrying the new field.
 - Classifier: lift-anchored segmentation plus a hand-tuned hidden Markov
@@ -196,21 +200,48 @@ without a barometer.
 
 `lift_matching.anchor(frame, lifts, config) -> list[LiftSpan]`.
 
-For every second and every lift polyline, compute the perpendicular distance
-to the nearest segment and the absolute bearing difference between the track
-and that segment (either direction). A second is "on lift L" when distance
-is at most 40 m and bearing difference at most 25 degrees. Consecutive
-windows of at least 60 s in which at least 80% of seconds are on the same
-lift and net altitude change is positive become a candidate span. The span
-is extended to the first and last on-lift seconds and its ends snap to the
-polyline end points when within 60 m, so lift actions start at the base and
-end at the top. Overlapping candidates for different lifts keep the one with
-the higher on-lift fraction. Each `LiftSpan` carries `lift_name` and
-`external_track_id`; `ActionRecord` gains an internal `lift_name: str | None`
-that is stored on `ride_session_actions` (nullable column) but not yet
-exposed in the API. Revision `0015_analyzer_output_fields` adds this column
-and the two break fields of section 8 together, as one schema change for
-the new analyzer output.
+Per second and per lift polyline, compute the distance to the nearest segment,
+the bearing of that segment, and the along-line position. The track bearing
+comes from positions 5 s either side and is undefined when that displacement
+is under 3 m.
+
+- A second is `near` lift L when its distance is at most 67.5 m (1.5 times
+  the match radius).
+- A second is `riding` lift L when its distance is at most 45 m, its
+  along-line position lies between the two terminals (a rider skiing away
+  from the top station in the direction of the line is past the terminal and
+  does not count), its speed is at least 0.5 m/s, and the track bearing is
+  within 30 degrees of the segment bearing in either direction.
+
+A candidate span runs from one `riding` second to a later one, extended while
+the next `riding` second is at most 150 s away and every second in between
+is `near` (a stopped lift keeps the rider on the line; walking away breaks
+the span). Standing still never starts or ends a span. A candidate becomes a
+`LiftSpan` when all of these hold:
+
+- it lasts at least 30 s and at least 35% of its seconds are `riding`;
+- its end-to-end displacement is at least the smaller of 60 m and half the
+  lift length;
+- the median speed of its `riding` seconds is at most 12 m/s;
+- direction: for `chair` and `gondola` rows the fused altitude rises by at
+  least 15 m, or, for lifts whose OSM type was `gondola`, `cable_car`, or
+  `mixed_lift` only, falls by at least 15 m (a download); for `surface`,
+  `tbar`, and `magic_carpet` rows the altitude change is at least -2 m and
+  the median riding speed is at most 3.5 m/s. Skiing down underneath a chair
+  therefore never matches.
+
+Overlapping spans for different lifts keep the longer one. To support the
+download rule, `resort_lifts` needs the OSM `aerialway` value, so the import
+stores it in a new nullable column `osm_aerialway` (added in revision
+`0015_analyzer_output_fields`), and the analyzer `ResortLift` dataclass gains
+`osm_aerialway: str | None`.
+
+Each `LiftSpan` carries `lift_name` and `external_track_id`; `ActionRecord`
+gains an internal `lift_name: str | None` that is stored on
+`ride_session_actions` (nullable column) but not yet exposed in the API.
+Revision `0015_analyzer_output_fields` adds this column, `osm_aerialway`, and
+the two break fields of section 8 together, as one schema change for the new
+analyzer output.
 
 Sessions without `resort_id`, or with an empty catalog, skip this stage.
 
@@ -219,8 +250,9 @@ Sessions without `resort_id`, or with an empty catalog, skip this stage.
 `hmm.decode(frame, anchored, config) -> list[StateSpan]` runs Viterbi over
 each stretch between anchored lift spans.
 
-States: `descent`, `stop`, `unknown`, and `lift` (the `lift` state is enabled
-only when no catalog is available). Short versus long stops and in-run
+States: `descent`, `stop`, `unknown`, and `lift`. The `lift` state is always
+enabled, because OSM misses some lifts; section 8 validates the fallback
+lifts it produces. Short versus long stops and in-run
 versus between-action stops are not HMM states; section 8 derives them from
 duration and neighbours.
 
@@ -231,7 +263,7 @@ defined in `config.py` as tables so they can be swept:
 |---|---|---|---|---|
 | descent | > 2.0 likely, 0.8 to 2.0 possible | < -0.3 likely, -0.3 to 0.3 possible | any | must be False |
 | stop | < 0.8 likely, 0.8 to 1.5 possible (shuffling, walking) | -0.3 to 0.3 | any | must be False |
-| lift (fallback) | 1.0 to 10.0 | > 0.3 likely | low likely | must be False |
+| lift (fallback) | 1.0 to 10.0 likely, under 1.0 possible | > 0.15 likely, -0.1 to 0.15 possible | low likely | must be False |
 | unknown | any | any | any | must be True |
 
 Transition probabilities encode expected dwell times (descent 120 s, stop
@@ -255,19 +287,39 @@ When a catalog exists, a stop that lies within 80 m of a lift base terminal
 is treated as "before a lift" even if a short descent follows (skiing the
 last metres into the lift line), so the run ends at that stop.
 
-Other rules:
+Validity rules, applied per span before runs are assembled:
 
-- A stop inside a run longer than `max_in_run_break_s` (default 3600) splits
-  the run, as a guard against sessions left recording.
-- `unknown` spans neither count as breaks nor split runs, unless longer than
-  600 s, in which case the run is split without a break.
-- Descent spans shorter than 20 s or with less than 15 m of vertical drop
-  that are not merged into a longer run are dropped.
-- Anchored and fallback lift spans become `lift` actions.
-- Masked seconds are excluded from a run's `duration_s`, distance, and
-  average and minimum speed; `started_at` and `ended_at` still span the
-  whole run. This differs from today, where masked samples still count
-  toward wall-clock duration.
+- A descent span that covers less than 25 m is a stop.
+- A fallback lift span (not anchored to a catalog line) must last at least
+  60 s, gain at least 20 m, have a median speed of at most 8 m/s, and lie
+  mostly inside the resort area; otherwise it is a stop. The resort area is
+  the bounding box of all lift polylines padded by 400 m, and is undefined
+  without a catalog.
+- A stop or unknown span between two lift spans of at most 300 s with at
+  most 40 m of displacement is a lift stoppage and merges the two into one
+  lift.
+- A descent span is invalid when any of these hold: 10 or more seconds
+  above 28 m/s (vehicle); altitude change under 3 m with a mean speed above
+  8 m/s for at least 15 s (zip line, snowmobile, frozen altitude); it starts
+  below the lowest base altitude of any lift ridden in the session plus 10 m
+  (leaving the resort); most of it lies outside the resort area.
+
+Run assembly:
+
+- A run chain is a sequence of descent spans, valid or invalid, joined across
+  stop and unknown spans (an unknown span longer than 600 s breaks the
+  chain, as does a stop longer than `max_in_run_break_s`, default 3600).
+- Invalid spans are trimmed from both ends of a chain. Spans that drop less
+  than 3 m are additionally trimmed from the tail only: Slopes and riders
+  both treat the slow traverse away from a lift as the start of the run, but
+  flat movement after the last real descent is not part of it. Invalid or
+  flat spans in the middle of a chain stay in the run (cat tracks).
+- The trimmed chain becomes a run when it lasts at least 20 s and drops at
+  least 15 m from start to end.
+- Masked seconds (in-run stops of 120 s or longer) are excluded from the
+  `duration_s`, distance, and average and minimum speed of a run;
+  `started_at` and `ended_at` still span the whole run. This differs from
+  today, where masked samples still count toward wall-clock duration.
 - Sequence indices, top speed, top-speed location, and altitude fields are
   computed as today from the original points mapped to each span.
   `MIN_ACTION_DURATION_S` (2 s) remains as a final guard.
@@ -304,14 +356,29 @@ that resort when present, and reports per archive: per-second agreement
 lift-count delta, descent-vertical delta. It prints a table and writes a JSON
 report. `--config key=value` overrides any `AnalyzerConfig` field.
 
-### 9.3 Regression gate
+### 9.3 Metrics, overrides, and the regression gate
+
+Per archive the scorer reports: per-second agreement over `run`, `lift`,
+`other`; run and lift count deltas; and action-level matches, where a
+reference action is found when some action of ours of the same type overlaps
+at least half of it, and one of ours is correct when it overlaps a reference
+action the same way. Corpus lift and run recall and precision are sums over
+all archives.
+
+`backend/tests/fixtures/slopes/label_overrides.json` corrects Slopes labels
+that are plainly wrong. Each entry names the archive, the action start time,
+the corrected type (`run`, `lift`, or `other`), and a reason. It starts with
+one entry: March 13 2026 Grouse Mountain, the lift from offset 10577 s to
+12021 s, corrected to `other` because the rider walks the summit plateau at
+about 1.3 m/s gaining 20 m in 24 minutes. Additions need the same evidence
+and are reviewed by the user.
 
 `backend/tests/fixtures/slopes/expected_scores.json` records, per archive,
-the agreement and counts achieved at tuning time, plus for the up-to-two
-archives that miss the bar a `reason` string. `tests/unit/test_analyzer_corpus.py`
+the agreement and counts achieved at tuning time. `tests/unit/test_analyzer_corpus.py`
 asserts that every archive scores at least its recorded agreement minus 0.5
-points with matching counts, and that the corpus targets in section 1 hold.
-Lowering a recorded score requires editing the file in the same commit.
+points, that the corpus targets in section 1 hold, and that the corpus mean
+is above the 78.4% of the old analyzer. Lowering a recorded score requires
+editing the file in the same commit.
 
 ### 9.4 Unit and QA tests
 
@@ -328,6 +395,23 @@ Lowering a recorded score requires editing the file in the same commit.
   the break fields; lift import script against the recorded fixture.
 - Mobile: Drift migration test, point and summary mapper tests, contract
   fixture parse test, bridge payload test for `pressureHpa`.
+
+### 9.5 Spike evidence (2026-09-17)
+
+A throwaway spike (kept outside git in
+`.superpowers/spikes/2026-09-17-gps-segmentation/`, with the three Overpass
+responses it used) scored the fourteen archives:
+
+| Analyzer | Per-second agreement | Exact counts | Slopes lifts found | Lifts output | Runs output (Slopes: 115) |
+|---|---|---|---|---|---|
+| Production `analyzer@1` | 78.4% | 0 of 14 | 107 of 118 | 183 | 264 |
+| Spike without catalog | 84.1% | 6 of 14 | 101 of 118 | 106 | 109 |
+| Spike with OSM catalog | 86.1% | 7 of 14 | 111 of 118 | 114 | 107 |
+
+The spike has no heading feature, no masking, no label overrides, and only a
+few hours of tuning, so the section 1 targets sit a little above it. The
+remaining disagreement is mostly Slopes starting runs during very slow
+movement and ending lifts a little earlier than the line geometry does.
 
 ## 10. Rollout
 
