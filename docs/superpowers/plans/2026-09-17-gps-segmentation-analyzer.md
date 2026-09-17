@@ -871,7 +871,6 @@ from app.services.analysis.signal import condition
 from app.services.analysis.types import ResortLift
 from tests.unit.analysis.helpers import DEG_LAT_PER_M
 from tests.unit.analysis.helpers import climb
-from tests.unit.analysis.helpers import descent
 from tests.unit.analysis.helpers import point
 from tests.unit.analysis.helpers import standstill
 
@@ -954,7 +953,6 @@ def test_resort_area_pads_the_lift_bounding_box() -> None:
     min_lat, max_lat, _, _ = area
     assert min_lat < 49.4 and max_lat > 49.4 + 800 * DEG_LAT_PER_M
     assert resort_area([], CONFIG) is None
-    assert descent(0, 5)  # helper import kept in use
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
