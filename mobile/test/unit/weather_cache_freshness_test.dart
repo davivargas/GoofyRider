@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/weather/data/weather_cache_freshness.dart';
+import 'package:fall_line_mobile/features/weather/data/weather_cache_freshness.dart';
 
 void main() {
   group('isCachedWeatherStale', () {

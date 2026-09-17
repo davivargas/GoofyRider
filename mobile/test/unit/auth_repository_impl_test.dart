@@ -2,13 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:goofyrider_mobile/core/errors/failures.dart';
-import 'package:goofyrider_mobile/core/storage/token_storage.dart';
-import 'package:goofyrider_mobile/features/auth/data/auth_api.dart';
-import 'package:goofyrider_mobile/features/auth/data/auth_api_models.dart';
-import 'package:goofyrider_mobile/features/auth/data/auth_repository_impl.dart';
-import 'package:goofyrider_mobile/features/auth/data/device_label_provider.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
+import 'package:fall_line_mobile/core/errors/failures.dart';
+import 'package:fall_line_mobile/core/storage/token_storage.dart';
+import 'package:fall_line_mobile/features/auth/data/auth_api.dart';
+import 'package:fall_line_mobile/features/auth/data/auth_api_models.dart';
+import 'package:fall_line_mobile/features/auth/data/auth_repository_impl.dart';
+import 'package:fall_line_mobile/features/auth/data/device_label_provider.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
 
 class MockAuthApi extends Mock implements AuthApi {}
 

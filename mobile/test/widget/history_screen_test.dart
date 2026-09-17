@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
-import 'package:goofyrider_mobile/features/session/presentation/history_screen.dart';
-import 'package:goofyrider_mobile/features/session/presentation/history_view_models.dart';
-import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
+import 'package:fall_line_mobile/features/session/presentation/history_screen.dart';
+import 'package:fall_line_mobile/features/session/presentation/history_view_models.dart';
+import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 
 class FakeLocationRepository implements LocationTrackingRepository {
   @override

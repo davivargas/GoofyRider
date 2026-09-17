@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/constants/session_constants.dart';
-import 'package:goofyrider_mobile/features/session/presentation/recording/auto_pause_tracker.dart';
+import 'package:fall_line_mobile/core/constants/session_constants.dart';
+import 'package:fall_line_mobile/features/session/presentation/recording/auto_pause_tracker.dart';
 
 void main() {
   group('AutoPauseTracker', () {

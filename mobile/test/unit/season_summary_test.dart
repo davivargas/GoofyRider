@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/presentation/season_summary.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/presentation/season_summary.dart';
 
 LocalRideSession _s({
   required int id,

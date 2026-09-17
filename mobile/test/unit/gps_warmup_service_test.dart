@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:goofyrider_mobile/features/session/data/gps_warmup_service.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/data/gps_warmup_service.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
 
 class _FakeLocationRepository implements LocationTrackingRepository {
   _FakeLocationRepository({this.permission = LocationPermissionState.granted});

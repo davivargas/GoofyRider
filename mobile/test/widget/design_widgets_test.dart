@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/core/constants/app_constants.dart';
-import 'package:goofyrider_mobile/core/widgets/design_widgets.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/core/constants/app_constants.dart';
+import 'package:fall_line_mobile/core/widgets/design_widgets.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
 
 Widget _host(Widget child) => MaterialApp(
       theme: AppTheme.dark(),

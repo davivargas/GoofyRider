@@ -27,9 +27,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
-        title="GoofyRider API",
+        title="Fall Line API",
         version="0.1.0",
-        description="Backend API for the GoofyRider snowboarding tracker.",
+        description="Backend API for the Fall Line snowboarding tracker.",
         lifespan=lifespan,
         docs_url="/docs" if settings.debug else None,
         redoc_url="/redoc" if settings.debug else None,
@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
 
     @application.get("/", include_in_schema=False)
     async def root() -> dict[str, str]:
-        return {"message": "GoofyRider API is running"}
+        return {"message": "Fall Line API is running"}
 
     return application
 

@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/session/data/geolocator_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/data/native_android_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/tracking_mode_profiles.dart';
+import 'package:fall_line_mobile/features/session/data/geolocator_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/data/native_android_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/tracking_mode_profiles.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const controlChannel = MethodChannel('goofyrider/test/location_control');
-  const eventChannel = EventChannel('goofyrider/test/location_events');
+  const controlChannel = MethodChannel('fallline/test/location_control');
+  const eventChannel = EventChannel('fallline/test/location_events');
 
   final methodCalls = <MethodCall>[];
 

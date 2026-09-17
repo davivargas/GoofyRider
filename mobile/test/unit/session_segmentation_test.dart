@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_segmentation.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_segmentation.dart';
 
 LocalSessionPoint _point({
   required DateTime start,

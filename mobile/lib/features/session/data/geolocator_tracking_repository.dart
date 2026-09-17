@@ -213,7 +213,7 @@ class GeolocatorTrackingRepository implements LocationTrackingRepository {
       distanceFilter: distanceFilter,
       intervalDuration: Duration(milliseconds: intervalMs),
       foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: 'GoofyRider is recording your session',
+        notificationTitle: 'Fall Line is recording your session',
         notificationText: 'Tracking route in the background',
         enableWakeLock: true,
       ),

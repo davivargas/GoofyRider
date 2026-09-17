@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:goofyrider_mobile/core/providers/enum_preference_controller.dart';
-import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
-import 'package:goofyrider_mobile/core/utils/speed_unit.dart';
+import 'package:fall_line_mobile/core/providers/enum_preference_controller.dart';
+import 'package:fall_line_mobile/core/storage/app_preferences.dart';
+import 'package:fall_line_mobile/core/utils/speed_unit.dart';
 
 void main() {
   const wire = <SpeedUnit, String>{

@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:goofyrider_mobile/core/errors/failures.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_controller.dart';
+import 'package:fall_line_mobile/core/errors/failures.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_repository.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_controller.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 

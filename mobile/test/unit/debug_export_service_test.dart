@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
-import 'package:goofyrider_mobile/core/utils/distance_unit.dart';
-import 'package:goofyrider_mobile/core/utils/speed_unit.dart';
-import 'package:goofyrider_mobile/features/profile/presentation/debug_export_service.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/core/storage/drift_local_database.dart';
+import 'package:fall_line_mobile/core/utils/distance_unit.dart';
+import 'package:fall_line_mobile/core/utils/speed_unit.dart';
+import 'package:fall_line_mobile/features/profile/presentation/debug_export_service.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
 
 void main() {
   late DriftLocalDatabase database;

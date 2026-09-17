@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/constants/session_constants.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/tracking_mode_profiles.dart';
-import 'package:goofyrider_mobile/features/session/presentation/recording_controller.dart';
+import 'package:fall_line_mobile/core/constants/session_constants.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/tracking_mode_profiles.dart';
+import 'package:fall_line_mobile/features/session/presentation/recording_controller.dart';
 
 class ControlledLocationRepository implements LocationTrackingRepository {
   ControlledLocationRepository({

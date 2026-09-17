@@ -1,6 +1,6 @@
-﻿# GoofyRider
+﻿# Fall Line
 
-GoofyRider is an Android-first, offline-first snowboarding tracker built for portfolio-quality engineering.
+Fall Line is an Android-first, offline-first snowboarding tracker built for portfolio-quality engineering.
 It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 
 ## Quickstart for reviewers

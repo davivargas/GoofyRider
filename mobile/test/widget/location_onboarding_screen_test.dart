@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
-import 'package:goofyrider_mobile/features/session/data/gps_warmup_permission_preference.dart';
-import 'package:goofyrider_mobile/features/session/data/gps_warmup_service.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/presentation/onboarding/location_onboarding_screen.dart';
-import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/core/storage/app_preferences.dart';
+import 'package:fall_line_mobile/features/session/data/gps_warmup_permission_preference.dart';
+import 'package:fall_line_mobile/features/session/data/gps_warmup_service.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/presentation/onboarding/location_onboarding_screen.dart';
+import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 
 class _FakePreference extends GpsWarmupPermissionPreference {
   _FakePreference() : super(AppPreferences.inMemory());

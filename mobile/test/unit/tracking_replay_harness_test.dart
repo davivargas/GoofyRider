@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/tracking_pipeline.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/tracking_pipeline.dart';
 
 class ReplayOutcome {
   const ReplayOutcome({

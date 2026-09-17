@@ -38,7 +38,7 @@ Future<void> runAppWith({
               .overrideWithValue(activeMapTileProviderConfig),
           appPreferencesProvider.overrideWithValue(preferences),
         ],
-        child: const GoofyRiderApp(),
+        child: const FallLineApp(),
       ),
     );
   } on Object catch (error, stackTrace) {
@@ -70,7 +70,7 @@ class BootstrapErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GoofyRider',
+      title: 'Fall Line',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
       theme: AppTheme.light(),
@@ -86,14 +86,14 @@ class BootstrapErrorApp extends StatelessWidget {
   }
 }
 
-class GoofyRiderApp extends ConsumerStatefulWidget {
-  const GoofyRiderApp({super.key});
+class FallLineApp extends ConsumerStatefulWidget {
+  const FallLineApp({super.key});
 
   @override
-  ConsumerState<GoofyRiderApp> createState() => _GoofyRiderAppState();
+  ConsumerState<FallLineApp> createState() => _FallLineAppState();
 }
 
-class _GoofyRiderAppState extends ConsumerState<GoofyRiderApp>
+class _FallLineAppState extends ConsumerState<FallLineApp>
     with WidgetsBindingObserver {
   @override
   void initState() {
@@ -150,7 +150,7 @@ class _GoofyRiderAppState extends ConsumerState<GoofyRiderApp>
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'GoofyRider',
+      title: 'Fall Line',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
       theme: AppTheme.light(),

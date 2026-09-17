@@ -10,7 +10,7 @@ class AppConstants {
   /// FIRST CHAIR, VERT, CORDUROY, GOOFYRIDER).
   static const String brandWordmark = String.fromEnvironment(
     'BRAND_WORDMARK',
-    defaultValue: 'GOOFYRIDER',
+    defaultValue: 'FALL LINE',
   );
 
   static const String _configuredApiBaseUrl = String.fromEnvironment(

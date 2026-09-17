@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/app/theme/app_theme.dart';
-import 'package:goofyrider_mobile/features/resorts/domain/resort_models.dart';
-import 'package:goofyrider_mobile/features/resorts/domain/resort_repository.dart';
-import 'package:goofyrider_mobile/features/resorts/presentation/resort_providers.dart';
-import 'package:goofyrider_mobile/features/resorts/presentation/resorts_list_screen.dart';
+import 'package:fall_line_mobile/app/theme/app_theme.dart';
+import 'package:fall_line_mobile/features/resorts/domain/resort_models.dart';
+import 'package:fall_line_mobile/features/resorts/domain/resort_repository.dart';
+import 'package:fall_line_mobile/features/resorts/presentation/resort_providers.dart';
+import 'package:fall_line_mobile/features/resorts/presentation/resorts_list_screen.dart';
 
 class NoopResortRepository implements ResortRepository {
   @override

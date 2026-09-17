@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 /// their devices apart. Never throws; falls back to the OS name.
 class DeviceLabelProvider {
   DeviceLabelProvider({
-    MethodChannel channel = const MethodChannel('goofyrider/location_control'),
+    MethodChannel channel = const MethodChannel('fallline/location_control'),
   }) : _channel = channel;
 
   static const int maxLength = 80;

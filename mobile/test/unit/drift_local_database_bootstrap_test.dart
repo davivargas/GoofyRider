@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
+import 'package:fall_line_mobile/core/storage/drift_local_database.dart';
 
 void main() {
   group('DriftLocalDatabase.openOrFallback', () {

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_segmentation.dart';
-import 'package:goofyrider_mobile/features/session/domain/tracking_pipeline.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_segmentation.dart';
+import 'package:fall_line_mobile/features/session/domain/tracking_pipeline.dart';
 
 LocationSample _sample({
   required DateTime at,

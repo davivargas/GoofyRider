@@ -5,8 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:goofyrider_mobile/core/errors/failures.dart';
-import 'package:goofyrider_mobile/core/network/auth_token_interceptor.dart';
+import 'package:fall_line_mobile/core/errors/failures.dart';
+import 'package:fall_line_mobile/core/network/auth_token_interceptor.dart';
 
 class MockErrorInterceptorHandler extends Mock
     implements ErrorInterceptorHandler {}

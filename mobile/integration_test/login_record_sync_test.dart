@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_models.dart';
-import 'package:goofyrider_mobile/features/auth/domain/auth_repository.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/auth_providers.dart';
-import 'package:goofyrider_mobile/features/auth/presentation/login_screen.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
-import 'package:goofyrider_mobile/features/session/presentation/record_screen.dart';
-import 'package:goofyrider_mobile/features/session/presentation/session_providers.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
+import 'package:fall_line_mobile/features/auth/domain/auth_repository.dart';
+import 'package:fall_line_mobile/features/auth/presentation/auth_providers.dart';
+import 'package:fall_line_mobile/features/auth/presentation/login_screen.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
+import 'package:fall_line_mobile/features/session/presentation/record_screen.dart';
+import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 import 'package:integration_test/integration_test.dart';
 
 class FakeAuthRepository implements AuthRepository {

@@ -5,14 +5,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:goofyrider_mobile/core/errors/failures.dart';
-import 'package:goofyrider_mobile/core/network/api_error.dart';
-import 'package:goofyrider_mobile/core/network/auth_token_interceptor.dart';
-import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
-import 'package:goofyrider_mobile/features/session/data/session_api.dart';
-import 'package:goofyrider_mobile/features/session/data/session_repository_impl.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_repository.dart';
+import 'package:fall_line_mobile/core/errors/failures.dart';
+import 'package:fall_line_mobile/core/network/api_error.dart';
+import 'package:fall_line_mobile/core/network/auth_token_interceptor.dart';
+import 'package:fall_line_mobile/core/storage/drift_local_database.dart';
+import 'package:fall_line_mobile/features/session/data/session_api.dart';
+import 'package:fall_line_mobile/features/session/data/session_repository_impl.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
 
 class MockDriftLocalDatabase extends Mock implements DriftLocalDatabase {}
 

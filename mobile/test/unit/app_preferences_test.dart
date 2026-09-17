@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:goofyrider_mobile/core/storage/app_preferences.dart';
+import 'package:fall_line_mobile/core/storage/app_preferences.dart';
 
 class MockSecureStorage extends Mock implements FlutterSecureStorage {}
 

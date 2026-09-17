@@ -1,4 +1,4 @@
-package com.example.goofyrider_mobile
+package com.fallline.mobile
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -48,7 +48,7 @@ class TrackingForegroundService : Service() {
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("GoofyRider is recording your session")
+            .setContentTitle("Fall Line is recording your session")
             .setContentText("Tracking route in the background")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
@@ -58,7 +58,7 @@ class TrackingForegroundService : Service() {
 
     companion object {
         private const val TAG = "TrackingFgService"
-        private const val CHANNEL_ID = "goofyrider_tracking"
+        private const val CHANNEL_ID = "fallline_tracking"
         private const val CHANNEL_NAME = "Tracking"
         private const val NOTIFICATION_ID = 1717
 

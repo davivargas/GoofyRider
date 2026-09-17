@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
-import 'package:goofyrider_mobile/core/constants/session_constants.dart';
-import 'package:goofyrider_mobile/features/session/data/geolocator_tracking_repository.dart';
-import 'package:goofyrider_mobile/features/session/domain/location_tracking_repository.dart';
+import 'package:fall_line_mobile/core/constants/session_constants.dart';
+import 'package:fall_line_mobile/features/session/data/geolocator_tracking_repository.dart';
+import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 void main() {

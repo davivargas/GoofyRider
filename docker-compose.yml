@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15
-    container_name: goofyrider_db
+    container_name: fallline_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -21,7 +21,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: goofyrider_backend
+    container_name: fallline_backend
     restart: unless-stopped
     depends_on:
       db:

@@ -1,11 +1,11 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:goofyrider_mobile/features/auth/data/device_label_provider.dart';
+import 'package:fall_line_mobile/features/auth/data/device_label_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const channel = MethodChannel('goofyrider/location_control');
+  const channel = MethodChannel('fallline/location_control');
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

@@ -1,4 +1,4 @@
-package com.example.goofyrider_mobile
+package com.fallline.mobile
 
 import android.Manifest
 import android.content.ActivityNotFoundException
@@ -106,7 +106,7 @@ class AndroidFusedLocationBridge(
                     result.success(
                         mapOf(
                             "ok" to false,
-                            "message" to "Precise location is required for recording. Turn on precise location access for GoofyRider.",
+                            "message" to "Precise location is required for recording. Turn on precise location access for Fall Line.",
                         ),
                     )
                     return
@@ -679,8 +679,8 @@ class AndroidFusedLocationBridge(
 
     companion object {
         private const val TAG = "AndroidFusedBridge"
-        private const val EVENT_CHANNEL_NAME = "goofyrider/location_events"
-        private const val CONTROL_CHANNEL_NAME = "goofyrider/location_control"
+        private const val EVENT_CHANNEL_NAME = "fallline/location_events"
+        private const val CONTROL_CHANNEL_NAME = "fallline/location_control"
         private const val REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION = 2001
         private const val REQUEST_CODE_APP_SETTINGS = 2002
         private const val MAX_ACCEPTED_SAMPLE_AGE_MS = 300_000L

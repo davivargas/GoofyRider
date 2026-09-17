@@ -5,8 +5,8 @@ import 'package:drift/drift.dart'
     show DatabaseConnection, QueryRow, Variable, driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:goofyrider_mobile/core/storage/drift_local_database.dart';
-import 'package:goofyrider_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/core/storage/drift_local_database.dart';
+import 'package:fall_line_mobile/features/session/domain/session_models.dart';
 
 void main() {
   group('DriftLocalDatabase integrity', () {
