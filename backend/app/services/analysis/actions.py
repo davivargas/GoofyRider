@@ -135,7 +135,10 @@ def _apply_overrides(
     masked: list[bool],
     overrides: Sequence[OverrideSpan],
 ) -> None:
+    frame_start, frame_end = frame.time_at(0), frame.time_at(len(frame) - 1)
     for span in overrides:
+        if span.ended_at < frame_start or span.started_at > frame_end:
+            continue
         lo, hi = frame.index_at(span.started_at), frame.index_at(span.ended_at)
         for i in range(lo, hi + 1):
             if span.motion_state == IGNORE:
@@ -323,39 +326,59 @@ def _record(
     lift_name: str | None,
     track_id: str | None,
 ) -> ActionRecord:
-    seconds = [i for i in range(a, b + 1) if not masked[i]] or list(range(a, b + 1))
-    masked_count = (b - a + 1) - len(seconds) if any(masked[a : b + 1]) else 0
-    distance = sum(
-        haversine_m(frame.lat[i], frame.lon[i], frame.lat[i + 1], frame.lon[i + 1])
-        for i in seconds
-        if i + 1 <= b and not masked[i + 1]
-    )
-    speeds = [frame.speed[i] for i in seconds]
-    altitudes = [frame.alt[i] for i in seconds]
-    lats = [frame.lat[i] for i in seconds]
-    lons = [frame.lon[i] for i in seconds]
+    span_seconds = list(range(a, b + 1))
+    stat_seconds = [i for i in span_seconds if not masked[i]]
+    bounds_seconds = stat_seconds or span_seconds
 
-    top_speed = 0.0
     top_point = None
-    allowed = set(seconds)
-    for p in frame.points:
-        second = frame.index_at(p.recorded_at)
-        if second not in allowed or p.speed_mps is None:
-            continue
-        reference = max(frame.speed[second], config.spike_floor_mps)
-        if p.speed_mps <= reference * config.spike_ratio and p.speed_mps > top_speed:
-            top_speed, top_point = float(p.speed_mps), p
+    if stat_seconds:
+        masked_count = (b - a + 1) - len(stat_seconds)
+        distance = sum(
+            haversine_m(frame.lat[i], frame.lon[i], frame.lat[i + 1], frame.lon[i + 1])
+            for i in stat_seconds
+            if i + 1 <= b and not masked[i + 1]
+        )
+        speeds = [frame.speed[i] for i in stat_seconds]
+        duration_s = float(max(0, (b - a) - masked_count))
+        avg_speed = sum(speeds) / len(speeds)
+        min_speed = min(speeds)
+
+        top_speed = 0.0
+        allowed = set(stat_seconds)
+        for p in frame.points:
+            second = frame.index_at(p.recorded_at)
+            if second not in allowed or p.speed_mps is None:
+                continue
+            reference = max(frame.speed[second], config.spike_floor_mps)
+            if p.speed_mps <= reference * config.spike_ratio and p.speed_mps > top_speed:
+                top_speed, top_point = float(p.speed_mps), p
+        max_speed = top_speed
+    else:
+        # Every second is masked. Duration/distance/speed stats have nothing to
+        # measure and must not fall back to the whole span (that would pair a
+        # nonzero duration/avg speed with zero distance, which is incoherent).
+        # Bounds (altitude, lat/long) still come from the whole span below so
+        # they are never empty.
+        distance = 0.0
+        duration_s = 0.0
+        avg_speed = 0.0
+        min_speed = 0.0
+        max_speed = 0.0
+
+    altitudes = [frame.alt[i] for i in bounds_seconds]
+    lats = [frame.lat[i] for i in bounds_seconds]
+    lons = [frame.lon[i] for i in bounds_seconds]
 
     return ActionRecord(
         action_type=kind,
         sequence_index=sequence_index,
         started_at=frame.time_at(a),
         ended_at=frame.time_at(b),
-        duration_s=float(max(0, (b - a) - masked_count)),
+        duration_s=duration_s,
         distance_m=distance,
-        avg_speed_mps=sum(speeds) / len(speeds),
-        max_speed_mps=top_speed,
-        min_speed_mps=min(speeds),
+        avg_speed_mps=avg_speed,
+        max_speed_mps=max_speed,
+        min_speed_mps=min_speed,
         vertical_m=max(altitudes) - min(altitudes),
         min_altitude_m=min(altitudes),
         max_altitude_m=max(altitudes),

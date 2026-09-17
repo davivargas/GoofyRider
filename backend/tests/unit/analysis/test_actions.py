@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 
 from app.services.analysis.actions import build
@@ -172,3 +174,39 @@ def test_sequence_indices_count_runs_and_lifts_separately() -> None:
     assert [a.sequence_index for a in _runs(actions)] == [1, 2]
     assert [a.sequence_index for a in _lifts(actions)] == [1]
     assert [a.action_type for a in actions] == ["run", "lift", "run"]
+
+
+def test_fully_masked_run_has_coherent_zeroed_stats() -> None:
+    points = descent(0, 90)
+    override = OverrideSpan(
+        started_at=points[0].recorded_at,
+        ended_at=points[-1].recorded_at,
+        motion_state="ignore",
+        created_by="user",
+    )
+    actions, _ = _analyze(points, overrides=[override])
+    runs = _runs(actions)
+    assert len(runs) == 1
+    run = runs[0]
+    assert run.duration_s == 0.0
+    assert run.distance_m == 0.0
+    assert run.avg_speed_mps == 0.0
+    assert run.max_speed_mps == 0.0
+    assert run.min_speed_mps == 0.0
+    assert run.top_speed_lat is None
+    assert run.top_speed_long is None
+    assert run.top_speed_alt_m is None
+    assert run.min_altitude_m is not None
+
+
+def test_override_entirely_outside_the_frame_window_is_ignored() -> None:
+    points = descent(0, 90)
+    override = OverrideSpan(
+        started_at=points[-1].recorded_at + timedelta(hours=1),
+        ended_at=points[-1].recorded_at + timedelta(hours=1, seconds=30),
+        motion_state="lift",
+        created_by="user",
+    )
+    actions, _ = _analyze(points, overrides=[override])
+    assert len(_runs(actions)) == 1
+    assert len(_lifts(actions)) == 0

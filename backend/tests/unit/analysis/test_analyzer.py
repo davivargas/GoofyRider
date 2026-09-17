@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 import pytest
 
 from app.services.analysis import AnalyzerInput
+from app.services.analysis import OverrideSpan
 from app.services.analysis import PresetAction
 from app.services.analysis import ResortLift
 from app.services.analysis import SessionAnalyzer
@@ -100,3 +103,41 @@ def test_invalid_preset_type_is_rejected() -> None:
     )
     with pytest.raises(ValidationError):
         SessionAnalyzer(analyzer_version="v").analyze(_input(points, preset_actions=[bad]))
+
+
+def test_record_end_before_record_start_is_rejected() -> None:
+    points = descent(0, 5)
+    metadata = SessionMetadataInput(
+        record_start=points[-1].recorded_at,
+        record_end=points[-1].recorded_at - timedelta(seconds=1),
+        resort_id=None,
+        source="live_recording",
+    )
+    with pytest.raises(ValidationError):
+        SessionAnalyzer(analyzer_version="v").analyze(
+            AnalyzerInput(points=points, metadata=metadata)
+        )
+
+
+def test_override_with_end_before_start_is_rejected() -> None:
+    points = descent(0, 90)
+    override = OverrideSpan(
+        started_at=points[10].recorded_at,
+        ended_at=points[10].recorded_at - timedelta(seconds=1),
+        motion_state="ignore",
+        created_by="user",
+    )
+    with pytest.raises(ValidationError):
+        SessionAnalyzer(analyzer_version="v").analyze(_input(points, preset_overrides=[override]))
+
+
+def test_override_with_unknown_motion_state_is_rejected() -> None:
+    points = descent(0, 90)
+    override = OverrideSpan(
+        started_at=points[10].recorded_at,
+        ended_at=points[20].recorded_at,
+        motion_state="walk",
+        created_by="user",
+    )
+    with pytest.raises(ValidationError):
+        SessionAnalyzer(analyzer_version="v").analyze(_input(points, preset_overrides=[override]))
