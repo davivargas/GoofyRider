@@ -344,8 +344,9 @@ whole `started_at` to `ended_at` span of each run as `run`.
 
 All fourteen archives from `goofy-rider/slopes-files/` are copied to
 `backend/tests/fixtures/slopes/` using the existing `<resort>_<date>.slopes`
-naming (about 1.6 MB). `tests/unit/slopes_labels.py` turns each archive's
-Run and Lift actions into a per-second label series (`run`, `lift`, `other`)
+naming (about 1.6 MB). `app/scripts/evaluate_analyzer.py` (`load_archive`)
+turns each archive's Run and Lift actions, corrected by `label_overrides.json`,
+into labelled spans that are painted per second as `run`, `lift`, or `other`
 over the recording window.
 
 ### 9.2 Scoring
