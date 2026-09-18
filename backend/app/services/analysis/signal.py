@@ -32,9 +32,7 @@ class FeatureFrame:
     speed: list[float]
     vrate: list[float]
     heading_var: list[float]
-    hacc: list[float]
     gap: list[bool]
-    point_index: list[int]
     points: list[RawPoint]
     used_barometer: bool
 
@@ -71,9 +69,7 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
     lon = [kept[0].longitude] * n
     alt = [point_alts[0]] * n
     speed = [0.0] * n
-    hacc = [kept[0].accuracy_m or 0.0] * n
     gap = [False] * n
-    point_index = [0] * n
 
     for k in range(len(kept) - 1):
         a, b = kept[k], kept[k + 1]
@@ -84,8 +80,6 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
         for i in range(ia, min(ib, n - 1) + 1):
             f = (i - ia) / max(ib - ia, 1)
             alt[i] = point_alts[k] + f * (point_alts[k + 1] - point_alts[k])
-            hacc[i] = (a.accuracy_m if f < 0.5 else b.accuracy_m) or 0.0
-            point_index[i] = k if f < 0.5 else k + 1
             if implied < config.still_mps:
                 lat[i], lon[i] = a.latitude, a.longitude
                 speed[i] = (
@@ -101,7 +95,6 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
                 gap[i] = dt > config.bridge_max_s
     lat[-1], lon[-1] = kept[-1].latitude, kept[-1].longitude
     alt[-1], speed[-1] = point_alts[-1], point_speeds[-1]
-    point_index[-1] = len(kept) - 1
 
     alt_window = config.baro_alt_window_s if used_barometer else config.gps_alt_window_s
     smooth_alt = centered_mean(alt, alt_window)
@@ -114,9 +107,7 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
         speed=smooth_speed,
         vrate=_vertical_rate(smooth_alt, config.vrate_half_window_s),
         heading_var=_heading_variance(lat, lon, config.heading_window_s),
-        hacc=hacc,
         gap=gap,
-        point_index=point_index,
         points=kept,
         used_barometer=used_barometer,
     )

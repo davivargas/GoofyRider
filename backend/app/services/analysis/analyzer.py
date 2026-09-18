@@ -47,6 +47,9 @@ class SessionAnalyzer:
             if analyzer_input.preset_actions:
                 first = min(p.started_at for p in analyzer_input.preset_actions)
                 last = max(p.ended_at for p in analyzer_input.preset_actions)
+                # An imported session takes its break stats from the raw decoded states,
+                # before the live path's validity passes run, so imported and live break
+                # counts can differ for the same track.
                 breaks = break_stats(states, frame.index_at(first), frame.index_at(last), config)
             else:
                 area = resort_area(analyzer_input.resort_lifts, config)

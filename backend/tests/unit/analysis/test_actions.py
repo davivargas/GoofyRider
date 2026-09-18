@@ -182,6 +182,17 @@ def test_top_speed_ignores_a_one_sample_spike() -> None:
     assert run.top_speed_lat != pytest.approx(spike.latitude, abs=1e-9) or run.max_speed_mps < 11.0
 
 
+def test_top_speed_falls_back_to_the_frame_when_no_fix_reports_speed() -> None:
+    points = [
+        point(i, north_m=-8.0 * i, altitude_m=1000.0 - 3.0 * i, speed_mps=None) for i in range(90)
+    ]
+    run = _runs(_analyze(points)[0])[0]
+    assert run.max_speed_mps > 0.0
+    assert run.top_speed_lat is None
+    assert run.top_speed_long is None
+    assert run.top_speed_alt_m is None
+
+
 def test_sequence_indices_count_runs_and_lifts_separately() -> None:
     points = (
         descent(0, 60)

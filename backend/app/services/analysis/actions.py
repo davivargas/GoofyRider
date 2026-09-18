@@ -65,7 +65,9 @@ def build(
     actions: list[ActionRecord] = []
     counters = {RUN: 0, LIFT: 0}
     for a, b, kind in timeline:
-        if (b - a) < config.min_action_duration_s:
+        # Inclusive index bounds: a span from a to b covers b - a + 1 seconds, so the
+        # "2 s minimum" guard has to count the same way.
+        if (b - a + 1) < config.min_action_duration_s:
             continue
         counters[kind] += 1
         name, track_id = _lift_identity(anchored, a, b) if kind == LIFT else (None, None)
@@ -352,7 +354,12 @@ def _record(
             reference = max(frame.speed[second], config.spike_floor_mps)
             if p.speed_mps <= reference * config.spike_ratio and p.speed_mps > top_speed:
                 top_speed, top_point = float(p.speed_mps), p
-        max_speed = top_speed
+        # No fix in the span carried a plausible platform speed (a phone that never reports
+        # one, or a span whose every candidate was a spike): the conditioned frame is the
+        # only speed there is, and it has no location to attribute the peak to.
+        max_speed = (
+            top_speed if top_point is not None else max(frame.speed[i] for i in stat_seconds)
+        )
     else:
         # Every second is masked. Duration/distance/speed stats have nothing to
         # measure and must not fall back to the whole span (that would pair a
