@@ -13,6 +13,7 @@ class LocationSample {
     this.bearingAccuracyDeg,
     this.provider,
     this.isMocked,
+    this.pressureHpa,
   });
 
   final DateTime timestamp;
@@ -28,6 +29,10 @@ class LocationSample {
   final double? bearingAccuracyDeg;
   final String? provider;
   final bool? isMocked;
+
+  /// Barometric pressure in hectopascals from the device sensor, or null when
+  /// the device has no barometer or the reading was older than 5 s.
+  final double? pressureHpa;
 }
 
 enum LocationPermissionState {

@@ -5,6 +5,10 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.net.Uri
 import android.os.Build
@@ -56,6 +60,41 @@ class AndroidFusedLocationBridge(
     private var didLogFirstFixForActiveRequest: Boolean = false
     private val nativeWatchdogHandler = Handler(Looper.getMainLooper())
     private var nativeWatchdogRunnable: Runnable? = null
+    private val sensorManager: SensorManager? =
+        activity.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    private val pressureSensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_PRESSURE)
+    @Volatile private var latestPressureHpa: Float? = null
+    @Volatile private var latestPressureAtMs: Long = 0L
+    private var pressureListenerRegistered = false
+    private val pressureListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            latestPressureHpa = event.values[0]
+            latestPressureAtMs = SystemClock.elapsedRealtime()
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+    }
+
+    private fun startPressureUpdates() {
+        val manager = sensorManager ?: return
+        val sensor = pressureSensor ?: return
+        if (pressureListenerRegistered) return
+        pressureListenerRegistered =
+            manager.registerListener(pressureListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+    }
+
+    private fun stopPressureUpdates() {
+        if (!pressureListenerRegistered) return
+        sensorManager?.unregisterListener(pressureListener)
+        pressureListenerRegistered = false
+        latestPressureHpa = null
+    }
+
+    private fun currentPressureHpa(): Double? {
+        val value = latestPressureHpa ?: return null
+        val ageMs = SystemClock.elapsedRealtime() - latestPressureAtMs
+        return if (ageMs <= PRESSURE_MAX_AGE_MS) value.toDouble() else null
+    }
 
     init {
         EventChannel(messenger, EVENT_CHANNEL_NAME).setStreamHandler(this)
@@ -344,6 +383,7 @@ class AndroidFusedLocationBridge(
             "requestLocationUpdates id=$activeRequestId reason=$reason mode=${currentMode.name} priority=${currentConfig.priority} intervalMs=${currentConfig.intervalMs} minIntervalMs=${currentConfig.minIntervalMs} maxDelayMs=${currentConfig.maxDelayMs} minDistanceM=${currentConfig.minDistanceM}",
         )
 
+        startPressureUpdates()
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
             callback,
@@ -365,6 +405,7 @@ class AndroidFusedLocationBridge(
         activeRequestStartedRealtimeNanos = null
         didLogFirstFixForActiveRequest = false
         cancelNativeWatchdog()
+        stopPressureUpdates()
     }
 
     private fun nativeWatchdogThresholdMs(): Long {
@@ -545,6 +586,7 @@ class AndroidFusedLocationBridge(
             "bearingDeg" to if (hasBearing()) bearing else null,
             "provider" to provider,
             "isMocked" to readMockedFlag(this),
+            "pressureHpa" to currentPressureHpa(),
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -684,5 +726,6 @@ class AndroidFusedLocationBridge(
         private const val REQUEST_CODE_BACKGROUND_LOCATION_PERMISSION = 2001
         private const val REQUEST_CODE_APP_SETTINGS = 2002
         private const val MAX_ACCEPTED_SAMPLE_AGE_MS = 300_000L
+        private const val PRESSURE_MAX_AGE_MS = 5_000L
     }
 }

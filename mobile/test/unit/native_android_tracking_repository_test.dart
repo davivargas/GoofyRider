@@ -193,6 +193,52 @@ void main() {
     expect(samples[1].accuracyM, 4.5);
   });
 
+  test('parses pressureHpa from the native payload and tolerates its absence',
+      () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      eventChannel,
+      MockStreamHandler.inline(
+        onListen: (Object? arguments, MockStreamHandlerEventSink events) {
+          events.success(<String, Object?>{
+            'samples': <Object?>[
+              <String, Object?>{
+                'timestampUtc': 1000,
+                'elapsedRealtimeNanos': 10,
+                'latitude': 49.10,
+                'longitude': -123.10,
+                'pressureHpa': 898.7,
+              },
+              <String, Object?>{
+                'timestampUtc': 2000,
+                'elapsedRealtimeNanos': 20,
+                'latitude': 49.20,
+                'longitude': -123.20,
+              },
+            ],
+          });
+          events.endOfStream();
+        },
+      ),
+    );
+
+    final repository = NativeAndroidTrackingRepository(
+      eventChannel: eventChannel,
+      controlChannel: controlChannel,
+    );
+
+    final samples = await repository.watchPosition().toList();
+
+    expect(samples, hasLength(2));
+    final withPressure =
+        samples.firstWhere((LocationSample s) => s.latitude == 49.10);
+    final withoutPressure =
+        samples.firstWhere((LocationSample s) => s.latitude == 49.20);
+
+    expect(withPressure.pressureHpa, closeTo(898.7, 1e-9));
+    expect(withoutPressure.pressureHpa, isNull);
+  });
+
   test(
       'watchPosition keeps waiting for native startup when first sample is slow',
       () async {

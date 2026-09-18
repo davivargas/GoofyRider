@@ -253,6 +253,7 @@ class NativeAndroidTrackingRepository implements LocationTrackingRepository {
         bearingAccuracyDeg: _asNullableDouble(raw['bearingAccuracyDeg']),
         provider: _asNullableString(raw['provider']),
         isMocked: _asNullableBool(raw['isMocked']),
+        pressureHpa: _asNullableDouble(raw['pressureHpa']),
       );
     } on FormatException {
       return null;
