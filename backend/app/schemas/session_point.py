@@ -21,6 +21,7 @@ class SessionPointInput(BaseModel):
     speed_accuracy_mps: float | None = Field(default=None, ge=0)
     heading_deg: float | None = Field(default=None, ge=0, le=360)
     bearing_accuracy_deg: float | None = Field(default=None, ge=0)
+    pressure_hpa: float | None = Field(default=None, ge=300, le=1100)
     provider: str | None = None
     is_mocked: bool | None = None
 
@@ -48,7 +49,7 @@ class SessionPointPublic(ORMBaseModel):
     speed_accuracy_mps: float | None
     heading_deg: float | None
     bearing_accuracy_deg: float | None
+    pressure_hpa: float | None
     provider: str | None
     is_mocked: bool | None
     created_at: datetime
-

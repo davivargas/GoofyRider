@@ -2,11 +2,13 @@ from collections.abc import Callable
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+import uuid
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.models.resort import Resort
+from app.models.session_point import SessionPoint
 
 
 def test_sessions_lifecycle_create_points_complete_list(
@@ -619,3 +621,74 @@ def test_sessions_points_batch_rejects_over_cap(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Session point limit exceeded."
+
+
+def test_points_batch_stores_pressure(
+    client: TestClient,
+    register_user,
+    create_resort: Callable[..., Resort],
+    db,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Pressure Resort")
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id), "started_at": "2026-01-01T00:00:00Z"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+    points = [
+        {
+            "t_offset_ms": 0,
+            "latitude": 49.4,
+            "longitude": -123.0,
+            "altitude_m": 1000.0,
+            "speed_mps": 1.0,
+            "pressure_hpa": 898.7,
+        },
+        {
+            "t_offset_ms": 1000,
+            "latitude": 49.4001,
+            "longitude": -123.0,
+            "altitude_m": 999.0,
+            "speed_mps": 1.0,
+        },
+    ]
+    response = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={"points": points},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    stored = (
+        db.query(SessionPoint)
+        .filter(SessionPoint.session_id == uuid.UUID(session_id))
+        .order_by(SessionPoint.t_offset_ms)
+        .all()
+    )
+    assert [p.pressure_hpa for p in stored] == [898.7, None]
+
+
+def test_points_batch_rejects_impossible_pressure(
+    client: TestClient,
+    register_user,
+    create_resort: Callable[..., Resort],
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Pressure Resort 2")
+    created = client.post(
+        "/v1/sessions",
+        json={"resort_id": str(resort.id), "started_at": "2026-01-01T00:00:00Z"},
+        headers=headers,
+    )
+    session_id = created.json()["id"]
+    bad = [{"t_offset_ms": 0, "latitude": 49.4, "longitude": -123.0, "pressure_hpa": 42.0}]
+    response = client.post(
+        f"/v1/sessions/{session_id}/points:batch",
+        json={"points": bad},
+        headers=headers,
+    )
+    assert response.status_code == 422

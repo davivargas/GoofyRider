@@ -397,6 +397,7 @@ class SessionService:
             speed_accuracy_mps=point.speed_accuracy_mps,
             heading_deg=point.heading_deg,
             bearing_accuracy_deg=point.bearing_accuracy_deg,
+            pressure_hpa=point.pressure_hpa,
             provider=point.provider,
             is_mocked=point.is_mocked,
         )
@@ -413,6 +414,9 @@ def _to_raw_point(point: SessionPoint) -> RawPoint:
         speed_mps=point.speed_mps,
         accuracy_m=point.accuracy_m,
         vertical_accuracy_m=point.vertical_accuracy_m,
+        speed_accuracy_mps=point.speed_accuracy_mps,
+        heading_deg=point.heading_deg,
+        pressure_hpa=point.pressure_hpa,
     )
 
 

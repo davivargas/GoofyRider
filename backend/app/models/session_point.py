@@ -11,6 +11,7 @@ from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
+from sqlalchemy import Numeric
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import UUID
@@ -99,6 +100,10 @@ class SessionPoint(Base):
     )
     bearing_accuracy_deg: Mapped[float | None] = mapped_column(
         Float,
+        nullable=True,
+    )
+    pressure_hpa: Mapped[float | None] = mapped_column(
+        Numeric(7, 2, asdecimal=False),
         nullable=True,
     )
     provider: Mapped[str | None] = mapped_column(
