@@ -51,6 +51,10 @@ class ResortLift(Base):
         Text,
         nullable=True,
     )
+    osm_aerialway: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     polyline: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,

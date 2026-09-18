@@ -139,6 +139,10 @@ class RideSessionAction(Base):
         Text,
         nullable=True,
     )
+    lift_name: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     source: Mapped[str] = mapped_column(
         Text,
         nullable=False,

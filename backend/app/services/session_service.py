@@ -429,7 +429,7 @@ def _to_override_span(override: RideSessionOverride) -> OverrideSpan:
     )
 
 
-def _summary_to_fields(summary: SessionSummaryFields) -> dict[str, float | None]:
+def _summary_to_fields(summary: SessionSummaryFields) -> dict[str, float | int | None]:
     return {
         "total_duration_s": summary.total_duration_s,
         "descent_duration_s": summary.descent_duration_s,
@@ -444,6 +444,8 @@ def _summary_to_fields(summary: SessionSummaryFields) -> dict[str, float | None]
         "center_lat": summary.center_lat,
         "center_long": summary.center_long,
         "altitude_offset_m": summary.altitude_offset_m,
+        "break_count": summary.break_count,
+        "break_duration_s": summary.break_duration_s,
     }
 
 
@@ -471,6 +473,7 @@ def _to_action_model(action: ActionRecord) -> RideSessionAction:
         time_of_day=action.time_of_day,
         external_track_id=action.external_track_id,
         source=action.source,
+        lift_name=action.lift_name,
     )
 
 

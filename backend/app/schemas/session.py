@@ -102,6 +102,8 @@ class SessionSummary(ORMBaseModel):
     lift_vertical_m: float
     avg_descent_speed_mps: float
     total_duration_s: float
+    break_count: int
+    break_duration_s: float
     processed_by_version: str | None
     processed_at: datetime | None
     status: RideSessionStatus

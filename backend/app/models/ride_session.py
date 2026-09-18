@@ -10,6 +10,7 @@ from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
+from sqlalchemy import Integer
 from sqlalchemy import Numeric
 from sqlalchemy import Text
 from sqlalchemy import func
@@ -160,6 +161,16 @@ class RideSession(Base):
         server_default=text("0"),
     )
     total_duration_s: Mapped[float] = mapped_column(
+        Numeric(10, 3, asdecimal=False),
+        nullable=False,
+        server_default=text("0"),
+    )
+    break_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+    break_duration_s: Mapped[float] = mapped_column(
         Numeric(10, 3, asdecimal=False),
         nullable=False,
         server_default=text("0"),

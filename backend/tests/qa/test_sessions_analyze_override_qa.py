@@ -619,3 +619,20 @@ def test_complete_session_on_completed_returns_409(
     )
     assert response.status_code == 409
     assert response.json()["detail"] == "Only draft sessions can be completed."
+
+
+def test_session_detail_reports_break_stats(
+    client: TestClient,
+    create_resort: Callable[..., Resort],
+    register_user,
+) -> None:
+    user = register_user()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    resort = create_resort(name="Break Stats Resort")
+    session_id = _create_completed_session(client, headers, resort)
+
+    detail = client.get(f"/v1/sessions/{session_id}", headers=headers)
+    assert detail.status_code == 200
+    session = detail.json()["session"]
+    assert session["break_count"] == 0
+    assert session["break_duration_s"] == 0.0
