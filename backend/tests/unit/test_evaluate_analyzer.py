@@ -35,3 +35,24 @@ def test_scoring_the_cleanest_archive() -> None:
     assert score.ref_runs == 3 and score.ref_lifts == 3
     assert 0.0 <= score.agreement <= 1.0
     assert score.agreement > 0.9
+
+
+def test_labels_outside_the_point_window_never_count_as_found() -> None:
+    from datetime import timedelta
+
+    from app.scripts.evaluate_analyzer import LabelledAction
+
+    archive = load_archive(CORPUS_DIR / "cypress_2025-01-03.slopes")
+    after = archive.points[-1].recorded_at + timedelta(hours=2)
+    phantom = LabelledAction(kind="lift", started_at=after, ended_at=after + timedelta(minutes=5))
+    patched = type(archive)(
+        name=archive.name,
+        record_start=archive.record_start,
+        record_end=archive.record_end,
+        points=archive.points,
+        labels=[*archive.labels, phantom],
+    )
+    analyzer = SessionAnalyzer(analyzer_version="test", config=AnalyzerConfig())
+    score = score_archive(patched, analyzer, lifts=())
+    assert score.ref_lifts == 3
+    assert score.lift_found <= 3

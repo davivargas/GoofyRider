@@ -198,11 +198,15 @@ def score_archive(
     def to_spans(
         items: Sequence[tuple[str, datetime, datetime]], kind: str
     ) -> list[tuple[int, int]]:
-        return [
+        clipped = [
             (max(0, int(s.timestamp()) - origin), min(seconds - 1, int(e.timestamp()) - origin))
             for k, s, e in items
             if k == kind
         ]
+        # A span wholly outside the point window clips to start > end; it must not be
+        # painted and must never count as a match (a non-positive length would make
+        # the overlap threshold in matches() trivially satisfied).
+        return [(a, b) for a, b in clipped if a <= b]
 
     ours = [(a.action_type, a.started_at, a.ended_at) for a in result.actions]
     theirs = [(label.kind, label.started_at, label.ended_at) for label in archive.labels]
@@ -214,6 +218,8 @@ def score_archive(
 
     def paint(who: str) -> list[str]:
         track = ["other"] * seconds
+        # Lifts are painted after runs so a lift wins if the two ever overlap; the
+        # analyzer never emits overlapping actions today, so this is a tie-break only.
         for kind in ("run", "lift"):
             for a, b in spans[(who, kind)]:
                 for i in range(a, b + 1):
