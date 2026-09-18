@@ -151,7 +151,7 @@ class DebugExportService {
       'distance_m': session.distanceM,
       'max_speed_mps': session.maxSpeedMps,
       'avg_speed_mps': session.avgSpeedMps,
-      'elevation_gain_m': session.elevationGainM,
+      'lift_vertical_m': session.elevationGainM,
       'elevation_loss_m': session.elevationLossM,
       'state': session.state.wireValue,
       'point_count': session.pointCount,

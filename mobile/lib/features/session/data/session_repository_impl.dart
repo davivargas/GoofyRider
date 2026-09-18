@@ -799,6 +799,7 @@ class SessionRepositoryImpl implements SessionRepository {
       ),
       'pressure_hpa': _sanitizePressureForSync(
         point.pressureHpa,
+        fieldName: 'pressure_hpa',
         sanitizedFields: sanitizedFields,
       ),
       'provider': canonicalizeProviderForSync(point.provider),
@@ -1047,11 +1048,12 @@ class SessionRepositoryImpl implements SessionRepository {
 
   double? _sanitizePressureForSync(
     double? value, {
+    required String fieldName,
     required List<String> sanitizedFields,
   }) {
     if (value == null) return null;
     if (!value.isFinite || value < 300 || value > 1100) {
-      sanitizedFields.add('pressure_hpa');
+      sanitizedFields.add(fieldName);
       return null;
     }
     return value;
@@ -1516,6 +1518,7 @@ class SessionRepositoryImpl implements SessionRepository {
         derivedSpeedMps: _remoteNullableDouble(raw['derived_speed_mps']),
         distanceDeltaM: _remoteNullableDouble(raw['distance_delta_m']),
         motionState: motionState,
+        pressureHpa: _remoteNullableDouble(raw['pressure_hpa']),
       );
     }).toList(growable: false);
   }

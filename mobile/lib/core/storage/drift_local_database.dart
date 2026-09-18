@@ -114,10 +114,13 @@ class DriftLocalDatabase extends GeneratedDatabase {
   // ---------------------------------------------------------------------------
 
   Future<void> initialize() async {
-    final versionRows = await customSelect('PRAGMA user_version').get();
-    final currentVersion = versionRows.isNotEmpty
-        ? (versionRows.first.data.values.first as int? ?? 0)
-        : 0;
+    // Deliberately NOT `PRAGMA user_version`: drift's NativeDatabase stamps
+    // user_version to `schemaVersion` while opening the connection (which
+    // happens lazily on the first statement issued here), so reading it would
+    // always report the target version and skip every hand-written migration.
+    // `app_schema_meta` is owned by this method and only written once the whole
+    // sequence below has completed.
+    final currentVersion = await _readAppSchemaVersion();
     if (currentVersion >= schemaVersion) {
       return;
     }
@@ -283,7 +286,44 @@ class DriftLocalDatabase extends GeneratedDatabase {
     await _enforceRemoteSessionIdentityUniqueness();
     await _enforceLocalSessionPointUniqueness();
 
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS app_schema_meta (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        version INTEGER NOT NULL
+      )
+    ''');
+    await customStatement(
+      'INSERT OR REPLACE INTO app_schema_meta (id, version) '
+      'VALUES (1, $schemaVersion)',
+    );
+    // Kept for compatibility with anything that still inspects user_version.
     await customStatement('PRAGMA user_version = $schemaVersion');
+  }
+
+  Future<int> _readAppSchemaVersion() async {
+    final tableRows = await customSelect(
+      '''
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+      AND name = 'app_schema_meta'
+      ''',
+    ).get();
+    if (tableRows.isEmpty) {
+      return 0;
+    }
+
+    final versionRows = await customSelect(
+      'SELECT version FROM app_schema_meta WHERE id = 1',
+    ).get();
+    if (versionRows.isEmpty) {
+      return 0;
+    }
+    final rawVersion = versionRows.first.data['version'];
+    if (rawVersion == null) {
+      return 0;
+    }
+    return _asInt(rawVersion);
   }
 
   // ---------------------------------------------------------------------------

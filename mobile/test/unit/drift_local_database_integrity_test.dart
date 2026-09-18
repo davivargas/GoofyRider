@@ -597,15 +597,229 @@ void main() {
           await database.customSelect('PRAGMA user_version').get();
       final userVersion = versionRows.first.data.values.first as int;
 
+      final metaRows = await database
+          .customSelect(
+            'SELECT version FROM app_schema_meta WHERE id = 1',
+          )
+          .get();
+
       expect(pointColumnNames, contains('pressure_hpa'));
       expect(
         sessionColumnNames,
         containsAll(<String>['break_count', 'break_duration_s']),
       );
       expect(userVersion, 5);
+      expect(metaRows.single.data['version'], 5);
+    });
+
+    test('installed schema-4 database gains the v5 columns without losing rows',
+        () async {
+      final previousDontWarn =
+          driftRuntimeOptions.dontWarnAboutMultipleDatabases;
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      final legacyDatabase = DriftLocalDatabase.connectForTesting(
+        DatabaseConnection(NativeDatabase.memory()),
+      );
+      addTearDown(() async {
+        await legacyDatabase.close();
+        driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousDontWarn;
+      });
+
+      await legacyDatabase.customStatement(_v4RideSessionsTable);
+      await legacyDatabase.customStatement(_v4SessionPointsTable);
+      await legacyDatabase.customStatement(
+        '''
+        INSERT INTO local_ride_sessions (
+          owner_user_id,
+          remote_id,
+          resort_id,
+          started_at,
+          ended_at,
+          state,
+          point_count,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        <Object?>[
+          'user-1',
+          'remote-installed',
+          'resort-installed',
+          DateTime.utc(2026, 1, 5, 8).toIso8601String(),
+          DateTime.utc(2026, 1, 5, 9).toIso8601String(),
+          'synced',
+          1,
+          DateTime.utc(2026, 1, 5, 8).toIso8601String(),
+          DateTime.utc(2026, 1, 5, 9).toIso8601String(),
+        ],
+      );
+      await legacyDatabase.customStatement(
+        '''
+        INSERT INTO local_session_points (
+          local_session_id,
+          recorded_at,
+          t_offset_ms,
+          latitude,
+          longitude,
+          accepted_for_analytics,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''',
+        <Object?>[
+          1,
+          DateTime.utc(2026, 1, 5, 8, 0, 1).toIso8601String(),
+          1000,
+          49.0,
+          -123.0,
+          1,
+          DateTime.utc(2026, 1, 5, 8, 0, 1).toIso8601String(),
+        ],
+      );
+      await legacyDatabase.customStatement('PRAGMA user_version = 4');
+
+      final preMetaTables = await legacyDatabase
+          .customSelect(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'app_schema_meta'",
+          )
+          .get();
+      expect(preMetaTables, isEmpty);
+
+      await legacyDatabase.initialize();
+
+      final pointColumns = await legacyDatabase
+          .customSelect('PRAGMA table_info(local_session_points)')
+          .get();
+      final pointColumnNames = pointColumns
+          .map((QueryRow row) => row.data['name'] as String)
+          .toSet();
+      final sessionColumns = await legacyDatabase
+          .customSelect('PRAGMA table_info(local_ride_sessions)')
+          .get();
+      final sessionColumnNames = sessionColumns
+          .map((QueryRow row) => row.data['name'] as String)
+          .toSet();
+      final sessionRows = await legacyDatabase
+          .customSelect('SELECT remote_id FROM local_ride_sessions')
+          .get();
+      final pointRows = await legacyDatabase
+          .customSelect('SELECT t_offset_ms FROM local_session_points')
+          .get();
+      final metaRows = await legacyDatabase
+          .customSelect('SELECT version FROM app_schema_meta WHERE id = 1')
+          .get();
+
+      expect(pointColumnNames, contains('pressure_hpa'));
+      expect(
+        sessionColumnNames,
+        containsAll(<String>['break_count', 'break_duration_s']),
+      );
+      expect(sessionRows, hasLength(1));
+      expect(sessionRows.single.data['remote_id'], 'remote-installed');
+      expect(pointRows, hasLength(1));
+      expect(pointRows.single.data['t_offset_ms'], 1000);
+      expect(metaRows.single.data['version'], 5);
+    });
+
+    test('calling initialize twice leaves schema and rows untouched', () async {
+      final localSessionId = await database.sessions.insertLocalSession(
+        startedAt: DateTime.utc(2026, 1, 6, 8),
+        ownerUserId: 'user-1',
+      );
+      await database.sessionPoints.insertPoint(
+        localSessionId: localSessionId,
+        point: _point(
+          recordedAt: DateTime.utc(2026, 1, 6, 8, 0, 1),
+          tOffsetMs: 1000,
+          latitude: 49.0,
+          longitude: -123.0,
+        ),
+      );
+
+      Future<Set<String>> columnsOf(String table) async {
+        final rows =
+            await database.customSelect('PRAGMA table_info($table)').get();
+        return rows.map((QueryRow row) => row.data['name'] as String).toSet();
+      }
+
+      final sessionColumnsBefore = await columnsOf('local_ride_sessions');
+      final pointColumnsBefore = await columnsOf('local_session_points');
+
+      await database.initialize();
+
+      final sessions =
+          await database.sessions.listSessions(ownerUserId: 'user-1');
+      final points = await database.sessionPoints.listPoints(localSessionId);
+      final metaRows = await database
+          .customSelect('SELECT version FROM app_schema_meta WHERE id = 1')
+          .get();
+
+      expect(await columnsOf('local_ride_sessions'), sessionColumnsBefore);
+      expect(await columnsOf('local_session_points'), pointColumnsBefore);
+      expect(sessions, hasLength(1));
+      expect(points, hasLength(1));
+      expect(metaRows, hasLength(1));
+      expect(metaRows.single.data['version'], 5);
     });
   });
 }
+
+const String _v4RideSessionsTable = '''
+  CREATE TABLE local_ride_sessions (
+    local_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id TEXT,
+    remote_id TEXT,
+    resort_id TEXT,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    active_duration_s INTEGER NOT NULL DEFAULT 0,
+    distance_m REAL NOT NULL DEFAULT 0,
+    max_speed_mps REAL NOT NULL DEFAULT 0,
+    avg_speed_mps REAL NOT NULL DEFAULT 0,
+    elevation_gain_m INTEGER,
+    elevation_loss_m INTEGER,
+    state TEXT NOT NULL,
+    point_count INTEGER NOT NULL DEFAULT 0,
+    sync_attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_sync_error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )
+''';
+
+const String _v4SessionPointsTable = '''
+  CREATE TABLE local_session_points (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    local_session_id INTEGER NOT NULL,
+    recorded_at TEXT NOT NULL,
+    t_offset_ms INTEGER NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    accuracy_m REAL,
+    elapsed_realtime_ns INTEGER,
+    altitude_m REAL,
+    vertical_accuracy_m REAL,
+    speed_mps REAL,
+    speed_accuracy_mps REAL,
+    heading_deg REAL,
+    bearing_accuracy_deg REAL,
+    provider TEXT,
+    is_mocked INTEGER,
+    quality_class TEXT,
+    quality_score REAL,
+    quality_reason TEXT,
+    filtered_latitude REAL,
+    filtered_longitude REAL,
+    filtered_altitude_m REAL,
+    fused_speed_mps REAL,
+    derived_speed_mps REAL,
+    distance_delta_m REAL,
+    motion_state TEXT,
+    accepted_for_analytics INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(local_session_id) REFERENCES local_ride_sessions(local_id)
+  )
+''';
 
 NewSessionPoint _point({
   required DateTime recordedAt,

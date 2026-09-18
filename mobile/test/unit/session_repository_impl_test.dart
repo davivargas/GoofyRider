@@ -1876,6 +1876,7 @@ void main() {
           'quality_class': 'accept',
           'motion_state': 'active_descent',
           'distance_delta_m': 30,
+          'pressure_hpa': 812.5,
         },
         <String, dynamic>{
           't_offset_ms': 20000,
@@ -1903,6 +1904,8 @@ void main() {
     expect(restored[1].acceptedForAnalytics, isTrue);
     expect(restored[2].acceptedForAnalytics, isFalse);
     expect(restored[2].recordedAt, DateTime.utc(2026, 1, 1, 0, 0, 20));
+    expect(restored[0].pressureHpa, isNull);
+    expect(restored[1].pressureHpa, 812.5);
   });
 
   test(
