@@ -1,5 +1,5 @@
-import pytest
 from pydantic import ValidationError as PydanticValidationError
+import pytest
 
 from app.schemas.session_point import SessionPointInput
 
