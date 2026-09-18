@@ -216,8 +216,10 @@ is under 3 m.
 
 A candidate span runs from one `riding` second to a later one, extended while
 the next `riding` second is at most 150 s away and every second in between
-is `near` (a stopped lift keeps the rider on the line; walking away breaks
-the span). Standing still never starts or ends a span. A candidate becomes a
+is `near` and slower than 0.8 m/s (`lift_bridge_max_mps`): a stopped lift
+keeps the rider on the line, while walking away or skiing the run beneath
+the chair breaks the span. Tuning found that without the speed ceiling one
+lift span could swallow the descent skied under it. Standing still never starts or ends a span. A candidate becomes a
 `LiftSpan` when all of these hold:
 
 - it lasts at least 30 s and at least 35% of its seconds are `riding`;
@@ -309,7 +311,8 @@ Run assembly:
 
 - A run chain is a sequence of descent spans, valid or invalid, joined across
   stop and unknown spans (an unknown span longer than 600 s breaks the
-  chain, as does a stop longer than `max_in_run_break_s`, default 3600).
+  chain, as does a stop longer than `max_in_run_break_s`, default 1200; tuned from 3600
+  on the corpus, flat between 900 and 1800).
 - Invalid spans are trimmed from both ends of a chain. Spans that drop less
   than 3 m are additionally trimmed from the tail only: Slopes and riders
   both treat the slow traverse away from a lift as the start of the run, but
@@ -435,6 +438,10 @@ movement and ending lifts a little earlier than the line geometry does.
 | `OVERPASS_TIMEOUT_S` | 60 | request timeout |
 
 Analyzer constants are code, not settings; they live in `AnalyzerConfig`.
+Tuned defaults recorded on 2026-09-17: `lift_vrate_mps` 0.10 (was 0.15),
+`max_in_run_break_s` 1200 (was 3600), new `lift_bridge_max_mps` 0.8. The
+tuned analyzer scores 90.8% mean agreement, exact counts on 9 of 14, lift
+recall 99.1%, lift precision 96.7%, run recall 90.4%, worst archive 77.2%.
 
 ## 12. Risks
 
