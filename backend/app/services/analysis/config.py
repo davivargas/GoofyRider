@@ -47,6 +47,8 @@ class AnalyzerConfig:
     lift_bearing_min_move_m: float = 3.0
     lift_riding_min_mps: float = 0.5
     lift_gap_s: int = 150
+    # Bridged seconds inside a lift span must be slower than this. Chosen equal to
+    # still_mps on purpose (a stopped chair may creep); keep the two aligned when retuning.
     lift_bridge_max_mps: float = 0.8
     lift_min_duration_s: int = 30
     lift_riding_fraction: float = 0.35

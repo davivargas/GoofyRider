@@ -266,7 +266,7 @@ defined in `config.py` as tables so they can be swept:
 |---|---|---|---|---|
 | descent | > 2.0 likely, 0.8 to 2.0 possible | < -0.3 likely, -0.3 to 0.3 possible | any | must be False |
 | stop | < 0.8 likely, 0.8 to 1.5 possible (shuffling, walking) | -0.3 to 0.3 | any | must be False |
-| lift (fallback) | 1.0 to 10.0 likely, under 1.0 possible | > 0.15 likely, -0.1 to 0.15 possible | low likely | must be False |
+| lift (fallback) | 1.0 to 10.0 likely, under 1.0 possible | > 0.10 likely, -0.1 to 0.10 possible | low likely | must be False |
 | unknown | any | any | any | must be True |
 
 Transition probabilities encode expected dwell times (descent 120 s, stop
