@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
+from itertools import pairwise
 import math
 
 from app.services.analysis.config import AnalyzerConfig
@@ -51,6 +52,9 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
     kept = _apply_gates(points, config)
     if len(kept) < 2:
         return None
+    kept = _bound_frame_span(kept, config)
+    if len(kept) < 2:
+        return None
     point_speeds = _point_speeds(kept, config)
     point_alts, used_barometer = _point_altitudes(kept, config)
 
@@ -59,12 +63,6 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
     n = int(offsets[-1]) + 1
     if n < 2:
         return None
-    if n > config.max_frame_seconds:
-        # The per-second frame is sized by wall-clock span, so an implausible span would
-        # allocate unbounded memory. Reject it instead of truncating silently.
-        raise ValidationError(
-            f"Session span exceeds {config.max_frame_seconds} s of per-second samples"
-        )
     lat = [kept[0].latitude] * n
     lon = [kept[0].longitude] * n
     alt = [point_alts[0]] * n
@@ -152,15 +150,41 @@ def _apply_gates(points: Sequence[RawPoint], config: AnalyzerConfig) -> list[Raw
             dt = (p.recorded_at - last.recorded_at).total_seconds()
             if dt <= 0:
                 continue
-            if dt > config.max_point_gap_s:
-                # A bad client clock can put a fix days away from the rest of the session.
-                # Keeping the earlier point bounds the frame to the plausible recording.
-                continue
             implied = haversine_m(last.latitude, last.longitude, p.latitude, p.longitude) / dt
             if implied > config.jump_reject_mps:
                 continue
         kept.append(p)
     return kept
+
+
+def _bound_frame_span(kept: Sequence[RawPoint], config: AnalyzerConfig) -> list[RawPoint]:
+    """Trim outlying clusters of fixes until the frame fits inside `max_frame_seconds`.
+
+    The per-second frame is sized by wall-clock span, so a fix with a skewed clock would
+    allocate unbounded memory. Points are grouped into clusters at every gap wider than
+    `max_point_gap_s`, and the smallest cluster is dropped until the whole span fits;
+    ties drop the earlier cluster, so a session keeps its most recent riding. A gap alone
+    never drops anything: a real three-hour pause is left to the usual bridging. When a
+    single cluster is still too long there is no outlier to blame, so it is rejected.
+    """
+    clusters: list[list[RawPoint]] = [[kept[0]]]
+    for previous, p in pairwise(kept):
+        gap = (p.recorded_at - previous.recorded_at).total_seconds()
+        if gap > config.max_point_gap_s:
+            clusters.append([])
+        clusters[-1].append(p)
+
+    def span_s() -> float:
+        return (clusters[-1][-1].recorded_at - clusters[0][0].recorded_at).total_seconds()
+
+    while len(clusters) > 1 and span_s() > config.max_frame_seconds:
+        smallest = min(range(len(clusters)), key=lambda i: (len(clusters[i]), i))
+        clusters.pop(smallest)
+    if span_s() > config.max_frame_seconds:
+        raise ValidationError(
+            f"Session span exceeds {config.max_frame_seconds} s of per-second samples"
+        )
+    return [p for cluster in clusters for p in cluster]
 
 
 def _point_speeds(kept: Sequence[RawPoint], config: AnalyzerConfig) -> list[float]:

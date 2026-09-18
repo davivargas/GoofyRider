@@ -132,8 +132,9 @@ def test_override_with_end_before_start_is_rejected() -> None:
 
 
 def test_frame_spanning_more_than_a_day_is_surfaced_as_validation_error() -> None:
-    bridge = [standstill(3600 * k, 1, north=-1.0 * k, alt=1000.0)[0] for k in range(1, 25)]
-    points = [*descent(0, 60), *bridge, *descent(25 * 3600, 60, north0=-24.0)]
+    # One unbroken cluster (a fix every 30 minutes) spanning 25 hours: there is no outlying
+    # cluster to trim, so the span bound has to reject it.
+    points = [standstill(1800 * k, 1, north=-1.0 * k, alt=1000.0)[0] for k in range(0, 2 * 25 + 1)]
     with pytest.raises(ValidationError):
         SessionAnalyzer(analyzer_version="v").analyze(_input(points))
 

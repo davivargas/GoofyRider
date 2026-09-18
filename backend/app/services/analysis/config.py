@@ -26,7 +26,11 @@ class AnalyzerConfig:
     pressure_hold_s: int = 30
     vrate_half_window_s: int = 6
     heading_window_s: int = 10
-    # bounds against bad client clocks (spec section 5, item 8)
+    # Bounds against bad client clocks (spec section 5, item 8). A gap wider than
+    # max_point_gap_s splits the points into clusters; it never drops a point on its own.
+    # max_frame_seconds bounds the wall-clock span of the per-second frame: outlying
+    # clusters are trimmed until the span fits, and a single cluster that still overflows
+    # is rejected.
     max_point_gap_s: int = 7200
     max_frame_seconds: int = 86400
     # decoder emissions (spec section 7)

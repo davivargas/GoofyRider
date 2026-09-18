@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 import pytest
 
 from app.services.analysis.config import AnalyzerConfig
 from app.services.analysis.signal import condition
 from app.services.analysis.signal import smooth_speeds_centered_mean
 from app.services.exceptions import ValidationError
+from tests.unit.analysis.helpers import BASE_TIME
 from tests.unit.analysis.helpers import descent
 from tests.unit.analysis.helpers import point
 
@@ -215,17 +218,49 @@ def test_sub_second_recording_yields_no_frame() -> None:
     assert condition([point(0.0), point(0.4, north_m=1.0)], CONFIG) is None
 
 
-def test_point_after_a_huge_gap_is_dropped() -> None:
-    points = [*descent(0, 60), point(3 * 3600, north_m=-480.0, altitude_m=820.0)]
+def test_stale_first_fix_is_trimmed_and_the_frame_covers_the_recording() -> None:
+    stale = point(-30 * 3600, north_m=0.0, altitude_m=1000.0)
+    frame = condition([stale, *descent(0, 60)], CONFIG)
+    assert frame is not None
+    assert len(frame) == 60
+    assert len(frame.points) == 60
+    assert frame.start == BASE_TIME
+
+
+def test_a_three_hour_pause_keeps_every_point() -> None:
+    # A gap wider than max_point_gap_s only splits the points into clusters. As long as the
+    # whole session still fits inside max_frame_seconds nothing is dropped, and the pause is
+    # bridged as a standstill the way any other stationary gap is.
+    points = [*descent(0, 60), *descent(10_860, 60, north0=-472.0, alt0=823.0)]
     frame = condition(points, CONFIG)
     assert frame is not None
-    assert len(frame.points) == 60
-    assert frame.points[-1].recorded_at == points[59].recorded_at
+    assert len(frame.points) == 120
+    assert len(frame) == 10_920
+    assert max(frame.speed[62:10_855]) == 0.0
+    assert not any(frame.gap)
+
+
+def test_a_single_wildly_skewed_fix_is_trimmed() -> None:
+    skewed = point(400 * 24 * 3600, north_m=-480.0, altitude_m=820.0)
+    frame = condition([*descent(0, 60), skewed], CONFIG)
+    assert frame is not None
     assert len(frame) == 60
+    assert len(frame.points) == 60
+    assert frame.points[-1].recorded_at == BASE_TIME + timedelta(seconds=59)
 
 
-def test_frame_spanning_more_than_a_day_is_rejected() -> None:
-    bridge = [point(3600 * k, north_m=-1.0 * k, altitude_m=1000.0) for k in range(1, 25)]
-    points = [*descent(0, 60), *bridge, *descent(25 * 3600, 60, north0=-24.0)]
+def test_equal_clusters_too_far_apart_drop_the_earlier_one() -> None:
+    # Tie rule: when two candidate clusters hold the same number of points the earlier one
+    # goes, so a session keeps its most recent riding.
+    points = [*descent(0, 60), *descent(30 * 3600, 60)]
+    frame = condition(points, CONFIG)
+    assert frame is not None
+    assert len(frame) == 60
+    assert len(frame.points) == 60
+    assert frame.start == BASE_TIME + timedelta(seconds=30 * 3600)
+
+
+def test_one_cluster_spanning_more_than_a_day_is_rejected() -> None:
+    points = [point(1800 * k, north_m=-1.0 * k, altitude_m=1000.0) for k in range(0, 2 * 25 + 1)]
     with pytest.raises(ValidationError):
         condition(points, CONFIG)

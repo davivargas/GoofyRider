@@ -166,9 +166,9 @@ and adds a parse test on each side. A CI check compares the two copies.
    point.
 4. Speed trust: platform speed is used when `speed_accuracy_mps` is null or
    below 3 m/s; otherwise speed is estimated from positions over a centred
-   window of at least 10 s, after subtracting the horizontal accuracy of the
-   fixes from the displacement (a jittering stationary rider reads 0), never
-   from a single neighbouring fix.
+   window of at least `speed_window_s` seconds (5 s), after subtracting the
+   horizontal accuracy of the fixes from the displacement (a jittering
+   stationary rider reads 0), never from a single neighbouring fix.
    Top-speed reporting keeps the existing 2x spike ratio against a 1 m/s
    reference floor.
 5. Resampling to 1 Hz. Slopes and the planned adaptive sampling both thin
@@ -194,10 +194,17 @@ and adds a parse test on each side. A CI check compares the two copies.
 7. Heading consistency: circular variance of the bearing over a 10 s window,
    with the bearing computed from consecutive positions. The platform
    `heading_deg` is carried on `RawPoint` but not used by the analyzer yet.
-8. Bounds against bad client clocks: a point more than 2 hours after the
-   previous kept point is dropped, and a frame that would still span more
-   than 24 hours raises `ValidationError`. The per-second frame is sized by
-   wall-clock span, so these bounds cap memory and CPU.
+8. Bounds against bad client clocks. The per-second frame is sized by
+   wall-clock span, so a fix with a skewed clock would allocate unbounded
+   memory. Points are grouped into clusters at every gap wider than
+   `max_point_gap_s` (2 hours), and while the span from the first point of
+   the first cluster to the last point of the last cluster exceeds
+   `max_frame_seconds` (24 hours) the cluster with the fewest points is
+   dropped, ties dropping the earlier one. A single remaining cluster that
+   still exceeds the bound raises `ValidationError`, because there is no
+   outlier left to blame. A gap on its own never drops anything: when the
+   total span already fits, a real multi-hour pause keeps every point and is
+   bridged by rule 5 like any other gap.
 
 `FeatureFrame` holds parallel arrays for `lat`, `lon`, `alt`, `speed`,
 `vrate`, `heading_var`, and `gap`, plus the kept points; seconds are mapped
