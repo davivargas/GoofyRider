@@ -163,6 +163,11 @@ class SessionDetailScreen extends ConsumerWidget {
                                 value: '$runs',
                                 label: 'Runs',
                                 size: StatSize.small),
+                            StatBlock(
+                                value: _formatBreaks(
+                                    session.breakCount, session.breakDurationS),
+                                label: 'Breaks',
+                                size: StatSize.small),
                           ],
                         ),
                       ),
@@ -527,3 +532,9 @@ class SessionDetailScreen extends ConsumerWidget {
 }
 
 enum _SessionDetailAction { delete }
+
+String _formatBreaks(int count, int durationS) {
+  if (count == 0) return '0';
+  final minutes = (durationS / 60).round();
+  return '$count · ${minutes}m';
+}

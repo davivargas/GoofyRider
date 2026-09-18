@@ -5,6 +5,7 @@ import 'package:fall_line_mobile/app/theme/app_theme.dart';
 import 'package:fall_line_mobile/core/constants/app_constants.dart';
 import 'package:fall_line_mobile/core/errors/failures.dart';
 import 'package:fall_line_mobile/core/providers.dart';
+import 'package:fall_line_mobile/core/widgets/design_widgets.dart';
 import 'package:fall_line_mobile/features/session/domain/session_models.dart';
 import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
 import 'package:fall_line_mobile/features/session/presentation/session_detail_screen.dart';
@@ -283,6 +284,51 @@ SessionDetail _buildSegmentedDetail() {
   );
 }
 
+SessionDetail _buildDetailWithBreaks({
+  required int breakCount,
+  required int breakDurationS,
+  int elevationLossM = 500,
+}) {
+  final base = _buildSession();
+  final session = LocalRideSession(
+    localId: base.localId,
+    ownerUserId: base.ownerUserId,
+    remoteId: base.remoteId,
+    resortId: base.resortId,
+    startedAt: base.startedAt,
+    endedAt: base.endedAt,
+    activeDurationS: base.activeDurationS,
+    distanceM: base.distanceM,
+    maxSpeedMps: base.maxSpeedMps,
+    avgSpeedMps: base.avgSpeedMps,
+    elevationGainM: base.elevationGainM,
+    elevationLossM: elevationLossM,
+    state: base.state,
+    pointCount: base.pointCount,
+    syncAttemptCount: base.syncAttemptCount,
+    lastSyncError: base.lastSyncError,
+    createdAt: base.createdAt,
+    updatedAt: base.updatedAt,
+    breakCount: breakCount,
+    breakDurationS: breakDurationS,
+  );
+  return SessionDetail(
+    session: session,
+    points: const <LocalSessionPoint>[],
+    acceptedPoints: const <LocalSessionPoint>[],
+    trackingDiagnostics: const <TrackingDiagnosticEvent>[],
+    stats: SessionStats(
+      durationS: session.activeDurationS,
+      distanceM: session.distanceM,
+      maxSpeedMps: session.maxSpeedMps,
+      avgSpeedMps: session.avgSpeedMps,
+      elevationGainM: session.elevationGainM,
+      elevationLossM: session.elevationLossM,
+    ),
+    timeline: const <SessionTimelineSegment>[],
+  );
+}
+
 SessionDetail _buildLegacyDetail() {
   final session = _buildSession();
   return SessionDetail(
@@ -553,5 +599,59 @@ void main() {
       find.text('Failed to delete session: Could not connect to backend.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('session detail screen shows break count and duration',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(
+            FakeSessionRepository(
+                _buildDetailWithBreaks(breakCount: 2, breakDurationS: 1500)),
+          ),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const SessionDetailScreen(localSessionId: 1),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('BREAKS'), findsOneWidget);
+    final breaksBlock = tester.widget<StatBlock>(find.byWidgetPredicate(
+        (Widget w) => w is StatBlock && w.label == 'Breaks'));
+    expect(breaksBlock.value, '2 · 25m');
+  });
+
+  testWidgets('session detail screen shows zero breaks label when none',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(
+            FakeSessionRepository(
+                _buildDetailWithBreaks(breakCount: 0, breakDurationS: 0)),
+          ),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const SessionDetailScreen(localSessionId: 1),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('BREAKS'), findsOneWidget);
+    final breaksBlock = tester.widget<StatBlock>(find.byWidgetPredicate(
+        (Widget w) => w is StatBlock && w.label == 'Breaks'));
+    expect(breaksBlock.value, '0');
   });
 }
