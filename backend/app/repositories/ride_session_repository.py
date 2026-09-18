@@ -7,11 +7,13 @@ import uuid
 
 from sqlalchemy import delete
 from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import selectinload
 
 from app.models.ride_session import RideSession
+from app.models.ride_session import RideSessionStatus
 from app.models.ride_session_action import RideSessionAction
 from app.models.ride_session_override import RideSessionOverride
 from app.repositories.base import SqlAlchemyRepository
@@ -131,3 +133,18 @@ class RideSessionRepository(SqlAlchemyRepository):
             .where(RideSession.id == session_id)
         )
         return self._db.scalar(stmt)
+
+    def list_needing_reanalysis(self, current_version: str, *, limit: int) -> list[RideSession]:
+        stmt = (
+            select(RideSession)
+            .where(
+                RideSession.status == RideSessionStatus.COMPLETED,
+                or_(
+                    RideSession.processed_by_version.is_(None),
+                    RideSession.processed_by_version != current_version,
+                ),
+            )
+            .order_by(RideSession.created_at.asc())
+            .limit(limit)
+        )
+        return list(self._db.scalars(stmt).all())

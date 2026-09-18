@@ -247,6 +247,22 @@ python -m app.scripts.import_resort_lifts --all-favourites --user-email you@exam
 
 Re-running updates existing rows in place (matched by OSM way id).
 
+### Re-analysis
+
+When `SessionAnalyzer` changes (a new `session_analyzer_version`), stored
+sessions keep the actions and statistics computed by the version that
+processed them until they are explicitly re-analyzed. Preview what would
+change, then apply it:
+
+```bash
+python -m app.scripts.reanalyze_sessions --dry-run
+python -m app.scripts.reanalyze_sessions
+```
+
+The script batches completed sessions whose `processed_by_version` is null
+or older than the current `session_analyzer_version`, oldest first, and
+re-runs analysis (including stored overrides) for each one.
+
 ### 3. Mobile
 
 ```bash

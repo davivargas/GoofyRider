@@ -1,0 +1,6 @@
+{
+  "points": [
+    {"t_offset_ms": 0, "latitude": 49.38, "longitude": -123.08, "accuracy_m": 3.0, "elapsed_realtime_ns": 100000000, "recorded_at": "2026-01-18T20:05:13Z", "altitude_m": 1091.5, "vertical_accuracy_m": 4.7, "speed_mps": 1.19, "speed_accuracy_mps": 0.4, "heading_deg": 36.7, "bearing_accuracy_deg": 12.0, "provider": "fused", "is_mocked": false, "pressure_hpa": 898.7},
+    {"t_offset_ms": 1000, "latitude": 49.3801, "longitude": -123.08, "accuracy_m": 3.2, "elapsed_realtime_ns": 1100000000, "recorded_at": "2026-01-18T20:05:14Z", "altitude_m": 1091.0, "vertical_accuracy_m": 4.5, "speed_mps": 1.0, "speed_accuracy_mps": 0.4, "heading_deg": 39.4, "bearing_accuracy_deg": 12.0, "provider": "fused", "is_mocked": false}
+  ]
+}

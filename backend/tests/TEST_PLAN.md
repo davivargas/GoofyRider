@@ -101,6 +101,9 @@ Expected runtime:
   - invalid subject handling
   - unknown-user handling
   - valid path returns resolved user
+- `test_contract_fixtures.py`
+  - shared `session_point_batch.json` / `session_detail.json` fixtures parse against `SessionPointInput` / `SessionDetailResponse` unchanged
+  - the mobile copies under `mobile/test/fixtures/contracts/` stay byte-identical to the backend originals
 
 ### 5.2 QA coverage
 
@@ -127,6 +130,9 @@ Expected runtime:
   - sessions auth-required checks
   - cross-user ownership protection
   - reject completing already completed sessions
+- `test_sessions_lift_catalog_qa.py`
+  - lift catalog entries feed lift naming and lift/run detection for a resort's sessions
+  - sessions for resorts without a lift catalog still analyze correctly
 
 ## 6. Senior QA risk priorities
 

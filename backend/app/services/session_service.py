@@ -259,6 +259,11 @@ class SessionService:
         self._ride_session_repository.delete(ride_session)
         self._ride_session_repository.commit()
 
+    def reanalyze_stored_session(self, ride_session: RideSession) -> None:
+        """Re-run analysis for a stored session without an ownership check (operations only)."""
+        self._run_analysis(ride_session, include_overrides=True)
+        self._ride_session_repository.commit()
+
     def _run_analysis(self, ride_session: RideSession, *, include_overrides: bool) -> None:
         raw_points = self._session_point_repository.list_by_session(ride_session.id)
         if include_overrides:

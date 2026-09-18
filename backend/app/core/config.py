@@ -63,7 +63,7 @@ class AppSettings(BaseSettings):
     overpass_base_url: str = "https://overpass-api.de/api/interpreter"
     overpass_timeout_seconds: PositiveInt = 60
 
-    session_analyzer_version: str = "analyzer@1"
+    session_analyzer_version: str = "analyzer@2026.09-hmm"
 
     @field_validator("jwt_secret_key")
     @classmethod

@@ -47,6 +47,14 @@ Rules enforced:
 - No business logic in routers.
 - No direct DB access outside repositories.
 
+Session run/lift/stop classification and per-session statistics live in the
+`app/services/analysis/` package (`config.py`, `signal.py`, `lift_matching.py`,
+`hmm.py`, `actions.py`, `analyzer.py`, plus `geo.py` and `types.py` for shared
+helpers and dataclasses). `app/services/session_analyzer.py` is a
+compatibility shim that re-exports the package's public API so existing
+imports keep working; new code should import from `app.services.analysis`
+directly.
+
 ## Session sync protocol
 
 For locally completed sessions:

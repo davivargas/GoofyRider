@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models.ride_session import RideSession
+from app.models.ride_session import RideSessionStatus
 from app.models.ride_session_action import RideSessionAction
 from app.models.ride_session_override import RideSessionOverride
 from app.repositories.ride_session_repository import RideSessionRepository
@@ -247,3 +248,19 @@ def test_get_detail_with_actions_returns_session_with_eager_collections(
 def test_get_detail_with_actions_returns_none_for_missing_session(db: Session) -> None:
     repo = RideSessionRepository(db)
     assert repo.get_detail_with_actions(uuid.uuid4()) is None
+
+
+def test_list_needing_reanalysis_skips_current_version(
+    db: Session,
+    create_ride_session: Callable[..., RideSession],
+) -> None:
+    stale = create_ride_session()
+    stale.status = RideSessionStatus.COMPLETED
+    stale.processed_by_version = "analyzer@1"
+    fresh = create_ride_session()
+    fresh.status = RideSessionStatus.COMPLETED
+    fresh.processed_by_version = "analyzer@2026.09-hmm"
+    db.commit()
+
+    found = RideSessionRepository(db).list_needing_reanalysis("analyzer@2026.09-hmm", limit=10)
+    assert [s.id for s in found] == [stale.id]
