@@ -5,6 +5,7 @@ from app.services.analysis.signal import condition
 from app.services.analysis.types import ResortLift
 from tests.unit.analysis.helpers import DEG_LAT_PER_M
 from tests.unit.analysis.helpers import climb
+from tests.unit.analysis.helpers import descent
 from tests.unit.analysis.helpers import point
 from tests.unit.analysis.helpers import standstill
 
@@ -54,6 +55,17 @@ def test_a_stopped_lift_stays_one_span() -> None:
     spans = anchor(_frame(first + paused + second), [CHAIR], CONFIG)
     assert len(spans) == 1
     assert spans[0].end - spans[0].start >= 270
+
+
+def test_skiing_down_the_line_between_two_rides_does_not_bridge_them() -> None:
+    # The run under a chair stays inside the `near` corridor the whole way, so only the
+    # speed ceiling on bridged seconds stops one span from swallowing the descent.
+    first = climb(0, 100)
+    down = descent(100, 50, north0=396.0, alt0=848.5)
+    second = climb(150, 100, north0=4.0, alt0=701.5)
+    spans = anchor(_frame(first + down + second), [CHAIR], CONFIG)
+    assert len(spans) == 2
+    assert spans[0].end < 150 <= spans[1].start
 
 
 def test_skiing_down_under_a_chair_is_not_a_lift() -> None:

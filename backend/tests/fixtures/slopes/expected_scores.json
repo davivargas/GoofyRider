@@ -1,0 +1,72 @@
+{
+  "cypress_2025-01-03": {
+    "agreement": 0.9978,
+    "runs": 3,
+    "lifts": 3
+  },
+  "cypress_2025-01-20": {
+    "agreement": 0.9194,
+    "runs": 7,
+    "lifts": 7
+  },
+  "cypress_2025-02-12": {
+    "agreement": 0.7721,
+    "runs": 6,
+    "lifts": 6
+  },
+  "cypress_2026-03-21": {
+    "agreement": 0.9066,
+    "runs": 10,
+    "lifts": 10
+  },
+  "grouse_2025-03-02": {
+    "agreement": 0.8975,
+    "runs": 8,
+    "lifts": 10
+  },
+  "grouse_2025-04-04": {
+    "agreement": 0.8711,
+    "runs": 7,
+    "lifts": 8
+  },
+  "grouse_2025-04-13": {
+    "agreement": 0.9333,
+    "runs": 9,
+    "lifts": 11
+  },
+  "grouse_2026-01-18": {
+    "agreement": 0.91,
+    "runs": 6,
+    "lifts": 8
+  },
+  "grouse_2026-02-11": {
+    "agreement": 0.882,
+    "runs": 8,
+    "lifts": 8
+  },
+  "grouse_2026-02-28": {
+    "agreement": 0.8961,
+    "runs": 11,
+    "lifts": 10
+  },
+  "grouse_2026-03-13": {
+    "agreement": 0.9379,
+    "runs": 6,
+    "lifts": 7
+  },
+  "grouse_2026-03-27": {
+    "agreement": 0.8719,
+    "runs": 13,
+    "lifts": 13
+  },
+  "grouse_2026-04-04": {
+    "agreement": 0.9464,
+    "runs": 12,
+    "lifts": 11
+  },
+  "seymour_2026-02-19": {
+    "agreement": 0.9678,
+    "runs": 7,
+    "lifts": 8
+  }
+}

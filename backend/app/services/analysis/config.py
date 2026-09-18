@@ -29,7 +29,7 @@ class AnalyzerConfig:
     descent_slow_mps: float = 0.8
     descent_vrate_mps: float = -0.3
     stop_fast_mps: float = 1.5
-    lift_vrate_mps: float = 0.15
+    lift_vrate_mps: float = 0.1
     lift_max_mps: float = 10.0
     lift_heading_var_max: float = 0.5
     # decoder transition penalties (natural-log units)
@@ -47,6 +47,7 @@ class AnalyzerConfig:
     lift_bearing_min_move_m: float = 3.0
     lift_riding_min_mps: float = 0.5
     lift_gap_s: int = 150
+    lift_bridge_max_mps: float = 0.8
     lift_min_duration_s: int = 30
     lift_riding_fraction: float = 0.35
     lift_min_move_m: float = 60.0
@@ -69,7 +70,7 @@ class AnalyzerConfig:
     flat_fast_min_s: int = 15
     base_margin_m: float = 10.0
     unknown_split_s: int = 600
-    max_in_run_break_s: int = 3600
+    max_in_run_break_s: int = 1200
     tail_min_drop_m: float = 3.0
     min_run_s: int = 20
     min_run_drop_m: float = 15.0

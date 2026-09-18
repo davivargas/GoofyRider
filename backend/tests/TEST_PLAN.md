@@ -47,6 +47,10 @@ Focus:
 - dependency auth guard behavior
 - schema field constraints and custom validators
 
+Corpus gate:
+
+- `tests/unit/test_analyzer_corpus.py` scores the analyzer against the fourteen Slopes archives with the recorded OSM lift lines. It fails when any archive drops more than 0.5 points below `tests/fixtures/slopes/expected_scores.json`, when the corpus falls under the success bar of the GPS segmentation spec, or when it no longer beats the old analyzer's 78.4%. Re-record scores with `python -m app.scripts.evaluate_analyzer --write-expected`; a lower recorded score must be justified in the same commit.
+
 Expected runtime:
 
 - very fast, suitable for every local save loop

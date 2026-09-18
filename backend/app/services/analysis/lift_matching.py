@@ -148,6 +148,13 @@ def _spans_for_lift(
             nxt = indices[m + 1]
             if nxt - end > config.lift_gap_s or not all(near[q] for q in range(end, nxt + 1)):
                 break
+            # The seconds bridged between two riding seconds must be a stoppage, not a
+            # ride down: skiing the run under the line stays `near` the whole way, so
+            # without a speed ceiling one lift span swallows the descent between two
+            # rides of the same lift (spec section 6, "a stopped lift keeps the rider
+            # on the line").
+            if any(frame.speed[q] > config.lift_bridge_max_mps for q in range(end + 1, nxt)):
+                break
             end = nxt
             m += 1
         duration = end - start + 1
