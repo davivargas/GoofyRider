@@ -38,7 +38,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
   DriftLocalDatabase._(super.connection) : super.connect();
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -136,6 +136,8 @@ class DriftLocalDatabase extends GeneratedDatabase {
         avg_speed_mps REAL NOT NULL DEFAULT 0,
         elevation_gain_m INTEGER,
         elevation_loss_m INTEGER,
+        break_count INTEGER NOT NULL DEFAULT 0,
+        break_duration_s INTEGER NOT NULL DEFAULT 0,
         state TEXT NOT NULL,
         point_count INTEGER NOT NULL DEFAULT 0,
         sync_attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -178,6 +180,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
         derived_speed_mps REAL,
         distance_delta_m REAL,
         motion_state TEXT,
+        pressure_hpa REAL,
         accepted_for_analytics INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         FOREIGN KEY(local_session_id) REFERENCES local_ride_sessions(local_id)
@@ -186,6 +189,7 @@ class DriftLocalDatabase extends GeneratedDatabase {
 
     await _migrateToV2();
     await _migrateToV3();
+    await _migrateToV5();
     await _normalizeLegacySessionStates();
 
     await customStatement('''
@@ -723,6 +727,14 @@ class DriftLocalDatabase extends GeneratedDatabase {
       CREATE INDEX IF NOT EXISTS ix_local_ride_sessions_owner_state_updated
       ON local_ride_sessions(owner_user_id, state, updated_at DESC)
     ''');
+  }
+
+  Future<void> _migrateToV5() async {
+    await _addColumnIfMissing('local_session_points', 'pressure_hpa REAL');
+    await _addColumnIfMissing(
+        'local_ride_sessions', 'break_count INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(
+        'local_ride_sessions', 'break_duration_s INTEGER NOT NULL DEFAULT 0');
   }
 
   Future<void> _normalizeLegacySessionStates() async {

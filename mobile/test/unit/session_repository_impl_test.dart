@@ -165,6 +165,7 @@ LocalSessionPoint _buildPoint({
   double? filteredLongitude,
   double? qualityScore,
   String? provider,
+  double? pressureHpa,
 }) {
   final now = DateTime.utc(2026, 1, 1);
   return LocalSessionPoint(
@@ -190,6 +191,7 @@ LocalSessionPoint _buildPoint({
     derivedSpeedMps: derivedSpeedMps,
     distanceDeltaM: distanceDeltaM,
     motionState: motionState,
+    pressureHpa: pressureHpa,
   );
 }
 
@@ -613,6 +615,59 @@ void main() {
       speedAccuracy == null || (speedAccuracy is num && speedAccuracy >= 0),
       isTrue,
     );
+  });
+
+  test('syncSession uploads pressure_hpa for a point within the physical range',
+      () async {
+    final sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, pressureHpa: 898.7),
+      ],
+    );
+
+    final result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+    expect(uploaded.single['pressure_hpa'], closeTo(898.7, 1e-9));
+  });
+
+  test(
+      'syncSession sanitizes an out-of-range pressure_hpa away and still syncs',
+      () async {
+    final sessions = _buildSyncLifecycle(
+      _buildSession(
+        localId: 1,
+        state: LocalSessionState.syncPending,
+        remoteId: 'remote-1',
+      ),
+    );
+    stubSyncHappyPath(
+      sessions: sessions,
+      points: <LocalSessionPoint>[
+        _buildPoint(offsetMs: 0, pressureHpa: 42.0),
+      ],
+    );
+
+    final result = await repository.syncSession(1);
+
+    expect(result.state, LocalSessionState.synced);
+    final uploaded = captureUploadedPoints();
+    expect(uploaded, hasLength(1));
+    // The upload payload always carries the `pressure_hpa` key; an
+    // out-of-range value is sanitized to null rather than the key being
+    // omitted (the payload builder does not drop null-valued keys before
+    // sending — see `speed_accuracy_mps` above for the same pattern).
+    expect(uploaded.single['pressure_hpa'], isNull);
   });
 
   test('syncSession drops quality_score values outside backend range',

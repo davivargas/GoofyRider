@@ -47,9 +47,10 @@ class SessionPointDao {
           derived_speed_mps,
           distance_delta_m,
           motion_state,
+          pressure_hpa,
           accepted_for_analytics,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         variables: <Variable>[
           Variable<int>(localSessionId),
@@ -78,6 +79,7 @@ class SessionPointDao {
           Variable<double>(point.derivedSpeedMps),
           Variable<double>(point.distanceDeltaM),
           Variable<String>(point.motionState),
+          Variable<double>(point.pressureHpa),
           Variable<int>(point.acceptedForAnalytics ? 1 : 0),
           Variable<String>(now.toIso8601String()),
         ],
@@ -130,9 +132,10 @@ class SessionPointDao {
             derived_speed_mps,
             distance_delta_m,
             motion_state,
+            pressure_hpa,
             accepted_for_analytics,
             created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ''',
           variables: <Variable>[
             Variable<int>(localSessionId),
@@ -162,6 +165,7 @@ class SessionPointDao {
             Variable<double>(point.derivedSpeedMps),
             Variable<double>(point.distanceDeltaM),
             Variable<String>(point.motionState),
+            Variable<double>(point.pressureHpa),
             Variable<int>(point.acceptedForAnalytics ? 1 : 0),
             Variable<String>(now.toIso8601String()),
           ],
@@ -278,6 +282,7 @@ class SessionPointDao {
       derivedSpeedMps: h.asNullableDouble(data['derived_speed_mps']),
       distanceDeltaM: h.asNullableDouble(data['distance_delta_m']),
       motionState: data['motion_state'] as String?,
+      pressureHpa: h.asNullableDouble(data['pressure_hpa']),
     );
   }
 }

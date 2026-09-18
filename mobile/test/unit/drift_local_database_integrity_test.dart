@@ -571,6 +571,39 @@ void main() {
       expect(columnNames, contains('owner_user_id'));
       expect(migratedResort?['is_favorite'], isFalse);
     });
+
+    test(
+        'schema version 5 adds pressure_hpa to local_session_points and break stats to local_ride_sessions',
+        () async {
+      final pointColumns = await database
+          .customSelect(
+            'PRAGMA table_info(local_session_points)',
+          )
+          .get();
+      final pointColumnNames = pointColumns
+          .map((QueryRow row) => row.data['name'] as String)
+          .toSet();
+
+      final sessionColumns = await database
+          .customSelect(
+            'PRAGMA table_info(local_ride_sessions)',
+          )
+          .get();
+      final sessionColumnNames = sessionColumns
+          .map((QueryRow row) => row.data['name'] as String)
+          .toSet();
+
+      final versionRows =
+          await database.customSelect('PRAGMA user_version').get();
+      final userVersion = versionRows.first.data.values.first as int;
+
+      expect(pointColumnNames, contains('pressure_hpa'));
+      expect(
+        sessionColumnNames,
+        containsAll(<String>['break_count', 'break_duration_s']),
+      );
+      expect(userVersion, 5);
+    });
   });
 }
 

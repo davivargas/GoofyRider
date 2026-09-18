@@ -318,6 +318,7 @@ class TrackingPipelineEngine {
       derivedSpeedMps: derivedSpeedMps,
       distanceDeltaM: distanceDeltaM,
       motionState: _motionStateDetector.motionState.wireValue,
+      pressureHpa: sample.pressureHpa,
     );
 
     return TrackingProcessResult(

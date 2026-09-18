@@ -367,6 +367,7 @@ List<SessionActivityType> _replayedActivityTypes(
         bearingAccuracyDeg: point.bearingAccuracyDeg,
         provider: point.provider,
         isMocked: point.isMocked,
+        pressureHpa: point.pressureHpa,
       ),
       sessionStartedAtUtc: sessionStartedAtUtc,
       activeDurationS: _millisecondsToSeconds(cumulativeAcceptedMilliseconds),

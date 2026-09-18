@@ -797,6 +797,10 @@ class SessionRepositoryImpl implements SessionRepository {
         fieldName: 'bearing_accuracy_deg',
         sanitizedFields: sanitizedFields,
       ),
+      'pressure_hpa': _sanitizePressureForSync(
+        point.pressureHpa,
+        sanitizedFields: sanitizedFields,
+      ),
       'provider': canonicalizeProviderForSync(point.provider),
       'is_mocked': point.isMocked,
       'quality_class': canonicalizeQualityClassForSync(point.qualityClass),
@@ -1039,6 +1043,18 @@ class SessionRepositoryImpl implements SessionRepository {
     }
     sanitizedFields.add(fieldName);
     return null;
+  }
+
+  double? _sanitizePressureForSync(
+    double? value, {
+    required List<String> sanitizedFields,
+  }) {
+    if (value == null) return null;
+    if (!value.isFinite || value < 300 || value > 1100) {
+      sanitizedFields.add('pressure_hpa');
+      return null;
+    }
+    return value;
   }
 
   double? _sanitizeNullableRangedDoubleForSync(

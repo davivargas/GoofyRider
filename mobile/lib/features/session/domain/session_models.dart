@@ -141,6 +141,7 @@ abstract class SessionPointBase {
   double? get derivedSpeedMps;
   double? get distanceDeltaM;
   String? get motionState;
+  double? get pressureHpa;
 
   /// Alias kept for call-site readability.
   int get elapsedOffsetMs => tOffsetMs;
@@ -175,6 +176,7 @@ class LocalSessionPoint extends SessionPointBase {
     this.derivedSpeedMps,
     this.distanceDeltaM,
     this.motionState,
+    this.pressureHpa,
   });
 
   final int id;
@@ -229,6 +231,8 @@ class LocalSessionPoint extends SessionPointBase {
   final double? distanceDeltaM;
   @override
   final String? motionState;
+  @override
+  final double? pressureHpa;
 }
 
 class TrackingDiagnosticEvent {
@@ -276,6 +280,7 @@ class NewSessionPoint extends SessionPointBase {
     this.derivedSpeedMps,
     this.distanceDeltaM,
     this.motionState,
+    this.pressureHpa,
   });
 
   @override
@@ -328,6 +333,8 @@ class NewSessionPoint extends SessionPointBase {
   final double? distanceDeltaM;
   @override
   final String? motionState;
+  @override
+  final double? pressureHpa;
 }
 
 enum SessionActivityType {
