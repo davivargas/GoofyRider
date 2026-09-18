@@ -99,8 +99,8 @@ out geom;
 
 Radius defaults to 6000 m (`--radius-m` on the script). The request carries
 a `User-Agent: FallLine/1.0 (+local)` header and the service sleeps 1 s
-between requests. HTTP errors, timeouts, and malformed JSON raise
-`ServiceUnavailableError`; a resort without latitude and longitude raises
+between requests. HTTP errors and timeouts raise `ServiceUnavailableError`, malformed JSON
+raises `ValidationError`; a resort without latitude and longitude raises
 `ValidationError`.
 
 ### 3.2 Mapping
@@ -440,8 +440,10 @@ movement and ending lifts a little earlier than the line geometry does.
 
 - `analyzer_version` becomes `analyzer@2026.09-hmm`. Stored actions from the
   previous version remain until re-analyzed.
-- `python -m app.scripts.reanalyze_sessions --older-than-version <v>` walks
-  sessions in batches of 50 and re-runs the existing analyze service path.
+- `python -m app.scripts.reanalyze_sessions [--batch-size 50] [--dry-run]` walks
+  sessions whose `processed_by_version` differs from the configured analyzer
+  version, oldest first, and re-runs the existing analyze service path with
+  the lift catalog; a session that fails is skipped after one attempt.
 - Mobile session detail stats card gains one row, "Breaks", showing
   `break_count` and `break_duration_s`.
 - Docs: `ARCHITECTURE_SUMMARY.md` (analysis package layout), README (lift
