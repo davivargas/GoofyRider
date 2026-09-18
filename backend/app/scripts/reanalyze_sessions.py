@@ -7,6 +7,7 @@ Usage (from backend/):
 from __future__ import annotations
 
 from argparse import ArgumentParser
+import uuid
 
 from app.core.config import get_settings
 from app.core.database import get_session_local
@@ -35,6 +36,7 @@ def main() -> None:
     args = build_argument_parser().parse_args()
     version = get_settings().session_analyzer_version
     db = get_session_local()()
+    done = failed = 0
     try:
         sessions_repo = RideSessionRepository(db)
         service = SessionService(
@@ -45,17 +47,20 @@ def main() -> None:
             session_analyzer=get_session_analyzer(),
             resort_lift_repository=ResortLiftRepository(db),
         )
-        done = failed = 0
+        attempted: set[uuid.UUID] = set()
         while True:
             batch = sessions_repo.list_needing_reanalysis(version, limit=args.batch_size)
-            if not batch:
+            unattempted = [session for session in batch if session.id not in attempted]
+            if not unattempted:
                 break
             if args.dry_run:
-                for session in batch:
+                for session in unattempted:
                     print(f"- {session.id} ({session.processed_by_version or 'never'})")
-                done += len(batch)
-                break
-            for session in batch:
+                    attempted.add(session.id)
+                done += len(unattempted)
+                continue
+            for session in unattempted:
+                attempted.add(session.id)
                 try:
                     service.reanalyze_stored_session(session)
                     done += 1
@@ -65,9 +70,10 @@ def main() -> None:
                     print(f"- {session.id}: failed ({exc})")
     finally:
         db.close()
-    print(
-        f"{'Would re-analyze' if args.dry_run else 'Re-analyzed'} {done} session(s); failed {failed}; version {version}"
-    )
+        print(
+            f"{'Would re-analyze' if args.dry_run else 'Re-analyzed'} {done} session(s); "
+            f"failed {failed}; version {version}"
+        )
 
 
 if __name__ == "__main__":

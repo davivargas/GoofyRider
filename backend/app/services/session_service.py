@@ -456,7 +456,10 @@ def _to_analyzer_lift(model: ResortLiftModel) -> ResortLift | None:
     vertices: list[tuple[float, float]] = []
     for item in raw:
         if isinstance(item, (list, tuple)) and len(item) == 2:
-            vertices.append((float(item[0]), float(item[1])))
+            try:
+                vertices.append((float(item[0]), float(item[1])))
+            except (TypeError, ValueError):
+                continue
     if len(vertices) < 2:
         return None
     return ResortLift(

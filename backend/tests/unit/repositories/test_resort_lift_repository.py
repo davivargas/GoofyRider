@@ -136,3 +136,61 @@ def test_upsert_by_external_track_id_inserts_then_updates(
     assert lifts["osm:way:1"].name == "New Name"
     assert lifts["osm:way:1"].lift_type == "gondola"
     assert lifts["osm:way:1"].osm_aerialway == "gondola"
+
+
+def test_upsert_by_external_track_id_skips_rows_with_no_track_id(
+    db: Session, create_resort: Callable[..., Resort]
+) -> None:
+    resort = create_resort()
+    repo = ResortLiftRepository(db)
+    rows = [
+        ResortLift(
+            resort_id=resort.id,
+            name="No Track Id",
+            lift_type="chair",
+            polyline="[[1,2],[3,4]]",
+            external_track_id=None,
+        ),
+        ResortLift(
+            resort_id=resort.id,
+            name="Has Track Id",
+            lift_type="chair",
+            polyline="[[1,2],[3,4]]",
+            external_track_id="osm:way:3",
+        ),
+    ]
+
+    assert repo.upsert_by_external_track_id(resort.id, rows) == 1
+    repo.commit()
+
+    lifts = repo.list_by_resort(resort.id)
+    assert [lift.name for lift in lifts] == ["Has Track Id"]
+
+
+def test_upsert_by_external_track_id_deduplicates_within_one_batch(
+    db: Session, create_resort: Callable[..., Resort]
+) -> None:
+    resort = create_resort()
+    repo = ResortLiftRepository(db)
+    rows = [
+        ResortLift(
+            resort_id=resort.id,
+            name="First",
+            lift_type="chair",
+            polyline="[[1,2],[3,4]]",
+            external_track_id="osm:way:dup",
+        ),
+        ResortLift(
+            resort_id=resort.id,
+            name="Second",
+            lift_type="chair",
+            polyline="[[1,2],[3,4]]",
+            external_track_id="osm:way:dup",
+        ),
+    ]
+
+    assert repo.upsert_by_external_track_id(resort.id, rows) == 2
+    repo.commit()
+
+    lifts = repo.list_by_resort(resort.id)
+    assert [lift.name for lift in lifts] == ["Second"]

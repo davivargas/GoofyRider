@@ -23,6 +23,8 @@ class ResortLiftRepository(SqlAlchemyRepository):
     def upsert_by_external_track_id(self, resort_id: uuid.UUID, rows: Sequence[ResortLift]) -> int:
         count = 0
         for row in rows:
+            if row.external_track_id is None:
+                continue
             existing = self._db.scalars(
                 select(ResortLift).where(
                     ResortLift.resort_id == resort_id,
@@ -39,5 +41,9 @@ class ResortLiftRepository(SqlAlchemyRepository):
                 existing.polyline = row.polyline
                 existing.base_altitude_m = row.base_altitude_m
                 existing.top_altitude_m = row.top_altitude_m
+            # Flush so a second row in this batch with the same
+            # external_track_id sees the first as `existing` instead of
+            # inserting a duplicate.
+            self._db.flush()
             count += 1
         return count

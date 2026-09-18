@@ -20,6 +20,11 @@ def test_session_detail_fixture_parses_with_break_fields() -> None:
     assert detail.session.break_count == 1
     assert detail.session.break_duration_s == 240.0
     assert [a.action_type for a in detail.actions] == ["run", "lift"]
+    assert all(action.sequence_index >= 1 for action in detail.actions)
+    summary = detail.session
+    assert summary.total_duration_s >= (
+        summary.descent_duration_s + summary.lift_duration_s + summary.break_duration_s
+    )
 
 
 def test_mobile_copy_is_identical() -> None:

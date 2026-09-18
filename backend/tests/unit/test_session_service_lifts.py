@@ -56,6 +56,21 @@ def test_unusable_polylines_are_skipped() -> None:
     assert _to_analyzer_lift(_lift_model(json.dumps([[49.4, -123.0]]))) is None
 
 
+def test_non_numeric_pair_members_are_skipped_without_raising() -> None:
+    polyline = json.dumps(
+        [
+            [49.4, -123.0],
+            ["bad", -123.0],
+            [49.41, -123.0],
+        ]
+    )
+
+    lift = _to_analyzer_lift(_lift_model(polyline))
+
+    assert lift is not None
+    assert lift.polyline == ((49.4, -123.0), (49.41, -123.0))
+
+
 def test_run_analysis_passes_catalog_lifts_to_the_analyzer() -> None:
     analyzer = MagicMock()
     analyzer.analyze.return_value = AnalysisResult(
