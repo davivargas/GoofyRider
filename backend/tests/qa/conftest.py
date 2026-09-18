@@ -21,6 +21,7 @@ TABLES_TO_TRUNCATE = [
     "weather_cache",
     "ride_sessions",
     "favorite_resorts",
+    "resort_lifts",
     "resorts",
     "users",
 ]

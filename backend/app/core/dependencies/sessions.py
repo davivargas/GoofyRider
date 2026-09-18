@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.dependencies.database import get_db
+from app.core.dependencies.resorts import get_resort_lift_repository
 from app.core.dependencies.resorts import get_resort_repository
+from app.repositories.resort_lift_repository import ResortLiftRepository
 from app.repositories.resort_repository import ResortRepository
 from app.repositories.ride_session_repository import RideSessionRepository
 from app.repositories.session_override_repository import SessionOverrideRepository
@@ -36,6 +38,7 @@ def get_session_service(
         get_session_override_repository
     ),
     session_analyzer: SessionAnalyzer = Depends(get_session_analyzer),
+    resort_lift_repository: ResortLiftRepository = Depends(get_resort_lift_repository),
 ) -> SessionService:
     return SessionService(
         ride_session_repository=ride_session_repository,
@@ -43,4 +46,5 @@ def get_session_service(
         session_point_repository=session_point_repository,
         session_override_repository=session_override_repository,
         session_analyzer=session_analyzer,
+        resort_lift_repository=resort_lift_repository,
     )

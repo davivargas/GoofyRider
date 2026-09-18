@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies.database import get_db
 from app.repositories.favorite_resort_repository import FavoriteResortRepository
+from app.repositories.resort_lift_repository import ResortLiftRepository
 from app.repositories.resort_repository import ResortRepository
 from app.services.favorites_service import FavoritesService
 from app.services.resort_service import ResortService
@@ -10,6 +11,10 @@ from app.services.resort_service import ResortService
 
 def get_resort_repository(db: Session = Depends(get_db)) -> ResortRepository:
     return ResortRepository(db)
+
+
+def get_resort_lift_repository(db: Session = Depends(get_db)) -> ResortLiftRepository:
+    return ResortLiftRepository(db)
 
 
 def get_favorite_resort_repository(db: Session = Depends(get_db)) -> FavoriteResortRepository:

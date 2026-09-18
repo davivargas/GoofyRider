@@ -3,17 +3,20 @@ from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+import json
 import logging
 import uuid
 
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
+from app.models.resort_lift import ResortLift as ResortLiftModel
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.ride_session_action import RideSessionAction
 from app.models.ride_session_override import RideSessionOverride
 from app.models.session_point import SessionPoint
+from app.repositories.protocols import ResortLiftRepositoryProtocol
 from app.repositories.protocols import ResortRepositoryProtocol
 from app.repositories.protocols import RideSessionRepositoryProtocol
 from app.repositories.protocols import SessionOverrideRepositoryProtocol
@@ -31,6 +34,7 @@ from app.services.session_analyzer import AnalyzerInput
 from app.services.session_analyzer import OverrideRecord
 from app.services.session_analyzer import OverrideSpan
 from app.services.session_analyzer import RawPoint
+from app.services.session_analyzer import ResortLift
 from app.services.session_analyzer import SessionAnalyzer
 from app.services.session_analyzer import SessionMetadataInput
 from app.services.session_analyzer import SessionSummaryFields
@@ -60,12 +64,14 @@ class SessionService:
         session_point_repository: SessionPointRepositoryProtocol,
         session_override_repository: SessionOverrideRepositoryProtocol,
         session_analyzer: SessionAnalyzer,
+        resort_lift_repository: ResortLiftRepositoryProtocol | None = None,
     ) -> None:
         self._ride_session_repository = ride_session_repository
         self._resort_repository = resort_repository
         self._session_point_repository = session_point_repository
         self._session_override_repository = session_override_repository
         self._session_analyzer = session_analyzer
+        self._resort_lift_repository = resort_lift_repository
 
     def create_session(
         self,
@@ -268,10 +274,12 @@ class SessionService:
             source=ride_session.source,
         )
 
+        resort_lifts = self._load_resort_lifts(ride_session.resort_id)
         analyzer_input = AnalyzerInput(
             points=[_to_raw_point(p) for p in raw_points],
             metadata=metadata,
             preset_overrides=[_to_override_span(o) for o in existing_overrides],
+            resort_lifts=resort_lifts,
         )
         result = self._session_analyzer.analyze(analyzer_input)
 
@@ -282,6 +290,16 @@ class SessionService:
             overrides=[_to_override_model(o) for o in result.overrides],
             version=result.analyzer_version,
         )
+
+    def _load_resort_lifts(self, resort_id: uuid.UUID | None) -> tuple[ResortLift, ...]:
+        if resort_id is None or self._resort_lift_repository is None:
+            return ()
+        lifts = []
+        for model in self._resort_lift_repository.list_by_resort(resort_id):
+            lift = _to_analyzer_lift(model)
+            if lift is not None:
+                lifts.append(lift)
+        return tuple(lifts)
 
     def _load_detail(self, session_id: uuid.UUID, user_id: uuid.UUID) -> SessionDetail:
         session = self._ride_session_repository.get_detail_with_actions(session_id)
@@ -417,6 +435,31 @@ def _to_raw_point(point: SessionPoint) -> RawPoint:
         speed_accuracy_mps=point.speed_accuracy_mps,
         heading_deg=point.heading_deg,
         pressure_hpa=point.pressure_hpa,
+    )
+
+
+def _to_analyzer_lift(model: ResortLiftModel) -> ResortLift | None:
+    if not model.polyline:
+        return None
+    try:
+        raw = json.loads(model.polyline)
+    except ValueError:
+        logger.warning("Ignoring lift %s: polyline is not JSON", model.id)
+        return None
+    if not isinstance(raw, list):
+        return None
+    vertices: list[tuple[float, float]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            vertices.append((float(item[0]), float(item[1])))
+    if len(vertices) < 2:
+        return None
+    return ResortLift(
+        name=model.name,
+        polyline=tuple(vertices),
+        lift_type=model.lift_type,
+        osm_aerialway=model.osm_aerialway,
+        external_track_id=model.external_track_id,
     )
 
 
