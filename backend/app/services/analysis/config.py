@@ -22,8 +22,13 @@ class AnalyzerConfig:
     gps_alt_window_s: int = 15
     baro_alt_window_s: int = 5
     baro_offset_tau_s: float = 300.0
+    pressure_coverage_min: float = 0.8
+    pressure_hold_s: int = 30
     vrate_half_window_s: int = 6
     heading_window_s: int = 10
+    # bounds against bad client clocks (spec section 5, item 8)
+    max_point_gap_s: int = 7200
+    max_frame_seconds: int = 86400
     # decoder emissions (spec section 7)
     descent_fast_mps: float = 2.0
     descent_slow_mps: float = 0.8

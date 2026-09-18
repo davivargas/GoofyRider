@@ -12,9 +12,11 @@ from app.services.analysis.config import AnalyzerConfig
 from app.services.analysis.geo import circular_variance
 from app.services.analysis.geo import haversine_m
 from app.services.analysis.types import RawPoint
+from app.services.exceptions import ValidationError
 
 _SEA_LEVEL_HPA = 1013.25
 _MIN_VERTICAL_ACCURACY_M = 3.0
+_MIN_POSITION_SLACK_M = 3.0
 _BARO_WARMUP_S = 30.0
 _LEGACY_SPEED_WINDOW = 5
 
@@ -59,6 +61,12 @@ def condition(points: Sequence[RawPoint], config: AnalyzerConfig) -> FeatureFram
     n = int(offsets[-1]) + 1
     if n < 2:
         return None
+    if n > config.max_frame_seconds:
+        # The per-second frame is sized by wall-clock span, so an implausible span would
+        # allocate unbounded memory. Reject it instead of truncating silently.
+        raise ValidationError(
+            f"Session span exceeds {config.max_frame_seconds} s of per-second samples"
+        )
     lat = [kept[0].latitude] * n
     lon = [kept[0].longitude] * n
     alt = [point_alts[0]] * n
@@ -153,6 +161,10 @@ def _apply_gates(points: Sequence[RawPoint], config: AnalyzerConfig) -> list[Raw
             dt = (p.recorded_at - last.recorded_at).total_seconds()
             if dt <= 0:
                 continue
+            if dt > config.max_point_gap_s:
+                # A bad client clock can put a fix days away from the rest of the session.
+                # Keeping the earlier point bounds the frame to the plausible recording.
+                continue
             implied = haversine_m(last.latitude, last.longitude, p.latitude, p.longitude) / dt
             if implied > config.jump_reject_mps:
                 continue
@@ -169,11 +181,31 @@ def _point_speeds(kept: Sequence[RawPoint], config: AnalyzerConfig) -> list[floa
         if trusted and p.speed_mps is not None:
             speeds.append(float(p.speed_mps))
             continue
-        neighbour = kept[k - 1] if k > 0 else kept[k + 1]
-        dt = abs((p.recorded_at - neighbour.recorded_at).total_seconds())
-        distance = haversine_m(p.latitude, p.longitude, neighbour.latitude, neighbour.longitude)
-        speeds.append(distance / dt if dt > 0 else 0.0)
+        speeds.append(_position_speed(kept, k, config))
     return speeds
+
+
+def _position_speed(kept: Sequence[RawPoint], k: int, config: AnalyzerConfig) -> float:
+    """Displacement over a centred window of at least `speed_window_s`, less the fix accuracy.
+
+    A single neighbouring fix turns GPS jitter into speed: +/- 8 m at 1 Hz reads as 16 m/s.
+    Widening the window and subtracting the horizontal accuracy of the two ends makes a
+    jittering stationary rider read 0 while a real descent keeps its speed.
+    """
+    lo = hi = k
+    last = len(kept) - 1
+    while (kept[hi].recorded_at - kept[lo].recorded_at).total_seconds() < config.speed_window_s:
+        if lo == 0 and hi == last:
+            break
+        lo = max(0, lo - 1)
+        hi = min(last, hi + 1)
+    span_s = (kept[hi].recorded_at - kept[lo].recorded_at).total_seconds()
+    if span_s <= 0:
+        return 0.0
+    a, b = kept[lo], kept[hi]
+    distance = haversine_m(a.latitude, a.longitude, b.latitude, b.longitude)
+    slack = max(a.accuracy_m or 0.0, b.accuracy_m or 0.0, _MIN_POSITION_SLACK_M)
+    return max(0.0, distance - slack) / span_s
 
 
 def _point_altitudes(kept: Sequence[RawPoint], config: AnalyzerConfig) -> tuple[list[float], bool]:
@@ -181,7 +213,8 @@ def _point_altitudes(kept: Sequence[RawPoint], config: AnalyzerConfig) -> tuple[
     first_known = next((a for a in gps if a is not None), None)
     if first_known is None:
         return [0.0] * len(kept), False
-    if not all(p.pressure_hpa is not None for p in kept):
+    covered = sum(1 for p in kept if p.pressure_hpa is not None)
+    if covered < config.pressure_coverage_min * len(kept):
         filled: list[float] = []
         last = float(first_known)
         for a in gps:
@@ -189,22 +222,29 @@ def _point_altitudes(kept: Sequence[RawPoint], config: AnalyzerConfig) -> tuple[
             filled.append(last)
         return filled, False
 
-    barometric = [
-        44_330.0 * (1.0 - (float(p.pressure_hpa or _SEA_LEVEL_HPA) / _SEA_LEVEL_HPA) ** 0.1903)
-        for p in kept
-    ]
+    barometric = _barometric_altitudes(kept, config)
     # Start from the mean GPS-minus-barometer difference of the first 30 s, so one noisy
     # first fix cannot bias the whole session. (The accuracy gate has already removed
     # outliers, and a median is degenerate for noise that alternates around the truth.)
     warmup = [
         float(a) - b
         for p, a, b in zip(kept, gps, barometric, strict=True)
-        if a is not None and (p.recorded_at - kept[0].recorded_at).total_seconds() <= _BARO_WARMUP_S
+        if a is not None
+        and b is not None
+        and (p.recorded_at - kept[0].recorded_at).total_seconds() <= _BARO_WARMUP_S
     ]
-    offset = sum(warmup) / len(warmup) if warmup else float(first_known) - barometric[0]
+    offset = sum(warmup) / len(warmup) if warmup else _initial_offset(gps, barometric)
     fused: list[float] = []
     previous_time = kept[0].recorded_at
+    last_fused = float(first_known)
     for p, a, b in zip(kept, gps, barometric, strict=True):
+        if b is None:
+            # No usable pressure for this point: its own GPS altitude carries it, and the
+            # last fused value stands in when even that is missing.
+            last_fused = float(a) if a is not None else last_fused
+            previous_time = p.recorded_at
+            fused.append(last_fused)
+            continue
         if a is not None:
             dt = (p.recorded_at - previous_time).total_seconds()
             trust = _MIN_VERTICAL_ACCURACY_M / max(
@@ -213,8 +253,35 @@ def _point_altitudes(kept: Sequence[RawPoint], config: AnalyzerConfig) -> tuple[
             weight = min(1.0, dt / config.baro_offset_tau_s) * trust
             offset += weight * ((float(a) - b) - offset)
         previous_time = p.recorded_at
-        fused.append(b + offset)
+        last_fused = b + offset
+        fused.append(last_fused)
     return fused, True
+
+
+def _barometric_altitudes(kept: Sequence[RawPoint], config: AnalyzerConfig) -> list[float | None]:
+    """Barometric altitude per point; a gap reuses the last reading for `pressure_hold_s`."""
+    out: list[float | None] = []
+    pressure: float | None = None
+    measured_at: datetime | None = None
+    for p in kept:
+        if p.pressure_hpa is not None:
+            pressure, measured_at = float(p.pressure_hpa), p.recorded_at
+        elif (
+            measured_at is not None
+            and (p.recorded_at - measured_at).total_seconds() > config.pressure_hold_s
+        ):
+            pressure = None
+        out.append(
+            None if pressure is None else 44_330.0 * (1.0 - (pressure / _SEA_LEVEL_HPA) ** 0.1903)
+        )
+    return out
+
+
+def _initial_offset(gps: Sequence[float | None], barometric: Sequence[float | None]) -> float:
+    for a, b in zip(gps, barometric, strict=True):
+        if a is not None and b is not None:
+            return float(a) - b
+    return 0.0
 
 
 def _vertical_rate(alt: Sequence[float], half_window: int) -> list[float]:

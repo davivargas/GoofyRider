@@ -59,6 +59,26 @@ def test_long_stop_between_descents_is_masked_and_counted_as_a_break() -> None:
     assert breaks.duration_s == pytest.approx(300, abs=12)
 
 
+def test_jittery_untrusted_stop_between_descents_is_still_a_break() -> None:
+    # Fixes that jitter +/- 8 m at 1 Hz imply 16 m/s to a one-sided estimator; the centred
+    # window with the accuracy slack reads them as the standstill they are.
+    jitter = [
+        point(
+            60 + i,
+            north_m=-472.0 + (8.0 if i % 2 else -8.0),
+            altitude_m=823.0,
+            speed_mps=40.0,
+            accuracy_m=25.0,
+            speed_accuracy_mps=5.0,
+        )
+        for i in range(300)
+    ]
+    points = descent(0, 60) + jitter + descent(360, 60, north0=-472.0, alt0=823.0)
+    actions, breaks = _analyze(points)
+    assert len(_runs(actions)) == 1
+    assert breaks.count == 1
+
+
 def test_stop_followed_by_a_lift_ends_the_run_at_the_stop() -> None:
     points = (
         descent(0, 60)

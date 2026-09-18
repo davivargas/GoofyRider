@@ -131,6 +131,13 @@ def test_override_with_end_before_start_is_rejected() -> None:
         SessionAnalyzer(analyzer_version="v").analyze(_input(points, preset_overrides=[override]))
 
 
+def test_frame_spanning_more_than_a_day_is_surfaced_as_validation_error() -> None:
+    bridge = [standstill(3600 * k, 1, north=-1.0 * k, alt=1000.0)[0] for k in range(1, 25)]
+    points = [*descent(0, 60), *bridge, *descent(25 * 3600, 60, north0=-24.0)]
+    with pytest.raises(ValidationError):
+        SessionAnalyzer(analyzer_version="v").analyze(_input(points))
+
+
 def test_override_with_unknown_motion_state_is_rejected() -> None:
     points = descent(0, 90)
     override = OverrideSpan(

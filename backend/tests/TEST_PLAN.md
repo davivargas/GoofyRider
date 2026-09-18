@@ -49,7 +49,7 @@ Focus:
 
 Corpus gate:
 
-- `tests/unit/test_analyzer_corpus.py` (the one unit test that takes a few seconds: it scores all fourteen archives once per module) scores the analyzer against the fourteen Slopes archives with the recorded OSM lift lines. It fails when any archive drops more than 0.5 points below `tests/fixtures/slopes/expected_scores.json`, when the corpus falls under the success bar of the GPS segmentation spec, or when it no longer beats the old analyzer's 78.4%. Re-record scores with `python -m app.scripts.evaluate_analyzer --write-expected`; a lower recorded score must be justified in the same commit.
+- `tests/unit/test_analyzer_corpus.py` (the one unit test that takes a few seconds: it scores all fourteen archives once per module) scores the analyzer against the fourteen Slopes archives with the recorded OSM lift lines. It fails when any archive drops more than 0.5 points below `tests/fixtures/slopes/expected_scores.json`, when the corpus falls under the success bar of the GPS segmentation spec, or when it no longer beats the old analyzer's 78.4%. Re-record scores with `python -m app.scripts.evaluate_analyzer --write-expected` (which rewrites both expected files); a lower recorded score must be justified in the same commit. The same module also scores the no-catalog configuration against `tests/fixtures/slopes/expected_scores_no_catalog.json`: that is the configuration live sessions use until the backend passes the lift catalog (plan 2), and it is gated against regression only, not against the success bar.
 
 Expected runtime:
 

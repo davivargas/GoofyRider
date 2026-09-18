@@ -34,6 +34,7 @@ CORPUS_DIR = _BACKEND_DIR / "tests" / "fixtures" / "slopes"
 OSM_DIR = _BACKEND_DIR / "tests" / "fixtures" / "osm"
 OVERRIDES_PATH = CORPUS_DIR / "label_overrides.json"
 EXPECTED_PATH = CORPUS_DIR / "expected_scores.json"
+EXPECTED_NO_CATALOG_PATH = CORPUS_DIR / "expected_scores_no_catalog.json"
 _SLOPES_DT = "%Y-%m-%d %H:%M:%S %z"
 _MATCH_OVERLAP = 0.5
 
@@ -286,22 +287,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.json is not None:
         args.json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     if args.write_expected:
-        EXPECTED_PATH.write_text(
-            json.dumps(
-                {
-                    n: {
-                        "agreement": round(v["agreement"], 4),
-                        "runs": v["runs"],
-                        "lifts": v["lifts"],
-                    }
-                    for n, v in payload.items()
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        # Both configurations are recorded on every re-record: the catalog run is the one
+        # the success bar is measured on, the no-catalog run is what live sessions get
+        # until the backend passes the lift catalog.
+        with_catalog = corpus if not args.no_catalog else score_corpus(config, use_catalog=True)
+        without_catalog = corpus if args.no_catalog else score_corpus(config, use_catalog=False)
+        _write_expected(EXPECTED_PATH, with_catalog)
+        _write_expected(EXPECTED_NO_CATALOG_PATH, without_catalog)
     return 0
+
+
+def _write_expected(path: Path, corpus: CorpusScore) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                a.name: {"agreement": round(a.agreement, 4), "runs": a.runs, "lifts": a.lifts}
+                for a in corpus.archives
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
