@@ -112,7 +112,7 @@ Each way becomes one `resort_lifts` row:
 | `name` | `tags.name`, else `Unnamed <lift_type>` |
 | `lift_type` | `chair_lift` to `chair`; `gondola`, `cable_car`, `mixed_lift` to `gondola`; `drag_lift`, `platter`, `rope_tow`, `j-bar` to `surface`; `t-bar` to `tbar`; `magic_carpet` to `magic_carpet`; any other value (for example `goods`, `station`, `zip_line`) is skipped and logged at INFO |
 | `polyline` | JSON array of `[lat, lon]` pairs in way order (the column is already `Text`) |
-| `base_altitude_m`, `top_altitude_m` | from `ele` tags on the first and last nodes when present, else null |
+| `base_altitude_m`, `top_altitude_m` | left null: Overpass `out geom` returns no elevation for way nodes (verified on the three recorded resorts); the analyzer takes terminal altitudes from the track |
 | `external_track_id` | `osm:way:<id>`; re-runs update the existing row instead of inserting |
 
 Ways with fewer than two nodes are skipped. Direction (which end is the base)
@@ -165,7 +165,10 @@ and adds a parse test on each side. A CI check compares the two copies.
 3. Jump gate: implied speed to the last kept point above 40 m/s drops the
    point.
 4. Speed trust: platform speed is used when `speed_accuracy_mps` is null or
-   below 3 m/s; otherwise speed is recomputed from consecutive positions.
+   below 3 m/s; otherwise speed is estimated from positions over a centred
+   window of at least 10 s, after subtracting the horizontal accuracy of the
+   fixes from the displacement (a jittering stationary rider reads 0), never
+   from a single neighbouring fix.
    Top-speed reporting keeps the existing 2x spike ratio against a 1 m/s
    reference floor.
 5. Resampling to 1 Hz. Slopes and the planned adaptive sampling both thin
@@ -181,16 +184,24 @@ and adds a parse test on each side. A CI check compares the two copies.
    `44330 * (1 - (p / 1013.25) ** 0.1903)` plus an offset that starts at the mean
    GPS-minus-barometer difference of the first 30 s and then tracks GPS
    altitude with an exponential filter of time constant 300 s, weighted by
-   `1 / max(vertical_accuracy_m, 3)`. Without pressure: exponential smoother
-   over GPS altitude with a 10 s window and the same weighting. Vertical rate
-   is the central difference of fused altitude over 5 s.
-7. Heading consistency: circular variance of bearing over a 10 s window
-   (bearing from platform when present, else from consecutive positions).
+   `1 / max(vertical_accuracy_m, 3)`. The barometer branch is used when at
+   least 80% of the kept points carry pressure; a point without pressure
+   reuses the previous reading if it is at most 30 s old, else the GPS
+   altitude for that point. Without the barometer: a centred rolling mean
+   over 15 s of the GPS altitude (no accuracy weighting; the 30 m horizontal
+   gate already removes the worst fixes). Vertical rate is the central
+   difference of the smoothed altitude over 12 s (6 s either side).
+7. Heading consistency: circular variance of the bearing over a 10 s window,
+   with the bearing computed from consecutive positions. The platform
+   `heading_deg` is carried on `RawPoint` but not used by the analyzer yet.
+8. Bounds against bad client clocks: a point more than 2 hours after the
+   previous kept point is dropped, and a frame that would still span more
+   than 24 hours raises `ValidationError`. The per-second frame is sized by
+   wall-clock span, so these bounds cap memory and CPU.
 
-`FeatureFrame` holds parallel arrays: `t` (seconds from start), `lat`, `lon`,
-`alt`, `speed`, `vrate`, `heading_var`, `hacc`, `gap`, plus the mapping from
-each second to the nearest original point index (for top-speed location and
-override application).
+`FeatureFrame` holds parallel arrays for `lat`, `lon`, `alt`, `speed`,
+`vrate`, `heading_var`, and `gap`, plus the kept points; seconds are mapped
+back to points by time when needed (top-speed location, overrides).
 
 Slopes archives carry horizontal and vertical accuracy (GPS.csv columns 7
 and 8) but no speed accuracy and no pressure, so the corpus exercises the
@@ -286,9 +297,9 @@ Stop spans are classified by what surrounds them:
 | lift, or start of session | descent | getting ready | run starts when the stop ends; counts as a break if 120 s or longer |
 | lift | lift | transfer between lifts | belongs to no action; counts as a break if 120 s or longer |
 
-When a catalog exists, a stop that lies within 80 m of a lift base terminal
-is treated as "before a lift" even if a short descent follows (skiing the
-last metres into the lift line), so the run ends at that stop.
+(A separate rule for stops near a lift base terminal was considered and
+dropped: it could only apply to lifts in the catalog, and for those the
+anchored lift span already absorbs the glide into the line.)
 
 Validity rules, applied per span before runs are assembled:
 
@@ -439,7 +450,9 @@ movement and ending lifts a little earlier than the line geometry does.
 
 Analyzer constants are code, not settings; they live in `AnalyzerConfig`.
 Tuned defaults recorded on 2026-09-17: `lift_vrate_mps` 0.10 (was 0.15),
-`max_in_run_break_s` 1200 (was 3600), new `lift_bridge_max_mps` 0.8. The
+`max_in_run_break_s` 1200 (was 3600), new `lift_bridge_max_mps` 0.8;
+bounds `max_point_gap_s` 7200 and `max_frame_seconds` 86400; barometer
+`pressure_coverage_min` 0.8 and `pressure_hold_s` 30. The
 tuned analyzer scores 90.8% mean agreement, exact counts on 9 of 14, lift
 recall 99.1%, lift precision 96.7%, run recall 90.4%, worst archive 77.2%.
 
