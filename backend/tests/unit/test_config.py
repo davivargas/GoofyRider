@@ -1,5 +1,6 @@
 import pytest
 
+from app.core.config import AppSettings
 from app.core.config import get_database_url
 from app.core.config import get_settings
 
@@ -246,3 +247,9 @@ def test_rate_limit_setting_parses_from_env(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("RATE_LIMIT_LOGIN_PER_IP", "3")
 
     assert get_settings().rate_limit_login_per_ip == 3
+
+
+def test_overpass_defaults() -> None:
+    settings = AppSettings(jwt_secret_key="x" * 32)
+    assert settings.overpass_base_url == "https://overpass-api.de/api/interpreter"
+    assert settings.overpass_timeout_seconds == 60

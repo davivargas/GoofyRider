@@ -60,6 +60,9 @@ class AppSettings(BaseSettings):
     resort_sync_enabled: bool = True
     resort_sync_interval_days: PositiveInt = 7
 
+    overpass_base_url: str = "https://overpass-api.de/api/interpreter"
+    overpass_timeout_seconds: PositiveInt = 60
+
     session_analyzer_version: str = "analyzer@1"
 
     @field_validator("jwt_secret_key")
@@ -85,6 +88,14 @@ class AppSettings(BaseSettings):
         if value is None or value == "":
             return None
         return value
+
+    @field_validator("overpass_base_url")
+    @classmethod
+    def _validate_overpass_base_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if not normalized:
+            raise ValueError("OVERPASS_BASE_URL must not be empty.")
+        return normalized
 
     @model_validator(mode="after")
     def _validate_refresh_lifetimes(self) -> "AppSettings":

@@ -20,6 +20,10 @@ class ResortRepository(SqlAlchemyRepository):
     def get_by_id(self, resort_id: uuid.UUID) -> Resort | None:
         return self._db.scalar(select(Resort).where(Resort.id == resort_id))
 
+    def get_by_name(self, name: str) -> Resort | None:
+        stmt = select(Resort).where(func.lower(Resort.name) == name.strip().lower())
+        return self._db.scalars(stmt).first()
+
     def get_by_external_ref(
         self,
         external_source: str,

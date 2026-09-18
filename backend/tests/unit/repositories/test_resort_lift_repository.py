@@ -94,3 +94,45 @@ def test_match_track_id_returns_none_when_unknown(
     repo = ResortLiftRepository(db)
 
     assert repo.match_track_id("missing") is None
+
+
+def test_upsert_by_external_track_id_inserts_then_updates(
+    db: Session, create_resort: Callable[..., Resort]
+) -> None:
+    resort = create_resort()
+    repo = ResortLiftRepository(db)
+    first = [
+        ResortLift(
+            resort_id=resort.id,
+            name="Old Name",
+            lift_type="chair",
+            polyline="[[1,2],[3,4]]",
+            external_track_id="osm:way:1",
+        )
+    ]
+    assert repo.upsert_by_external_track_id(resort.id, first) == 1
+    repo.commit()
+    second = [
+        ResortLift(
+            resort_id=resort.id,
+            name="New Name",
+            lift_type="gondola",
+            osm_aerialway="gondola",
+            polyline="[[1,2],[3,5]]",
+            external_track_id="osm:way:1",
+        ),
+        ResortLift(
+            resort_id=resort.id,
+            name="Other",
+            lift_type="surface",
+            polyline="[[0,0],[0,1]]",
+            external_track_id="osm:way:2",
+        ),
+    ]
+    assert repo.upsert_by_external_track_id(resort.id, second) == 2
+    repo.commit()
+    lifts = {lift.external_track_id: lift for lift in repo.list_by_resort(resort.id)}
+    assert set(lifts) == {"osm:way:1", "osm:way:2"}
+    assert lifts["osm:way:1"].name == "New Name"
+    assert lifts["osm:way:1"].lift_type == "gondola"
+    assert lifts["osm:way:1"].osm_aerialway == "gondola"

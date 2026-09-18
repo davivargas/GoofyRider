@@ -230,6 +230,23 @@ python -m app.scripts.import_resorts
 uvicorn app.main:app --reload
 ```
 
+### Lift catalog
+
+Lift lines come from OpenStreetMap through the public Overpass API and are
+needed for lift naming and the best run/lift detection. After
+`python -m app.scripts.import_resorts`, import the lifts for the resorts you
+ride (one request per resort, paced at one per second):
+
+```bash
+python -m app.scripts.import_resort_lifts --resort "Grouse Mountain"
+python -m app.scripts.import_resort_lifts --resort "Cypress Mountain"
+python -m app.scripts.import_resort_lifts --resort "Mount Seymour"
+# or everything you have favourited:
+python -m app.scripts.import_resort_lifts --all-favourites --user-email you@example.com
+```
+
+Re-running updates existing rows in place (matched by OSM way id).
+
 ### 3. Mobile
 
 ```bash
