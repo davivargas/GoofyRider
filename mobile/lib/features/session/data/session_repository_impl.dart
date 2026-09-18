@@ -1268,12 +1268,14 @@ class SessionRepositoryImpl implements SessionRepository {
         startedAt:
             _parseRemoteDateTime(raw['started_at']) ?? DateTime.now().toUtc(),
         endedAt: _parseRemoteDateTime(raw['ended_at']),
-        activeDurationS: _remoteIntOrZero(raw['duration_s']),
-        distanceM: _remoteDoubleOrZero(raw['distance_m']),
+        activeDurationS: _remoteIntOrZero(raw['descent_duration_s']),
+        distanceM: _remoteDoubleOrZero(raw['descent_distance_m']),
         maxSpeedMps: _remoteDoubleOrZero(raw['max_speed_mps']),
-        avgSpeedMps: _remoteDoubleOrZero(raw['avg_speed_mps']),
-        elevationGainM: _remoteNullableInt(raw['elevation_gain_m']),
-        elevationLossM: _remoteNullableInt(raw['elevation_loss_m']),
+        avgSpeedMps: _remoteDoubleOrZero(raw['avg_descent_speed_mps']),
+        elevationGainM: _remoteNullableInt(raw['lift_vertical_m']),
+        elevationLossM: _remoteNullableInt(raw['descent_vertical_m']),
+        breakCount: _remoteIntOrZero(raw['break_count']),
+        breakDurationS: _remoteIntOrZero(raw['break_duration_s']),
         resortId: _remoteSessionResortId(raw),
         createdAt: _parseRemoteDateTime(raw['created_at']) ??
             _parseRemoteDateTime(raw['started_at']),
@@ -1721,12 +1723,14 @@ class SessionRepositoryImpl implements SessionRepository {
       resortId: _remoteSessionResortId(raw),
       startedAt: startedAt,
       endedAt: _parseRemoteDateTime(raw['ended_at']),
-      activeDurationS: _remoteIntOrZero(raw['duration_s']),
-      distanceM: _remoteDoubleOrZero(raw['distance_m']),
+      activeDurationS: _remoteIntOrZero(raw['descent_duration_s']),
+      distanceM: _remoteDoubleOrZero(raw['descent_distance_m']),
       maxSpeedMps: _remoteDoubleOrZero(raw['max_speed_mps']),
-      avgSpeedMps: _remoteDoubleOrZero(raw['avg_speed_mps']),
-      elevationGainM: _remoteNullableInt(raw['elevation_gain_m']),
-      elevationLossM: _remoteNullableInt(raw['elevation_loss_m']),
+      avgSpeedMps: _remoteDoubleOrZero(raw['avg_descent_speed_mps']),
+      elevationGainM: _remoteNullableInt(raw['lift_vertical_m']),
+      elevationLossM: _remoteNullableInt(raw['descent_vertical_m']),
+      breakCount: _remoteIntOrZero(raw['break_count']),
+      breakDurationS: _remoteIntOrZero(raw['break_duration_s']),
       state: LocalSessionState.synced,
       pointCount: 0,
       syncAttemptCount: 0,
@@ -1760,7 +1764,7 @@ class SessionRepositoryImpl implements SessionRepository {
       return value;
     }
     if (value is num) {
-      return value.toInt();
+      return value.round();
     }
     return int.tryParse(value.toString());
   }

@@ -525,6 +525,8 @@ class DriftLocalDatabase extends GeneratedDatabase {
     required int? elevationLossM,
     required String? resortId,
     DateTime? createdAt,
+    int breakCount = 0,
+    int breakDurationS = 0,
   }) =>
       remoteSessionCache.upsertRemoteSessionSummary(
         ownerUserId: ownerUserId,
@@ -539,6 +541,8 @@ class DriftLocalDatabase extends GeneratedDatabase {
         elevationLossM: elevationLossM,
         resortId: resortId,
         createdAt: createdAt,
+        breakCount: breakCount,
+        breakDurationS: breakDurationS,
       );
 
   @Deprecated('Use remoteSessionCache.replaceCachedRemoteSessions instead')

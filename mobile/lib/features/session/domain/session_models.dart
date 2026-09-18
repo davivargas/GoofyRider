@@ -79,6 +79,8 @@ class LocalRideSession {
     required this.lastSyncError,
     required this.createdAt,
     required this.updatedAt,
+    this.breakCount = 0,
+    this.breakDurationS = 0,
   });
 
   final int localId;
@@ -93,6 +95,8 @@ class LocalRideSession {
   final double avgSpeedMps;
   final int? elevationGainM;
   final int? elevationLossM;
+  final int breakCount;
+  final int breakDurationS;
   final LocalSessionState state;
   final int pointCount;
   final int syncAttemptCount;

@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -105,6 +106,12 @@ class FakeNewSessionPoint extends Fake implements NewSessionPoint {}
 
 const String _ownerUserId = 'user-1';
 const String _uuidLikeRemoteSessionId = '2dc7f6ff-9ad0-4d87-b0f1-6545af670d87';
+
+Map<String, dynamic> _loadSessionDetailFixtureSession() {
+  final file = File('test/fixtures/contracts/session_detail.json');
+  final decoded = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+  return decoded['session'] as Map<String, dynamic>;
+}
 
 LocalRideSession _buildSession({
   required int localId,
@@ -1585,6 +1592,8 @@ void main() {
         avgSpeedMps: any(named: 'avgSpeedMps'),
         elevationGainM: any(named: 'elevationGainM'),
         elevationLossM: any(named: 'elevationLossM'),
+        breakCount: any(named: 'breakCount'),
+        breakDurationS: any(named: 'breakDurationS'),
         resortId: any(named: 'resortId'),
         createdAt: any(named: 'createdAt'),
       ),
@@ -1617,10 +1626,12 @@ void main() {
       'status': 'COMPLETED',
       'started_at': '2026-01-03T00:00:00Z',
       'ended_at': '2026-01-03T00:12:00Z',
-      'duration_s': 720,
-      'distance_m': 2100,
+      'descent_duration_s': 720,
+      'descent_distance_m': 2100,
       'max_speed_mps': 14,
-      'avg_speed_mps': 8,
+      'avg_descent_speed_mps': 8,
+      'break_count': 2,
+      'break_duration_s': 90,
       'created_at': '2026-01-03T00:12:05Z',
     };
     final localSnapshots = Queue<List<LocalRideSession>>.from(
@@ -1670,6 +1681,8 @@ void main() {
         avgSpeedMps: any(named: 'avgSpeedMps'),
         elevationGainM: any(named: 'elevationGainM'),
         elevationLossM: any(named: 'elevationLossM'),
+        breakCount: any(named: 'breakCount'),
+        breakDurationS: any(named: 'breakDurationS'),
         resortId: any(named: 'resortId'),
         createdAt: any(named: 'createdAt'),
       ),
@@ -1692,8 +1705,98 @@ void main() {
         avgSpeedMps: 8,
         elevationGainM: null,
         elevationLossM: null,
+        breakCount: 2,
+        breakDurationS: 90,
         resortId: null,
         createdAt: DateTime.utc(2026, 1, 3, 0, 12, 5),
+      ),
+    ).called(1);
+  });
+
+  test(
+      'history maps the backend descent/lift/break summary fields for '
+      'not-yet-local remote sessions', () async {
+    final fixture = _loadSessionDetailFixtureSession();
+
+    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => const <LocalRideSession>[]);
+    when(() =>
+            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
+        .thenAnswer((_) async => <Map<String, dynamic>>[fixture]);
+    when(() => api.listRemoteSessions())
+        .thenAnswer((_) async => <Map<String, dynamic>>[fixture]);
+    when(
+      () => localDatabase.replaceCachedRemoteSessions(
+        ownerUserId: _ownerUserId,
+        sessions: any(named: 'sessions'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => localDatabase.upsertRemoteSessionSummary(
+        ownerUserId: any(named: 'ownerUserId'),
+        remoteId: any(named: 'remoteId'),
+        startedAt: any(named: 'startedAt'),
+        endedAt: any(named: 'endedAt'),
+        activeDurationS: any(named: 'activeDurationS'),
+        distanceM: any(named: 'distanceM'),
+        maxSpeedMps: any(named: 'maxSpeedMps'),
+        avgSpeedMps: any(named: 'avgSpeedMps'),
+        elevationGainM: any(named: 'elevationGainM'),
+        elevationLossM: any(named: 'elevationLossM'),
+        breakCount: any(named: 'breakCount'),
+        breakDurationS: any(named: 'breakDurationS'),
+        resortId: any(named: 'resortId'),
+        createdAt: any(named: 'createdAt'),
+      ),
+    ).thenAnswer((_) async => 1);
+
+    final history = await repository.listLocalAndRemoteSessionHistory();
+
+    expect(history, hasLength(1));
+    final session = history.single;
+    expect(
+      session.activeDurationS,
+      (fixture['descent_duration_s'] as num).round(),
+    );
+    expect(
+      session.distanceM,
+      closeTo((fixture['descent_distance_m'] as num).toDouble(), 1e-6),
+    );
+    expect(
+      session.avgSpeedMps,
+      closeTo((fixture['avg_descent_speed_mps'] as num).toDouble(), 1e-6),
+    );
+    expect(
+      session.maxSpeedMps,
+      closeTo((fixture['max_speed_mps'] as num).toDouble(), 1e-6),
+    );
+    expect(
+      session.elevationGainM,
+      (fixture['lift_vertical_m'] as num).round(),
+    );
+    expect(
+      session.elevationLossM,
+      (fixture['descent_vertical_m'] as num).round(),
+    );
+    expect(session.breakCount, 1);
+    expect(session.breakDurationS, 240);
+
+    verify(
+      () => localDatabase.upsertRemoteSessionSummary(
+        ownerUserId: _ownerUserId,
+        remoteId: fixture['id'] as String,
+        startedAt: any(named: 'startedAt'),
+        endedAt: any(named: 'endedAt'),
+        activeDurationS: (fixture['descent_duration_s'] as num).round(),
+        distanceM: (fixture['descent_distance_m'] as num).toDouble(),
+        maxSpeedMps: (fixture['max_speed_mps'] as num).toDouble(),
+        avgSpeedMps: (fixture['avg_descent_speed_mps'] as num).toDouble(),
+        elevationGainM: (fixture['lift_vertical_m'] as num).round(),
+        elevationLossM: (fixture['descent_vertical_m'] as num).round(),
+        breakCount: 1,
+        breakDurationS: 240,
+        resortId: fixture['resort_id'] as String?,
+        createdAt: any(named: 'createdAt'),
       ),
     ).called(1);
   });

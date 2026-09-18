@@ -27,6 +27,8 @@ class RemoteSessionCacheDao {
     required int? elevationLossM,
     required String? resortId,
     DateTime? createdAt,
+    int breakCount = 0,
+    int breakDurationS = 0,
   }) async {
     final now = DateTime.now().toUtc();
     await _db.customStatement(
@@ -43,13 +45,15 @@ class RemoteSessionCacheDao {
         avg_speed_mps,
         elevation_gain_m,
         elevation_loss_m,
+        break_count,
+        break_duration_s,
         state,
         point_count,
         sync_attempt_count,
         last_sync_error,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(owner_user_id, remote_id)
       DO UPDATE SET
         resort_id = excluded.resort_id,
@@ -61,6 +65,8 @@ class RemoteSessionCacheDao {
         avg_speed_mps = excluded.avg_speed_mps,
         elevation_gain_m = excluded.elevation_gain_m,
         elevation_loss_m = excluded.elevation_loss_m,
+        break_count = excluded.break_count,
+        break_duration_s = excluded.break_duration_s,
         state = excluded.state,
         last_sync_error = NULL,
         updated_at = excluded.updated_at
@@ -77,6 +83,8 @@ class RemoteSessionCacheDao {
         avgSpeedMps,
         elevationGainM,
         elevationLossM,
+        breakCount,
+        breakDurationS,
         LocalSessionState.synced.wireValue,
         0,
         0,

@@ -459,6 +459,8 @@ class SessionDao {
       elevationLossM: data['elevation_loss_m'] == null
           ? null
           : h.asInt(data['elevation_loss_m']),
+      breakCount: h.asInt(data['break_count'] ?? 0),
+      breakDurationS: h.asInt(data['break_duration_s'] ?? 0),
       state: LocalSessionStateCodec.fromWire(data['state'] as String),
       pointCount: h.asInt(data['point_count']),
       syncAttemptCount: h.asInt(data['sync_attempt_count']),
