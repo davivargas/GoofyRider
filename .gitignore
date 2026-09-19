@@ -31,3 +31,6 @@ build/
 
 # Environment variables
 .env
+
+# Subagent-driven-development scratch (ledger, briefs, review packages)
+.superpowers/
