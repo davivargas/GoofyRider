@@ -95,5 +95,4 @@ class ResortLift(Base):
         server_default=func.now(),
     )
 
-    resort: Mapped["Resort"] = relationship("Resort")
-
+    resort: Mapped[Resort] = relationship("Resort")

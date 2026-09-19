@@ -81,7 +81,9 @@ def create_resort(db: Session) -> Callable[..., Resort]:
 
 
 @pytest.fixture
-def create_ride_session(db: Session, create_user: Callable[..., User]) -> Callable[..., RideSession]:
+def create_ride_session(
+    db: Session, create_user: Callable[..., User]
+) -> Callable[..., RideSession]:
     def _create_ride_session(
         user: User | None = None,
         started_at: datetime | None = None,
