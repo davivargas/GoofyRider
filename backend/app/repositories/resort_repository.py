@@ -24,17 +24,6 @@ class ResortRepository(SqlAlchemyRepository):
         stmt = select(Resort).where(func.lower(Resort.name) == name.strip().lower())
         return self._db.scalars(stmt).first()
 
-    def get_by_external_ref(
-        self,
-        external_source: str,
-        external_id: str,
-    ) -> Resort | None:
-        stmt = select(Resort).where(
-            Resort.external_source == external_source,
-            Resort.external_id == external_id,
-        )
-        return self._db.scalar(stmt)
-
     def get_by_name_country_region(
         self,
         name: str,
@@ -47,10 +36,6 @@ class ResortRepository(SqlAlchemyRepository):
             func.lower(Resort.region) == region.lower(),
         )
         return self._db.scalar(stmt)
-
-    def list_by_external_source(self, external_source: str) -> list[Resort]:
-        stmt = select(Resort).where(Resort.external_source == external_source)
-        return list(self._db.scalars(stmt).all())
 
     def count_filtered(self, query: str | None, region: str | None) -> int:
         stmt = select(func.count()).select_from(Resort).where(Resort.is_active.is_(True))

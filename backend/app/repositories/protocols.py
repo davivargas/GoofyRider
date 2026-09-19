@@ -68,16 +68,12 @@ class ResortRepositoryProtocol(Protocol):
 
     def commit(self) -> None: ...
 
-    def get_by_external_ref(self, external_source: str, external_id: str) -> Resort | None: ...
-
     def get_by_name_country_region(
         self,
         name: str,
         country: str,
         region: str,
     ) -> Resort | None: ...
-
-    def list_by_external_source(self, external_source: str) -> list[Resort]: ...
 
     def get_by_name(self, name: str) -> Resort | None: ...
 

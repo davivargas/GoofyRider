@@ -21,6 +21,8 @@ TABLES_TO_TRUNCATE = [
     "weather_cache",
     "ride_sessions",
     "favorite_resorts",
+    "resort_field_overrides",
+    "resort_source_records",
     "resort_lifts",
     "resorts",
     "users",
