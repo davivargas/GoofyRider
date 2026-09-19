@@ -27,11 +27,11 @@ from app.services.analysis import ResortLift
 from app.services.analysis import SessionAnalyzer
 from app.services.analysis import SessionMetadataInput
 from app.services.analysis.config import parse_overrides
-from app.services.osm_lift_mapping import map_overpass_ways
+from app.services.openskidata_mapping import map_lift
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 CORPUS_DIR = _BACKEND_DIR / "tests" / "fixtures" / "slopes"
-OSM_DIR = _BACKEND_DIR / "tests" / "fixtures" / "osm"
+CORPUS_LIFTS = _BACKEND_DIR / "tests" / "fixtures" / "openskidata" / "corpus_lifts.geojson"
 OVERRIDES_PATH = CORPUS_DIR / "label_overrides.json"
 EXPECTED_PATH = CORPUS_DIR / "expected_scores.json"
 EXPECTED_NO_CATALOG_PATH = CORPUS_DIR / "expected_scores_no_catalog.json"
@@ -162,20 +162,24 @@ def load_archive(path: Path) -> CorpusArchive:
 
 def lifts_for(archive_name: str) -> tuple[ResortLift, ...]:
     resort = archive_name.split("_", 1)[0]
-    path = OSM_DIR / f"overpass_{resort}.json"
-    if not path.exists():
+    if not CORPUS_LIFTS.exists():
         return ()
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return tuple(
-        ResortLift(
-            name=lift.name,
-            polyline=lift.polyline,
-            lift_type=lift.lift_type,
-            osm_aerialway=lift.osm_aerialway,
-            external_track_id=lift.external_track_id,
+    payload = json.loads(CORPUS_LIFTS.read_text(encoding="utf-8"))
+    lifts: list[ResortLift] = []
+    for feature in payload.get("features", []):
+        lift = map_lift(feature)
+        if lift is None or f"osd-{resort}" not in lift.ski_area_ids:
+            continue
+        lifts.append(
+            ResortLift(
+                name=lift.name,
+                polyline=lift.polyline,
+                lift_type=lift.lift_type,
+                osm_aerialway=lift.osm_aerialway,
+                external_track_id=lift.external_track_id,
+            )
         )
-        for lift in map_overpass_ways(payload)
-    )
+    return tuple(lifts)
 
 
 def score_archive(

@@ -1,0 +1,1407 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.078756,
+      49.3712493
+     ],
+     [
+      -123.0788679,
+      49.3718252
+     ],
+     [
+      -123.0789212,
+      49.3720903
+     ],
+     [
+      -123.0790594,
+      49.372778
+     ],
+     [
+      -123.0791918,
+      49.3734369
+     ],
+     [
+      -123.079302,
+      49.3739853
+     ],
+     [
+      -123.0794227,
+      49.3745861
+     ],
+     [
+      -123.0795024,
+      49.3749827
+     ],
+     [
+      -123.0796297,
+      49.3756159
+     ],
+     [
+      -123.0797369,
+      49.3761495
+     ],
+     [
+      -123.0798391,
+      49.3766584
+     ],
+     [
+      -123.0799815,
+      49.3773671
+     ],
+     [
+      -123.0801058,
+      49.3779852
+     ],
+     [
+      -123.0803149,
+      49.379026
+     ],
+     [
+      -123.0804923,
+      49.3797647
+     ],
+     [
+      -123.0805686,
+      49.3801147
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-38556750",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Screaming Eagle Chair",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/38556750"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.068719,
+      49.3810821
+     ],
+     [
+      -123.069451,
+      49.3815923
+     ],
+     [
+      -123.0703036,
+      49.3821866
+     ],
+     [
+      -123.0714924,
+      49.3830153
+     ],
+     [
+      -123.0727338,
+      49.3838805
+     ],
+     [
+      -123.0737574,
+      49.384594
+     ],
+     [
+      -123.0743525,
+      49.3850087
+     ],
+     [
+      -123.0754315,
+      49.3857608
+     ],
+     [
+      -123.0757413,
+      49.3859767
+     ],
+     [
+      -123.0758762,
+      49.3860708
+     ],
+     [
+      -123.0761288,
+      49.3862477
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-39504230",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Olympic Express",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/39504230"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.080425,
+      49.3815946
+     ],
+     [
+      -123.080669,
+      49.3811167
+     ],
+     [
+      -123.080937,
+      49.380596
+     ],
+     [
+      -123.081106,
+      49.3802665
+     ],
+     [
+      -123.0811828,
+      49.3801178
+     ],
+     [
+      -123.08123,
+      49.3800265
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-39838288",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Greenway Chair",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/39838288"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.0803579,
+      49.381948
+     ],
+     [
+      -123.080047,
+      49.3822994
+     ],
+     [
+      -123.079864,
+      49.3825061
+     ],
+     [
+      -123.079374,
+      49.3830612
+     ],
+     [
+      -123.078609,
+      49.3839272
+     ],
+     [
+      -123.0784039,
+      49.3841592
+     ],
+     [
+      -123.07792,
+      49.3847065
+     ],
+     [
+      -123.077196,
+      49.3855259
+     ],
+     [
+      -123.076765,
+      49.3860136
+     ],
+     [
+      -123.07673,
+      49.386053
+     ],
+     [
+      -123.0766262,
+      49.3862316
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-39838290",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Peak Chair",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/39838290"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.0989551,
+      49.372408
+     ],
+     [
+      -123.0910781,
+      49.3761106
+     ],
+     [
+      -123.0843976,
+      49.3792545
+     ],
+     [
+      -123.083459,
+      49.3796959
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-456237945",
+    "liftType": "cable_car",
+    "status": "operating",
+    "name": "Red Skyride",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/456237945"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.0797387,
+      49.3817467
+     ],
+     [
+      -123.0790398,
+      49.3816189
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-866809044",
+    "liftType": "magic_carpet",
+    "status": "operating",
+    "name": "Magic Carpet",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/866809044"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.0771938,
+      49.3756829
+     ],
+     [
+      -123.0768148,
+      49.3771546
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-1120473840",
+    "liftType": "rope_tow",
+    "status": "operating",
+    "name": "Side Cut Handle Tow",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/1120473840"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.0826648,
+      49.3791
+     ],
+     [
+      -123.0829707,
+      49.3789821
+     ],
+     [
+      -123.083204,
+      49.3788922
+     ],
+     [
+      -123.083661,
+      49.3787161
+     ],
+     [
+      -123.0837297,
+      49.3786896
+     ],
+     [
+      -123.0838219,
+      49.378654
+     ],
+     [
+      -123.0859911,
+      49.3778139
+     ],
+     [
+      -123.088117,
+      49.3769907
+     ],
+     [
+      -123.0900375,
+      49.3762469
+     ],
+     [
+      -123.090861,
+      49.375928
+     ],
+     [
+      -123.0919543,
+      49.3755046
+     ],
+     [
+      -123.0935673,
+      49.3748788
+     ],
+     [
+      -123.0964383,
+      49.3737923
+     ],
+     [
+      -123.0979349,
+      49.3732145
+     ],
+     [
+      -123.0990785,
+      49.3727737
+     ],
+     [
+      -123.0992763,
+      49.3726974
+     ],
+     [
+      -123.0995065,
+      49.3726086
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-1232218748",
+    "liftType": "gondola",
+    "status": "operating",
+    "name": "Blue Grouse Gondola",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-grouse",
+       "name": "grouse"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/1232218748"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.2035787,
+      49.3972903
+     ],
+     [
+      -123.2035046,
+      49.3973575
+     ],
+     [
+      -123.2031999,
+      49.3976129
+     ],
+     [
+      -123.202685,
+      49.3979968
+     ],
+     [
+      -123.202063,
+      49.3984838
+     ],
+     [
+      -123.201368,
+      49.3990273
+     ],
+     [
+      -123.200505,
+      49.3997028
+     ],
+     [
+      -123.199688,
+      49.4003412
+     ],
+     [
+      -123.198945,
+      49.4009231
+     ],
+     [
+      -123.198359,
+      49.4013816
+     ],
+     [
+      -123.197805,
+      49.4018147
+     ],
+     [
+      -123.197014,
+      49.4024331
+     ],
+     [
+      -123.196185,
+      49.4030821
+     ],
+     [
+      -123.195179,
+      49.4038687
+     ],
+     [
+      -123.195068,
+      49.4039557
+     ],
+     [
+      -123.194958,
+      49.4040431
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-37895749",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Lions Express Quad",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/37895749"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.195704,
+      49.4053358
+     ],
+     [
+      -123.195732,
+      49.4055173
+     ],
+     [
+      -123.1957761,
+      49.4058025
+     ],
+     [
+      -123.1958768,
+      49.4064546
+     ],
+     [
+      -123.1960236,
+      49.4074047
+     ],
+     [
+      -123.1961482,
+      49.4082113
+     ],
+     [
+      -123.1962783,
+      49.4090536
+     ],
+     [
+      -123.1963497,
+      49.4095156
+     ],
+     [
+      -123.1964149,
+      49.4099376
+     ],
+     [
+      -123.1964526,
+      49.4101818
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-37895750",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Sky Quad",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/37895750"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.2061553,
+      49.3971674
+     ],
+     [
+      -123.2063276,
+      49.3970332
+     ],
+     [
+      -123.206845,
+      49.396631
+     ],
+     [
+      -123.207329,
+      49.3962548
+     ],
+     [
+      -123.208141,
+      49.3956231
+     ],
+     [
+      -123.20909,
+      49.3948852
+     ],
+     [
+      -123.21017,
+      49.3940454
+     ],
+     [
+      -123.211304,
+      49.3931639
+     ],
+     [
+      -123.212388,
+      49.392321
+     ],
+     [
+      -123.212754,
+      49.3920367
+     ],
+     [
+      -123.213067,
+      49.3917933
+     ],
+     [
+      -123.213252,
+      49.3916475
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-37928827",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Eagle Express Quad",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/37928827"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.1979441,
+      49.3887694
+     ],
+     [
+      -123.1981358,
+      49.3887928
+     ],
+     [
+      -123.1982305,
+      49.388802
+     ],
+     [
+      -123.1987571,
+      49.3888587
+     ],
+     [
+      -123.1988886,
+      49.3888713
+     ],
+     [
+      -123.1998594,
+      49.3889616
+     ],
+     [
+      -123.2010693,
+      49.3890833
+     ],
+     [
+      -123.2026999,
+      49.3892429
+     ],
+     [
+      -123.2040556,
+      49.3893734
+     ],
+     [
+      -123.2047198,
+      49.3894383
+     ],
+     [
+      -123.2051969,
+      49.3894852
+     ],
+     [
+      -123.2069781,
+      49.3896517
+     ],
+     [
+      -123.2082782,
+      49.389797
+     ],
+     [
+      -123.2089023,
+      49.3898682
+     ],
+     [
+      -123.2089845,
+      49.3898726
+     ],
+     [
+      -123.209077,
+      49.3898765
+     ],
+     [
+      -123.2092918,
+      49.3898869
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-40040374",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Raven Ridge Quad",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/40040374"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.2025626,
+      49.3964188
+     ],
+     [
+      -123.202446,
+      49.396495
+     ],
+     [
+      -123.202181,
+      49.3966698
+     ],
+     [
+      -123.201828,
+      49.3969015
+     ],
+     [
+      -123.200724,
+      49.3976282
+     ],
+     [
+      -123.199854,
+      49.3982002
+     ],
+     [
+      -123.198644,
+      49.3989961
+     ],
+     [
+      -123.1982383,
+      49.3992755
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-40040629",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Midway Chair",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/40040629"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.2022822,
+      49.3961272
+     ],
+     [
+      -123.201742,
+      49.3961963
+     ],
+     [
+      -123.200705,
+      49.3963291
+     ],
+     [
+      -123.199576,
+      49.3964736
+     ],
+     [
+      -123.198705,
+      49.3965851
+     ],
+     [
+      -123.1981283,
+      49.3966589
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-40040634",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Easy Rider Quad",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/40040634"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -123.2039022,
+      49.396069
+     ],
+     [
+      -123.2037125,
+      49.3961604
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-258201046",
+    "liftType": "magic_carpet",
+    "status": "operating",
+    "name": "Unnamed magic_carpet",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-cypress",
+       "name": "cypress"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/258201046"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.9485669,
+      49.3681038
+     ],
+     [
+      -122.9481987,
+      49.3686829
+     ],
+     [
+      -122.9478075,
+      49.3692996
+     ],
+     [
+      -122.9473359,
+      49.3700429
+     ],
+     [
+      -122.9468844,
+      49.3707548
+     ],
+     [
+      -122.9462177,
+      49.3718058
+     ],
+     [
+      -122.9458177,
+      49.3724362
+     ],
+     [
+      -122.9448089,
+      49.3740264
+     ],
+     [
+      -122.9446527,
+      49.3742726
+     ],
+     [
+      -122.9438156,
+      49.3755921
+     ],
+     [
+      -122.943192,
+      49.3765751
+     ],
+     [
+      -122.9429605,
+      49.3769339
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-40044497",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Mystery Peak Express",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-seymour",
+       "name": "seymour"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/40044497"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.939899,
+      49.3775632
+     ],
+     [
+      -122.9399261,
+      49.3777012
+     ],
+     [
+      -122.9399836,
+      49.3779986
+     ],
+     [
+      -122.9402035,
+      49.3791347
+     ],
+     [
+      -122.9403466,
+      49.3798742
+     ],
+     [
+      -122.9404846,
+      49.380587
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-40044498",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Brockton Chairlift",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-seymour",
+       "name": "seymour"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/40044498"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.9422339,
+      49.3640906
+     ],
+     [
+      -122.9424711,
+      49.3641768
+     ],
+     [
+      -122.9434608,
+      49.3645368
+     ],
+     [
+      -122.9441517,
+      49.3647881
+     ],
+     [
+      -122.9450443,
+      49.3651127
+     ],
+     [
+      -122.9460546,
+      49.3654802
+     ],
+     [
+      -122.9471005,
+      49.3658606
+     ],
+     [
+      -122.9474967,
+      49.3660057
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-60314751",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Lodge Chairlift 2",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-seymour",
+       "name": "seymour"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/60314751"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.9454111,
+      49.3673478
+     ],
+     [
+      -122.9472504,
+      49.3672428
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-258200000",
+    "liftType": "magic_carpet",
+    "status": "operating",
+    "name": "Goldie Magic Carpet",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-seymour",
+       "name": "seymour"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/258200000"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.9485802,
+      49.3609837
+     ],
+     [
+      -122.9506988,
+      49.3618427
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-397372366",
+    "liftType": "platter",
+    "status": "operating",
+    "name": "Enquist Tube Park Lift",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-seymour",
+       "name": "seymour"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/397372366"
+     }
+    ],
+    "places": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.9447501,
+      49.3610387
+     ],
+     [
+      -122.9486008,
+      49.3638015
+     ]
+    ]
+   },
+   "properties": {
+    "type": "lift",
+    "id": "osd-lift-1216158023",
+    "liftType": "chair_lift",
+    "status": "operating",
+    "name": "Ridge Chair",
+    "ref": null,
+    "skiAreas": [
+     {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+       "type": "skiArea",
+       "id": "osd-seymour",
+       "name": "seymour"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "type": "openstreetmap",
+      "id": "way/1216158023"
+     }
+    ],
+    "places": []
+   }
+  }
+ ]
+}
