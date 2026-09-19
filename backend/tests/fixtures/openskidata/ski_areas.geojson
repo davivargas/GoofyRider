@@ -1,0 +1,112 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-123.095, 49.372], [-123.068, 49.372], [-123.068, 49.392], [-123.095, 49.392], [-123.095, 49.372]]]
+      },
+      "properties": {
+        "type": "skiArea",
+        "id": "osd-grouse",
+        "name": "Grouse Mountain",
+        "activities": ["downhill"],
+        "status": "operating",
+        "sources": [{"type": "openstreetmap", "id": "relation/1"}],
+        "statistics": {
+          "minElevation": 880,
+          "maxElevation": 1250,
+          "runs": {"byActivity": {}},
+          "lifts": {"minElevation": 895, "maxElevation": 1231, "byType": {"chair_lift": {"count": 3, "lengthInKm": 2.1}}}
+        },
+        "places": [{"iso3166_1Alpha2": "CA", "iso3166_2": "CA-BC", "localized": {"en": {"country": "Canada", "region": "British Columbia", "locality": "North Vancouver"}}}]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-123.204, 49.396]},
+      "properties": {
+        "type": "skiArea",
+        "id": "osd-cypress",
+        "name": "Cypress Mountain",
+        "activities": ["downhill", "nordic"],
+        "status": "operating",
+        "sources": [{"type": "openstreetmap", "id": "relation/2"}],
+        "statistics": {
+          "minElevation": 910,
+          "maxElevation": 1440,
+          "runs": {"byActivity": {}},
+          "lifts": {"minElevation": 915, "maxElevation": 1430, "byType": {"chair_lift": {"count": 2, "lengthInKm": 3.4}}}
+        },
+        "places": [{"iso3166_1Alpha2": "CA", "iso3166_2": "CA-BC", "localized": {"en": {"country": "Canada", "region": "British Columbia", "locality": "West Vancouver"}}}]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-122.948, 49.366]},
+      "properties": {
+        "type": "skiArea",
+        "id": "osd-seymour",
+        "name": "Mount Seymour",
+        "activities": ["downhill"],
+        "status": null,
+        "sources": [{"type": "openstreetmap", "id": "relation/3"}],
+        "statistics": {
+          "minElevation": 1010,
+          "maxElevation": 1260,
+          "runs": {"byActivity": {}},
+          "lifts": {}
+        },
+        "places": [{"iso3166_1Alpha2": "CA", "iso3166_2": "CA-BC", "localized": {"en": {"country": "Canada", "region": "British Columbia", "locality": null}}}]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-110.0, 45.0]},
+      "properties": {
+        "type": "skiArea",
+        "id": "osd-grouse-us",
+        "name": "Grouse Mountain",
+        "activities": ["downhill"],
+        "status": "operating",
+        "sources": [{"type": "openstreetmap", "id": "relation/4"}],
+        "statistics": {
+          "minElevation": 1500,
+          "maxElevation": 2100,
+          "runs": {"byActivity": {}},
+          "lifts": {}
+        },
+        "places": [{"iso3166_1Alpha2": "US", "iso3166_2": "US-MT", "localized": {"en": {"country": "United States", "region": "Montana", "locality": "Elsewhere"}}}]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-123.21, 49.40]},
+      "properties": {
+        "type": "skiArea",
+        "id": "osd-cypress-nordic",
+        "name": "Cypress Nordic",
+        "activities": ["nordic"],
+        "status": "operating",
+        "sources": [{"type": "openstreetmap", "id": "relation/5"}],
+        "statistics": null,
+        "places": [{"iso3166_1Alpha2": "CA", "iso3166_2": "CA-BC", "localized": {"en": {"country": "Canada", "region": "British Columbia", "locality": null}}}]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-123.0, 49.5]},
+      "properties": {
+        "type": "skiArea",
+        "id": "osd-old-hill",
+        "name": "Old Hill",
+        "activities": ["downhill"],
+        "status": "abandoned",
+        "sources": [{"type": "openstreetmap", "id": "relation/6"}],
+        "statistics": null,
+        "places": [{"iso3166_1Alpha2": "CA", "iso3166_2": "CA-BC", "localized": {"en": {"country": "Canada", "region": "British Columbia", "locality": null}}}]
+      }
+    }
+  ]
+}

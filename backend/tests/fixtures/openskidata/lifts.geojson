@@ -1,0 +1,158 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.082, 49.376, 895], [-123.079, 49.386, 1231]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-1001",
+        "liftType": "chair_lift",
+        "status": "operating",
+        "name": "Screaming Eagle Chair",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-grouse", "name": "Grouse Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/1001"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.089, 49.373, 290], [-123.081, 49.380, 1100]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-1002",
+        "liftType": "cable_car",
+        "status": "operating",
+        "name": "Red Skyride",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-grouse", "name": "Grouse Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/1002"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.078, 49.378, 1010], [-123.075, 49.384, 1180]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-1003",
+        "liftType": "chair_lift",
+        "status": "operating",
+        "name": "Greenway Quad",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-grouse", "name": "Grouse Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/1003"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.080, 49.377, 1000], [-123.079, 49.379, 1050]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-1004",
+        "liftType": "chair_lift",
+        "status": "abandoned",
+        "name": "Abandoned Chair",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-grouse", "name": "Grouse Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/1004"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.083, 49.375, 900], [-123.081, 49.378, 1000]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-4001",
+        "liftType": "funicular",
+        "status": "operating",
+        "name": "Test Funicular",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-grouse", "name": "Grouse Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/4001"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.206, 49.393, 915], [-123.200, 49.402, 1430]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-2001",
+        "liftType": "chair_lift",
+        "status": "operating",
+        "name": "Lions Express",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-cypress", "name": "Cypress Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/2001"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.203, 49.395, 930], [-123.198, 49.400, 1300]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-2002",
+        "liftType": "chair_lift",
+        "status": "operating",
+        "name": "Sky Chair",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-cypress", "name": "Cypress Mountain"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/2002"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-122.950, 49.363, 1010], [-122.945, 49.370, 1250]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-3001",
+        "liftType": "chair_lift",
+        "status": "operating",
+        "name": "Mystery Peak Express",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-seymour", "name": "Mount Seymour"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/3001"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-122.949, 49.364, 1015], [-122.947, 49.367, 1120]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-3002",
+        "liftType": "chair_lift",
+        "status": "operating",
+        "name": "Lodge Chair",
+        "ref": null,
+        "skiAreas": [{"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-seymour", "name": "Mount Seymour"}}],
+        "sources": [{"type": "openstreetmap", "id": "way/3002"}],
+        "places": []
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-123.100, 49.380, 1000], [-123.098, 49.382, 1060]]},
+      "properties": {
+        "type": "lift",
+        "id": "osd-lift-5001",
+        "liftType": "t-bar",
+        "status": "operating",
+        "name": "Shared T-bar",
+        "ref": null,
+        "skiAreas": [
+          {"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-cypress", "name": "Cypress Mountain"}},
+          {"type": "Feature", "geometry": null, "properties": {"type": "skiArea", "id": "osd-seymour", "name": "Mount Seymour"}}
+        ],
+        "sources": [{"type": "openstreetmap", "id": "way/5001"}],
+        "places": []
+      }
+    }
+  ]
+}

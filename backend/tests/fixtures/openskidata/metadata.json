@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "formatVersion": "16.0.0",
+  "source": {
+    "openStreetMap": {"dataTimestamp": "2026-09-18T22:08:16.000Z"},
+    "skiMapOrg": {"downloadedAt": "2026-09-18T22:09:42.064Z"}
+  },
+  "run": {
+    "startedAt": "2026-09-18T22:09:41.436Z",
+    "finishedAt": "2026-09-18T23:29:43.282Z",
+    "durationSeconds": 4802
+  },
+  "counts": {"skiAreas": {"total": 6, "operating": 5, "downhill": 5, "nordic": 1}, "lifts": 10}
+}
