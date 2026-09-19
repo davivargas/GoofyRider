@@ -44,7 +44,8 @@ class ResortLiftRepository(SqlAlchemyRepository):
                 existing.base_altitude_m = row.base_altitude_m
                 existing.top_altitude_m = row.top_altitude_m
                 existing.status = row.status
-                existing.source = row.source
+                if row.source is not None:
+                    existing.source = row.source
                 existing.source_record_id = row.source_record_id
             # Flush so a second row in this batch with the same
             # external_track_id sees the first as `existing` instead of
