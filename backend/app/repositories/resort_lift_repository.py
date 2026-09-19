@@ -1,6 +1,8 @@
+from collections.abc import Collection
 from collections.abc import Sequence
 import uuid
 
+from sqlalchemy import delete
 from sqlalchemy import select
 
 from app.models.resort_lift import ResortLift
@@ -41,9 +43,32 @@ class ResortLiftRepository(SqlAlchemyRepository):
                 existing.polyline = row.polyline
                 existing.base_altitude_m = row.base_altitude_m
                 existing.top_altitude_m = row.top_altitude_m
+                existing.status = row.status
+                existing.source = row.source
+                existing.source_record_id = row.source_record_id
             # Flush so a second row in this batch with the same
             # external_track_id sees the first as `existing` instead of
             # inserting a duplicate.
             self._db.flush()
             count += 1
         return count
+
+    def delete_missing_for_resort(
+        self, resort_id: uuid.UUID, keep_track_ids: Collection[str], source: str
+    ) -> int:
+        stmt = delete(ResortLift).where(
+            ResortLift.resort_id == resort_id,
+            ResortLift.source == source,
+            ResortLift.external_track_id.not_in(list(keep_track_ids)),
+        )
+        result = self._db.execute(stmt)
+        rowcount = getattr(result, "rowcount", None)
+        return int(rowcount or 0)
+
+    def delete_by_source_for_resort(self, resort_id: uuid.UUID, source: str) -> int:
+        stmt = delete(ResortLift).where(
+            ResortLift.resort_id == resort_id, ResortLift.source == source
+        )
+        result = self._db.execute(stmt)
+        rowcount = getattr(result, "rowcount", None)
+        return int(rowcount or 0)

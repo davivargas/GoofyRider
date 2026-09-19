@@ -6,6 +6,7 @@ defining its own inline Protocol class.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from collections.abc import Mapping
 from collections.abc import Sequence
 from datetime import datetime
@@ -15,7 +16,9 @@ import uuid
 
 from app.models.refresh_token import RefreshToken
 from app.models.resort import Resort
+from app.models.resort_field_override import ResortFieldOverride
 from app.models.resort_lift import ResortLift
+from app.models.resort_source_record import ResortSourceRecord
 from app.models.ride_session import RideSession
 from app.models.ride_session_action import RideSessionAction
 from app.models.ride_session_override import RideSessionOverride
@@ -68,14 +71,15 @@ class ResortRepositoryProtocol(Protocol):
 
     def commit(self) -> None: ...
 
-    def get_by_name_country_region(
-        self,
-        name: str,
-        country: str,
-        region: str,
-    ) -> Resort | None: ...
-
     def get_by_name(self, name: str) -> Resort | None: ...
+
+    def flush(self) -> None: ...
+
+    def list_all_for_matching(self) -> list[Resort]: ...
+
+    def list_without_source(self, source: str) -> list[Resort]: ...
+
+    def list_stale_for_merge(self) -> list[Resort]: ...
 
 
 class RideSessionRepositoryProtocol(Protocol):
@@ -175,6 +179,50 @@ class ResortLiftRepositoryProtocol(Protocol):
         self, resort_id: uuid.UUID, rows: Sequence[ResortLift]
     ) -> int: ...
 
+    def delete_missing_for_resort(
+        self, resort_id: uuid.UUID, keep_track_ids: Collection[str], source: str
+    ) -> int: ...
+
+    def delete_by_source_for_resort(self, resort_id: uuid.UUID, source: str) -> int: ...
+
+    def commit(self) -> None: ...
+
+
+class ResortSourceRecordRepositoryProtocol(Protocol):
+    def get_by_source_and_external_id(
+        self, source: str, external_id: str
+    ) -> ResortSourceRecord | None: ...
+
+    def list_by_resort(self, resort_id: uuid.UUID) -> list[ResortSourceRecord]: ...
+
+    def list_by_source(self, source: str) -> list[ResortSourceRecord]: ...
+
+    def list_pending_review(self, source: str | None = None) -> list[ResortSourceRecord]: ...
+
+    def list_unlinked(self, source: str) -> list[ResortSourceRecord]: ...
+
+    def add(self, record: ResortSourceRecord) -> None: ...
+
+    def mark_missing_except(
+        self, source: str, seen_external_ids: Collection[str], missing_since: datetime
+    ) -> int: ...
+
+    def flush(self) -> None: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
+class ResortFieldOverrideRepositoryProtocol(Protocol):
+    def list_by_resort(self, resort_id: uuid.UUID) -> list[ResortFieldOverride]: ...
+
+    def upsert(
+        self, resort_id: uuid.UUID, field: str, value: Any, note: str | None
+    ) -> ResortFieldOverride: ...
+
+    def delete(self, resort_id: uuid.UUID, field: str) -> int: ...
+
     def commit(self) -> None: ...
 
 
@@ -229,8 +277,10 @@ class RefreshTokenRepositoryProtocol(Protocol):
 __all__ = [
     "FavoriteResortRepositoryProtocol",
     "RefreshTokenRepositoryProtocol",
+    "ResortFieldOverrideRepositoryProtocol",
     "ResortLiftRepositoryProtocol",
     "ResortRepositoryProtocol",
+    "ResortSourceRecordRepositoryProtocol",
     "RideSessionRepositoryProtocol",
     "SessionActionRepositoryProtocol",
     "SessionOverrideRepositoryProtocol",

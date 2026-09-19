@@ -108,6 +108,7 @@ def test_upsert_by_external_track_id_inserts_then_updates(
             lift_type="chair",
             polyline="[[1,2],[3,4]]",
             external_track_id="osm:way:1",
+            source="overpass",
         )
     ]
     assert repo.upsert_by_external_track_id(resort.id, first) == 1
@@ -120,6 +121,7 @@ def test_upsert_by_external_track_id_inserts_then_updates(
             osm_aerialway="gondola",
             polyline="[[1,2],[3,5]]",
             external_track_id="osm:way:1",
+            source="overpass",
         ),
         ResortLift(
             resort_id=resort.id,
@@ -127,6 +129,7 @@ def test_upsert_by_external_track_id_inserts_then_updates(
             lift_type="surface",
             polyline="[[0,0],[0,1]]",
             external_track_id="osm:way:2",
+            source="overpass",
         ),
     ]
     assert repo.upsert_by_external_track_id(resort.id, second) == 2
@@ -179,6 +182,7 @@ def test_upsert_by_external_track_id_deduplicates_within_one_batch(
             lift_type="chair",
             polyline="[[1,2],[3,4]]",
             external_track_id="osm:way:dup",
+            source="overpass",
         ),
         ResortLift(
             resort_id=resort.id,
@@ -186,6 +190,7 @@ def test_upsert_by_external_track_id_deduplicates_within_one_batch(
             lift_type="chair",
             polyline="[[1,2],[3,4]]",
             external_track_id="osm:way:dup",
+            source="overpass",
         ),
     ]
 
@@ -194,3 +199,67 @@ def test_upsert_by_external_track_id_deduplicates_within_one_batch(
 
     lifts = repo.list_by_resort(resort.id)
     assert [lift.name for lift in lifts] == ["Second"]
+
+
+def test_delete_missing_for_resort_keeps_listed_tracks_and_other_sources(
+    db: Session, create_resort: Callable[..., Resort]
+) -> None:
+    resort = create_resort()
+    keep = _add_lift(db, resort, "Keep", external_track_id="osm:way:1")
+    keep.source = "openskidata"
+    gone = _add_lift(db, resort, "Gone", external_track_id="osm:way:2")
+    gone.source = "openskidata"
+    _add_lift(db, resort, "Legacy", external_track_id="osm:way:3")  # source overpass
+    db.commit()
+
+    repo = ResortLiftRepository(db)
+    deleted = repo.delete_missing_for_resort(resort.id, {"osm:way:1"}, source="openskidata")
+    repo.commit()
+
+    assert deleted == 1
+    assert sorted(lift.name for lift in repo.list_by_resort(resort.id)) == ["Keep", "Legacy"]
+
+
+def test_delete_by_source_for_resort(db: Session, create_resort: Callable[..., Resort]) -> None:
+    resort = create_resort()
+    _add_lift(db, resort, "Legacy A", external_track_id="osm:way:1")
+    _add_lift(db, resort, "Legacy B", external_track_id="osm:way:2")
+
+    repo = ResortLiftRepository(db)
+    assert repo.delete_by_source_for_resort(resort.id, "overpass") == 2
+    repo.commit()
+    assert repo.list_by_resort(resort.id) == []
+
+
+def test_upsert_copies_status_source_and_record_id(
+    db: Session, create_resort: Callable[..., Resort]
+) -> None:
+    resort = create_resort()
+    repo = ResortLiftRepository(db)
+    row = ResortLift(
+        resort_id=resort.id,
+        name="New",
+        lift_type="chair",
+        external_track_id="osm:way:9",
+        status="operating",
+        source="openskidata",
+    )
+    repo.upsert_by_external_track_id(resort.id, [row])
+    row2 = ResortLift(
+        resort_id=resort.id,
+        name="Renamed",
+        lift_type="chair",
+        external_track_id="osm:way:9",
+        status="disused",
+        source="openskidata",
+    )
+    repo.upsert_by_external_track_id(resort.id, [row2])
+    repo.commit()
+
+    lifts = repo.list_by_resort(resort.id)
+    assert len(lifts) == 1
+    assert (lifts[0].name, lifts[0].status, lifts[0].source) == (
+        "Renamed",
+        "disused",
+        "openskidata",
+    )

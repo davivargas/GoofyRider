@@ -1,10 +1,14 @@
 import uuid
 
+from sqlalchemy import exists
 from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.resort import Resort
+from app.models.resort_field_override import ResortFieldOverride
+from app.models.resort_source_record import ResortSourceRecord
 from app.repositories.base import SqlAlchemyRepository
 
 
@@ -24,18 +28,43 @@ class ResortRepository(SqlAlchemyRepository):
         stmt = select(Resort).where(func.lower(Resort.name) == name.strip().lower())
         return self._db.scalars(stmt).first()
 
-    def get_by_name_country_region(
-        self,
-        name: str,
-        country: str,
-        region: str,
-    ) -> Resort | None:
-        stmt = select(Resort).where(
-            func.lower(Resort.name) == name.lower(),
-            func.lower(Resort.country) == country.lower(),
-            func.lower(Resort.region) == region.lower(),
+    def flush(self) -> None:
+        self._db.flush()
+
+    def list_all_for_matching(self) -> list[Resort]:
+        return list(self._db.scalars(select(Resort).order_by(Resort.id.asc())).all())
+
+    def list_without_source(self, source: str) -> list[Resort]:
+        linked = select(ResortSourceRecord.resort_id).where(
+            ResortSourceRecord.source == source,
+            ResortSourceRecord.match_status == "linked",
+            ResortSourceRecord.resort_id.is_not(None),
         )
-        return self._db.scalar(stmt)
+        stmt = select(Resort).where(Resort.id.not_in(linked)).order_by(Resort.id.asc())
+        return list(self._db.scalars(stmt).all())
+
+    def list_stale_for_merge(self) -> list[Resort]:
+        changed_records = select(ResortSourceRecord.resort_id).where(
+            ResortSourceRecord.resort_id == Resort.id,
+            ResortSourceRecord.match_status == "linked",
+            or_(
+                Resort.last_merged_at.is_(None),
+                ResortSourceRecord.updated_at > Resort.last_merged_at,
+            ),
+        )
+        changed_overrides = select(ResortFieldOverride.resort_id).where(
+            ResortFieldOverride.resort_id == Resort.id,
+            or_(
+                Resort.last_merged_at.is_(None),
+                ResortFieldOverride.created_at > Resort.last_merged_at,
+            ),
+        )
+        stmt = (
+            select(Resort)
+            .where(or_(exists(changed_records), exists(changed_overrides)))
+            .order_by(Resort.id.asc())
+        )
+        return list(self._db.scalars(stmt).all())
 
     def count_filtered(self, query: str | None, region: str | None) -> int:
         stmt = select(func.count()).select_from(Resort).where(Resort.is_active.is_(True))
