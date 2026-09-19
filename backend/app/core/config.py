@@ -57,11 +57,8 @@ class AppSettings(BaseSettings):
     ski_api_page_size: PositiveInt = 50
     ski_api_timeout_seconds: PositiveInt = 10
 
-    resort_sync_enabled: bool = True
-    resort_sync_interval_days: PositiveInt = 7
-
-    overpass_base_url: str = "https://overpass-api.de/api/interpreter"
-    overpass_timeout_seconds: PositiveInt = 60
+    openskidata_base_url: str = "https://tiles.openskimap.org"
+    openskidata_timeout_seconds: PositiveInt = 120
 
     session_analyzer_version: str = "analyzer@2026.09-hmm"
 
@@ -89,12 +86,12 @@ class AppSettings(BaseSettings):
             return None
         return value
 
-    @field_validator("overpass_base_url")
+    @field_validator("openskidata_base_url")
     @classmethod
-    def _validate_overpass_base_url(cls, value: str) -> str:
+    def _validate_openskidata_base_url(cls, value: str) -> str:
         normalized = value.rstrip("/")
         if not normalized:
-            raise ValueError("OVERPASS_BASE_URL must not be empty.")
+            raise ValueError("OPENSKIDATA_BASE_URL must not be empty.")
         return normalized
 
     @model_validator(mode="after")

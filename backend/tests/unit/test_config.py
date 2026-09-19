@@ -1,6 +1,5 @@
 import pytest
 
-from app.core.config import AppSettings
 from app.core.config import get_database_url
 from app.core.config import get_settings
 
@@ -159,43 +158,6 @@ def test_ski_api_host_returns_none_when_blank(
     assert get_settings().ski_api_host is None
 
 
-def test_resort_sync_enabled_defaults_to_true(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("RESORT_SYNC_ENABLED", raising=False)
-
-    assert get_settings().resort_sync_enabled is True
-
-
-def test_resort_sync_enabled_rejects_invalid_value(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("RESORT_SYNC_ENABLED", "sometimes")
-
-    with pytest.raises(ValueError, match=r"RESORT_SYNC_ENABLED must be a boolean value."):
-        get_settings()
-
-
-def test_resort_sync_interval_days_defaults_to_weekly(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("RESORT_SYNC_INTERVAL_DAYS", raising=False)
-
-    assert get_settings().resort_sync_interval_days == 7
-
-
-def test_resort_sync_interval_days_rejects_non_positive(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("RESORT_SYNC_INTERVAL_DAYS", "0")
-
-    with pytest.raises(
-        ValueError,
-        match=r"RESORT_SYNC_INTERVAL_DAYS must be a positive integer.",
-    ):
-        get_settings()
-
-
 def test_debug_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DEBUG", raising=False)
 
@@ -249,7 +211,43 @@ def test_rate_limit_setting_parses_from_env(monkeypatch: pytest.MonkeyPatch) -> 
     assert get_settings().rate_limit_login_per_ip == 3
 
 
-def test_overpass_defaults() -> None:
-    settings = AppSettings(jwt_secret_key="x" * 32)
-    assert settings.overpass_base_url == "https://overpass-api.de/api/interpreter"
-    assert settings.overpass_timeout_seconds == 60
+def test_openskidata_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENSKIDATA_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENSKIDATA_TIMEOUT_SECONDS", raising=False)
+
+    settings = get_settings()
+
+    assert settings.openskidata_base_url == "https://tiles.openskimap.org"
+    assert settings.openskidata_timeout_seconds == 120
+
+
+def test_openskidata_base_url_strips_trailing_slash(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENSKIDATA_BASE_URL", "https://mirror.example/data/")
+
+    assert get_settings().openskidata_base_url == "https://mirror.example/data"
+
+
+def test_openskidata_base_url_rejects_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENSKIDATA_BASE_URL", "/")
+
+    with pytest.raises(ValueError, match=r"OPENSKIDATA_BASE_URL must not be empty."):
+        get_settings()
+
+
+def test_openskidata_timeout_rejects_non_positive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENSKIDATA_TIMEOUT_SECONDS", "0")
+
+    with pytest.raises(
+        ValueError, match=r"OPENSKIDATA_TIMEOUT_SECONDS must be a positive integer."
+    ):
+        get_settings()
+
+
+def test_removed_sync_settings_are_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESORT_SYNC_ENABLED", "true")
+    monkeypatch.setenv("OVERPASS_BASE_URL", "https://overpass.example")
+
+    settings = get_settings()
+
+    assert not hasattr(settings, "resort_sync_enabled")
+    assert not hasattr(settings, "overpass_base_url")

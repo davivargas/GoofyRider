@@ -57,17 +57,15 @@ services:
       SKI_API_KEY: ${SKI_API_KEY}
       SKI_API_PAGE_SIZE: ${SKI_API_PAGE_SIZE:-50}
       SKI_API_TIMEOUT_SECONDS: ${SKI_API_TIMEOUT_SECONDS:-10}
-      RESORT_SYNC_ENABLED: ${RESORT_SYNC_ENABLED:-true}
-      RESORT_SYNC_INTERVAL_DAYS: ${RESORT_SYNC_INTERVAL_DAYS:-7}
-      OVERPASS_BASE_URL: ${OVERPASS_BASE_URL:-https://overpass-api.de/api/interpreter}
-      OVERPASS_TIMEOUT_SECONDS: ${OVERPASS_TIMEOUT_SECONDS:-60}
+      OPENSKIDATA_BASE_URL: ${OPENSKIDATA_BASE_URL:-https://tiles.openskimap.org}
+      OPENSKIDATA_TIMEOUT_SECONDS: ${OPENSKIDATA_TIMEOUT_SECONDS:-120}
     ports:
       - "8000:8000"
     command:
       [
         "sh",
         "-c",
-        "alembic upgrade head && python -m app.scripts.import_resorts && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+        "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
       ]
 
 volumes:
