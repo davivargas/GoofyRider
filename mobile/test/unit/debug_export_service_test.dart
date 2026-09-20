@@ -27,12 +27,12 @@ void main() {
 
   test('export writes rich snapshot with masked email and capped points',
       () async {
-    final sessionId = await database.insertLocalSession(
+    final sessionId = await database.sessions.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
       resortId: 'resort-1',
     );
-    await database.updateSessionState(
+    await database.sessions.updateSessionState(
       sessionId,
       LocalSessionState.syncFailed,
       remoteId: 'remote-1',
@@ -40,7 +40,7 @@ void main() {
     );
 
     for (var index = 0; index < 120; index++) {
-      await database.insertPoint(
+      await database.sessionPoints.insertPoint(
         localSessionId: sessionId,
         point: NewSessionPoint(
           recordedAt: DateTime.utc(2026, 1, 1).add(Duration(seconds: index)),
@@ -62,7 +62,7 @@ void main() {
       );
     }
 
-    await database.insertTrackingDiagnostic(
+    await database.trackingDiagnostics.insertTrackingDiagnostic(
       localSessionId: sessionId,
       eventType: 'sync_failed',
       message: 'Network timeout',
@@ -71,7 +71,7 @@ void main() {
         'access_token': 'top-secret',
       },
     );
-    await database.replaceCachedRemoteSessions(
+    await database.remoteSessionCache.replaceCachedRemoteSessions(
       ownerUserId: 'user-1',
       sessions: <Map<String, dynamic>>[
         <String, dynamic>{
@@ -81,14 +81,14 @@ void main() {
         },
       ],
     );
-    await database.upsertCachedResort(
+    await database.resortCache.upsertCachedResort(
       'resort-1',
       <String, dynamic>{
         'id': 'resort-1',
         'name': 'Mt. Test',
       },
     );
-    await database.upsertCachedWeather(
+    await database.weatherCache.upsertCachedWeather(
       'resort-1',
       <String, dynamic>{
         'temperature_c': -3,

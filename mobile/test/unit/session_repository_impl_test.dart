@@ -17,6 +17,19 @@ import 'package:fall_line_mobile/features/session/domain/session_repository.dart
 
 class MockDriftLocalDatabase extends Mock implements DriftLocalDatabase {}
 
+class MockSessionDao extends Mock implements SessionDao {}
+
+class MockSessionPointDao extends Mock implements SessionPointDao {}
+
+class MockResortCacheDao extends Mock implements ResortCacheDao {}
+
+class MockRemoteSessionCacheDao extends Mock implements RemoteSessionCacheDao {}
+
+class MockTrackingDiagnosticsDao extends Mock
+    implements TrackingDiagnosticsDao {}
+
+class MockPendingDeleteDao extends Mock implements PendingDeleteDao {}
+
 class MockSessionApi extends Mock implements SessionApi {}
 
 class _SessionSyncRetryBackendInterceptor extends Interceptor {
@@ -259,48 +272,68 @@ void main() {
   });
 
   late MockDriftLocalDatabase localDatabase;
+  late MockSessionDao sessionDao;
+  late MockSessionPointDao sessionPointDao;
+  late MockResortCacheDao resortCacheDao;
+  late MockRemoteSessionCacheDao remoteSessionCacheDao;
+  late MockTrackingDiagnosticsDao trackingDiagnosticsDao;
+  late MockPendingDeleteDao pendingDeleteDao;
   late MockSessionApi api;
   late SessionRepositoryImpl repository;
 
   setUp(() {
     localDatabase = MockDriftLocalDatabase();
+    sessionDao = MockSessionDao();
+    sessionPointDao = MockSessionPointDao();
+    resortCacheDao = MockResortCacheDao();
+    remoteSessionCacheDao = MockRemoteSessionCacheDao();
+    trackingDiagnosticsDao = MockTrackingDiagnosticsDao();
+    pendingDeleteDao = MockPendingDeleteDao();
+    when(() => localDatabase.sessions).thenReturn(sessionDao);
+    when(() => localDatabase.sessionPoints).thenReturn(sessionPointDao);
+    when(() => localDatabase.resortCache).thenReturn(resortCacheDao);
+    when(() => localDatabase.remoteSessionCache)
+        .thenReturn(remoteSessionCacheDao);
+    when(() => localDatabase.trackingDiagnostics)
+        .thenReturn(trackingDiagnosticsDao);
+    when(() => localDatabase.pendingDeletes).thenReturn(pendingDeleteDao);
     api = MockSessionApi();
-    when(() => localDatabase.beginSyncAttempt(any())).thenAnswer((_) async {});
+    when(() => sessionDao.beginSyncAttempt(any())).thenAnswer((_) async {});
     when(
-      () => localDatabase.upsertCachedResort(
+      () => resortCacheDao.upsertCachedResort(
         any(),
         any(),
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.readCachedResorts(
+      () => resortCacheDao.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
-      () => localDatabase.listPendingRemoteSessionDeleteIds(
+      () => pendingDeleteDao.listPendingRemoteSessionDeleteIds(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async => <String>{});
     when(
-      () => localDatabase.listPendingRemoteDeleteIds(
+      () => pendingDeleteDao.listPendingRemoteDeleteIds(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async => <String>[]);
     when(
-      () => localDatabase.listRetryablePendingRemoteDeletes(
+      () => pendingDeleteDao.listRetryablePendingRemoteDeletes(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async => const <PendingRemoteSessionDeleteEntry>[]);
     when(
-      () => localDatabase.enqueuePendingRemoteSessionDelete(
+      () => pendingDeleteDao.enqueuePendingRemoteSessionDelete(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.recordPendingRemoteSessionDeleteAttempt(
+      () => pendingDeleteDao.recordPendingRemoteSessionDeleteAttempt(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
         lastError: any(named: 'lastError'),
@@ -308,21 +341,22 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.markPendingRemoteSessionDeleteFailed(
+      () => pendingDeleteDao.markPendingRemoteSessionDeleteFailed(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
         lastError: any(named: 'lastError'),
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
-    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
+    when(() =>
+            sessionDao.incrementSyncAttempt(any(), error: any(named: 'error')))
+        .thenAnswer((_) async {});
+    when(() => sessionDao.markSyncFailed(any(), error: any(named: 'error')))
         .thenAnswer((_) async {});
     repository = SessionRepositoryImpl(
       localDatabase: localDatabase,
@@ -336,23 +370,24 @@ void main() {
     required List<LocalSessionPoint> points,
     Future<void> Function(List<Map<String, dynamic>> batch)? onUploadBatch,
   }) {
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         any(),
         any(),
         remoteId: any(named: 'remoteId'),
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(),
+    when(() =>
+            sessionDao.incrementSyncAttempt(any(), error: any(named: 'error')))
+        .thenAnswer((_) async {});
+    when(() => sessionPointDao.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => points);
     when(
-      () => localDatabase.insertTrackingDiagnostic(
+      () => trackingDiagnosticsDao.insertTrackingDiagnostic(
         localSessionId: any(named: 'localSessionId'),
         eventType: any(named: 'eventType'),
         message: any(named: 'message'),
@@ -402,18 +437,18 @@ void main() {
       state: LocalSessionState.recording,
     );
 
-    when(() => localDatabase.insertLocalSession(
+    when(() => sessionDao.insertLocalSession(
           startedAt: any(named: 'startedAt'),
           ownerUserId: any(named: 'ownerUserId'),
           resortId: any(named: 'resortId'),
         )).thenAnswer((_) async => 7);
-    when(() => localDatabase.getSessionById(7, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(7, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => created);
 
     final result = await repository.startLocalSession(resortId: 'resort-1');
 
     expect(result.ownerUserId, _ownerUserId);
-    verify(() => localDatabase.insertLocalSession(
+    verify(() => sessionDao.insertLocalSession(
           startedAt: any(named: 'startedAt'),
           ownerUserId: _ownerUserId,
           resortId: 'resort-1',
@@ -428,12 +463,12 @@ void main() {
         _buildSession(localId: 1, state: LocalSessionState.syncPending),
       ],
     );
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
-    when(() => localDatabase.listPoints(1))
+    when(() => sessionPointDao.listPoints(1))
         .thenAnswer((_) async => const <LocalSessionPoint>[]);
     when(
-      () => localDatabase.completeLocalSession(
+      () => sessionDao.completeLocalSession(
         localId: any(named: 'localId'),
         endedAt: any(named: 'endedAt'),
         stats: any(named: 'stats'),
@@ -446,7 +481,7 @@ void main() {
 
     expect(finished.state, LocalSessionState.syncPending);
     final captured = verify(
-      () => localDatabase.completeLocalSession(
+      () => sessionDao.completeLocalSession(
         localId: 1,
         endedAt: any(named: 'endedAt'),
         stats: captureAny(named: 'stats'),
@@ -465,12 +500,12 @@ void main() {
         _buildSession(localId: 1, state: LocalSessionState.syncPending),
       ],
     );
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => sessions.removeFirst());
-    when(() => localDatabase.listPoints(1))
+    when(() => sessionPointDao.listPoints(1))
         .thenAnswer((_) async => const <LocalSessionPoint>[]);
     when(
-      () => localDatabase.completeLocalSession(
+      () => sessionDao.completeLocalSession(
         localId: any(named: 'localId'),
         endedAt: any(named: 'endedAt'),
         stats: any(named: 'stats'),
@@ -504,20 +539,20 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
-      () => localDatabase.beginSyncAttempt(any()),
+      () => sessionDao.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         any(),
         any(),
         remoteId: any(named: 'remoteId'),
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(),
+    when(() => sessionPointDao.listPoints(any(),
         onlyAccepted: any(named: 'onlyAccepted'))).thenAnswer(
       (_) async => <LocalSessionPoint>[
         _buildPoint(offsetMs: 0),
@@ -1013,7 +1048,7 @@ void main() {
     expect(result.state, LocalSessionState.synced);
     expect(result.lastSyncError, isNull);
     verifyNever(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         1,
         LocalSessionState.syncFailed,
         lastSyncError: any(named: 'lastSyncError'),
@@ -1051,22 +1086,22 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
-      () => localDatabase.beginSyncAttempt(any()),
+      () => sessionDao.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         any(),
         any(),
         remoteId: any(named: 'remoteId'),
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
+    when(() => sessionDao.markSyncFailed(any(), error: any(named: 'error')))
         .thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(),
+    when(() => sessionPointDao.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
     when(() => api.getRemoteSessionPoints(any()))
@@ -1081,8 +1116,8 @@ void main() {
     expect(result.state, LocalSessionState.syncFailed);
     expect(result.syncAttemptCount, 1);
     expect(result.lastSyncError, expectedMessage);
-    verify(() => localDatabase.beginSyncAttempt(1)).called(1);
-    verify(() => localDatabase.markSyncFailed(
+    verify(() => sessionDao.beginSyncAttempt(1)).called(1);
+    verify(() => sessionDao.markSyncFailed(
           1,
           error: expectedMessage,
         )).called(1);
@@ -1136,22 +1171,22 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
-      () => localDatabase.beginSyncAttempt(any()),
+      () => sessionDao.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         any(),
         any(),
         remoteId: any(named: 'remoteId'),
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.markSyncFailed(any(), error: any(named: 'error')))
+    when(() => sessionDao.markSyncFailed(any(), error: any(named: 'error')))
         .thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(),
+    when(() => sessionPointDao.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
 
@@ -1164,7 +1199,7 @@ void main() {
     expect(backend.uploadAttempts, 2);
     expect(backend.completeAttempts, 1);
     verifyNever(
-      () => localDatabase.markSyncFailed(
+      () => sessionDao.markSyncFailed(
         any(),
         error: any(named: 'error'),
       ),
@@ -1212,19 +1247,20 @@ void main() {
       ),
       type: DioExceptionType.badResponse,
     );
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(scopedSessions));
     when(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         any(),
         any(),
         remoteId: any(named: 'remoteId'),
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.incrementSyncAttempt(any(),
-        error: any(named: 'error'))).thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(),
+    when(() =>
+            sessionDao.incrementSyncAttempt(any(), error: any(named: 'error')))
+        .thenAnswer((_) async {});
+    when(() => sessionPointDao.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
     when(() => api.getRemoteSessionPoints(any()))
@@ -1239,7 +1275,7 @@ void main() {
     expect(result.state, LocalSessionState.syncFailed);
     expect(result.syncAttemptCount, 1);
     expect(result.lastSyncError, 'Authentication required.');
-    verifyNever(() => localDatabase.getSessionByLocalId(any()));
+    verifyNever(() => sessionDao.getSessionByLocalId(any()));
   });
 
   test('appendLocationPoint persists enriched point payload as-is', () async {
@@ -1264,10 +1300,10 @@ void main() {
       motionState: 'active_descent',
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => recordingSession);
     when(
-      () => localDatabase.insertPoint(
+      () => sessionPointDao.insertPoint(
         localSessionId: any(named: 'localSessionId'),
         point: any(named: 'point'),
       ),
@@ -1276,7 +1312,7 @@ void main() {
     await repository.appendLocationPoint(1, point);
 
     verify(
-      () => localDatabase.insertPoint(
+      () => sessionPointDao.insertPoint(
         localSessionId: 1,
         point: point,
       ),
@@ -1306,9 +1342,9 @@ void main() {
       () => offlineRepository.appendLocationPoint(1, point),
       throwsA(isA<StateError>()),
     );
-    verifyNever(() => localDatabase.getSessionByLocalId(any()));
+    verifyNever(() => sessionDao.getSessionByLocalId(any()));
     verifyNever(
-      () => localDatabase.insertPoint(
+      () => sessionPointDao.insertPoint(
         localSessionId: any(named: 'localSessionId'),
         point: any(named: 'point'),
       ),
@@ -1317,7 +1353,7 @@ void main() {
 
   test('computeSessionStats preserves duration from sub-second accepted points',
       () async {
-    when(() => localDatabase.listPoints(1)).thenAnswer(
+    when(() => sessionPointDao.listPoints(1)).thenAnswer(
       (_) async => <LocalSessionPoint>[
         _buildPoint(offsetMs: 0),
         _buildPoint(offsetMs: 200),
@@ -1340,7 +1376,7 @@ void main() {
 
   test('getSessionDetail derives timeline segments and ride-only stats',
       () async {
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer(
       (_) async => _buildSession(
         localId: 1,
@@ -1348,7 +1384,7 @@ void main() {
         activeDurationS: 30,
       ),
     );
-    when(() => localDatabase.listPoints(1)).thenAnswer(
+    when(() => sessionPointDao.listPoints(1)).thenAnswer(
       (_) async => <LocalSessionPoint>[
         _buildPoint(
           offsetMs: 0,
@@ -1403,7 +1439,7 @@ void main() {
         ),
       ],
     );
-    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+    when(() => trackingDiagnosticsDao.listTrackingDiagnostics(1, limit: 120))
         .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
 
     final detail = await repository.getSessionDetail(1);
@@ -1427,7 +1463,7 @@ void main() {
 
   test('computeSessionStats resists single accepted max-speed spikes',
       () async {
-    when(() => localDatabase.listPoints(1)).thenAnswer(
+    when(() => sessionPointDao.listPoints(1)).thenAnswer(
       (_) async => <LocalSessionPoint>[
         _buildPoint(offsetMs: 0, speedMps: 12, distanceDeltaM: 0),
         _buildPoint(offsetMs: 1000, speedMps: 12, distanceDeltaM: 12),
@@ -1472,20 +1508,20 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
     when(
-      () => localDatabase.beginSyncAttempt(any()),
+      () => sessionDao.beginSyncAttempt(any()),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.updateSessionState(
+      () => sessionDao.updateSessionState(
         any(),
         any(),
         remoteId: any(named: 'remoteId'),
         lastSyncError: any(named: 'lastSyncError'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.listPoints(any(),
+    when(() => sessionPointDao.listPoints(any(),
             onlyAccepted: any(named: 'onlyAccepted')))
         .thenAnswer((_) async => <LocalSessionPoint>[_buildPoint(offsetMs: 0)]);
     when(() => api.getRemoteSessionPoints(any()))
@@ -1554,11 +1590,10 @@ void main() {
         ],
       ],
     );
-    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+    when(() => sessionDao.listSessions(ownerUserId: _ownerUserId))
         .thenAnswer((_) async => localSnapshots.removeFirst());
-    when(() =>
-            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
-        .thenAnswer(
+    when(() => remoteSessionCacheDao.readCachedRemoteSessions(
+        ownerUserId: _ownerUserId)).thenAnswer(
       (_) async => <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'remote-1',
@@ -1581,7 +1616,7 @@ void main() {
       ],
     );
     when(
-      () => localDatabase.upsertRemoteSessionSummary(
+      () => remoteSessionCacheDao.upsertRemoteSessionSummary(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
         startedAt: any(named: 'startedAt'),
@@ -1604,7 +1639,7 @@ void main() {
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
@@ -1656,21 +1691,21 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+    when(() => sessionDao.listSessions(ownerUserId: _ownerUserId))
         .thenAnswer((_) async => localSnapshots.removeFirst());
-    when(() =>
-            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
+    when(() => remoteSessionCacheDao.readCachedRemoteSessions(
+            ownerUserId: _ownerUserId))
         .thenAnswer((_) async => remoteSnapshots.removeFirst());
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[remoteSummary]);
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.upsertRemoteSessionSummary(
+      () => remoteSessionCacheDao.upsertRemoteSessionSummary(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
         startedAt: any(named: 'startedAt'),
@@ -1694,7 +1729,7 @@ void main() {
     expect(history.single.localId, 7);
     expect(history.single.remoteId, 'remote-7');
     verify(
-      () => localDatabase.upsertRemoteSessionSummary(
+      () => remoteSessionCacheDao.upsertRemoteSessionSummary(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-7',
         startedAt: DateTime.utc(2026, 1, 3, 0, 0, 0),
@@ -1718,21 +1753,21 @@ void main() {
       'not-yet-local remote sessions', () async {
     final fixture = _loadSessionDetailFixtureSession();
 
-    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+    when(() => sessionDao.listSessions(ownerUserId: _ownerUserId))
         .thenAnswer((_) async => const <LocalRideSession>[]);
-    when(() =>
-            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
+    when(() => remoteSessionCacheDao.readCachedRemoteSessions(
+            ownerUserId: _ownerUserId))
         .thenAnswer((_) async => <Map<String, dynamic>>[fixture]);
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[fixture]);
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.upsertRemoteSessionSummary(
+      () => remoteSessionCacheDao.upsertRemoteSessionSummary(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
         startedAt: any(named: 'startedAt'),
@@ -1782,7 +1817,7 @@ void main() {
     expect(session.breakDurationS, 240);
 
     verify(
-      () => localDatabase.upsertRemoteSessionSummary(
+      () => remoteSessionCacheDao.upsertRemoteSessionSummary(
         ownerUserId: _ownerUserId,
         remoteId: fixture['id'] as String,
         startedAt: any(named: 'startedAt'),
@@ -1846,18 +1881,18 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
-    when(() => localDatabase.listPoints(1)).thenAnswer(
+    when(() => sessionPointDao.listPoints(1)).thenAnswer(
       (_) async => pointSnapshots.removeFirst(),
     );
     when(
-      () => localDatabase.replaceSessionPoints(
+      () => sessionPointDao.replaceSessionPoints(
         localSessionId: any(named: 'localSessionId'),
         points: any(named: 'points'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+    when(() => trackingDiagnosticsDao.listTrackingDiagnostics(1, limit: 120))
         .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
     when(() => api.getRemoteSessionPoints('remote-restore')).thenAnswer(
       (_) async => <Map<String, dynamic>>[
@@ -1893,7 +1928,7 @@ void main() {
     expect(detail.points, hasLength(3));
     expect(detail.acceptedPoints, hasLength(2));
     final captured = verify(
-      () => localDatabase.replaceSessionPoints(
+      () => sessionPointDao.replaceSessionPoints(
         localSessionId: 1,
         points: captureAny(named: 'points'),
       ),
@@ -1967,18 +2002,18 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
-    when(() => localDatabase.listPoints(1)).thenAnswer(
+    when(() => sessionPointDao.listPoints(1)).thenAnswer(
       (_) async => pointSnapshots.removeFirst(),
     );
     when(
-      () => localDatabase.replaceSessionPoints(
+      () => sessionPointDao.replaceSessionPoints(
         localSessionId: any(named: 'localSessionId'),
         points: any(named: 'points'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+    when(() => trackingDiagnosticsDao.listTrackingDiagnostics(1, limit: 120))
         .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
     when(() => api.getRemoteSessionPoints('remote-restore')).thenAnswer(
       (_) async => <Map<String, dynamic>>[
@@ -2015,7 +2050,7 @@ void main() {
     expect(detail.timeline, isNotEmpty);
     verify(() => api.getRemoteSessionPoints('remote-restore')).called(1);
     verify(
-      () => localDatabase.replaceSessionPoints(
+      () => sessionPointDao.replaceSessionPoints(
         localSessionId: 1,
         points: captureAny(named: 'points'),
       ),
@@ -2072,18 +2107,18 @@ void main() {
       ],
     );
 
-    when(() => localDatabase.getSessionById(1, ownerUserId: _ownerUserId))
+    when(() => sessionDao.getSessionById(1, ownerUserId: _ownerUserId))
         .thenAnswer((_) async => _popOrPeekLast(sessions));
-    when(() => localDatabase.listPoints(1)).thenAnswer(
+    when(() => sessionPointDao.listPoints(1)).thenAnswer(
       (_) async => pointSnapshots.removeFirst(),
     );
     when(
-      () => localDatabase.replaceSessionPoints(
+      () => sessionPointDao.replaceSessionPoints(
         localSessionId: any(named: 'localSessionId'),
         points: any(named: 'points'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.listTrackingDiagnostics(1, limit: 120))
+    when(() => trackingDiagnosticsDao.listTrackingDiagnostics(1, limit: 120))
         .thenAnswer((_) async => const <TrackingDiagnosticEvent>[]);
     when(() => api.getRemoteSessionPoints('remote-restore')).thenAnswer(
       (_) async => <Map<String, dynamic>>[
@@ -2121,7 +2156,7 @@ void main() {
     expect(detail.points, hasLength(3));
     expect(detail.acceptedPoints, hasLength(1));
     final captured = verify(
-      () => localDatabase.replaceSessionPoints(
+      () => sessionPointDao.replaceSessionPoints(
         localSessionId: 1,
         points: captureAny(named: 'points'),
       ),
@@ -2143,7 +2178,7 @@ void main() {
       state: LocalSessionState.syncPending,
     );
     when(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 1,
         ownerUserId: _ownerUserId,
         remoteId: null,
@@ -2156,7 +2191,7 @@ void main() {
 
     expect(result.disposition, DeleteSessionDisposition.localOnly);
     verify(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 1,
         ownerUserId: _ownerUserId,
         remoteId: null,
@@ -2165,7 +2200,7 @@ void main() {
     ).called(1);
     verifyNever(() => api.deleteRemoteSession(any()));
     verifyNever(
-      () => localDatabase.enqueuePendingRemoteSessionDelete(
+      () => pendingDeleteDao.enqueuePendingRemoteSessionDelete(
         ownerUserId: any(named: 'ownerUserId'),
         remoteId: any(named: 'remoteId'),
       ),
@@ -2181,7 +2216,7 @@ void main() {
     );
     when(() => api.deleteRemoteSession('remote-4')).thenAnswer((_) async {});
     when(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 4,
         ownerUserId: _ownerUserId,
         remoteId: 'remote-4',
@@ -2194,20 +2229,20 @@ void main() {
 
     expect(result.disposition, DeleteSessionDisposition.deletedRemotely);
     verify(
-      () => localDatabase.enqueuePendingRemoteSessionDelete(
+      () => pendingDeleteDao.enqueuePendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-4',
       ),
     ).called(1);
     verify(() => api.deleteRemoteSession('remote-4')).called(1);
     verify(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-4',
       ),
     ).called(1);
     verify(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 4,
         ownerUserId: _ownerUserId,
         remoteId: 'remote-4',
@@ -2215,7 +2250,7 @@ void main() {
       ),
     ).called(1);
     verifyNever(
-      () => localDatabase.deleteCachedRemoteSessionSummary(
+      () => remoteSessionCacheDao.deleteCachedRemoteSessionSummary(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-4',
       ),
@@ -2225,11 +2260,10 @@ void main() {
   test(
       'history hides persisted pending-delete remote sessions across repository reloads',
       () async {
-    when(() => localDatabase.listSessions(ownerUserId: _ownerUserId))
+    when(() => sessionDao.listSessions(ownerUserId: _ownerUserId))
         .thenAnswer((_) async => const <LocalRideSession>[]);
-    when(() =>
-            localDatabase.readCachedRemoteSessions(ownerUserId: _ownerUserId))
-        .thenAnswer(
+    when(() => remoteSessionCacheDao.readCachedRemoteSessions(
+        ownerUserId: _ownerUserId)).thenAnswer(
       (_) async => <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'remote-queued',
@@ -2258,13 +2292,13 @@ void main() {
       ],
     );
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
     ).thenAnswer((_) async {});
     when(
-      () => localDatabase.listPendingRemoteSessionDeleteIds(
+      () => pendingDeleteDao.listPendingRemoteSessionDeleteIds(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer((_) async => <String>{'remote-queued'});
@@ -2290,7 +2324,7 @@ void main() {
 
     when(() => api.deleteRemoteSession('remote-5')).thenThrow(connectionError);
     when(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 5,
         ownerUserId: _ownerUserId,
         remoteId: 'remote-5',
@@ -2303,14 +2337,14 @@ void main() {
 
     expect(result.queuedRemoteDelete, isTrue);
     verify(
-      () => localDatabase.enqueuePendingRemoteSessionDelete(
+      () => pendingDeleteDao.enqueuePendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-5',
       ),
     ).called(1);
     verify(() => api.deleteRemoteSession('remote-5')).called(1);
     verify(
-      () => localDatabase.recordPendingRemoteSessionDeleteAttempt(
+      () => pendingDeleteDao.recordPendingRemoteSessionDeleteAttempt(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-5',
         lastError: any(named: 'lastError'),
@@ -2318,7 +2352,7 @@ void main() {
       ),
     ).called(1);
     verify(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 5,
         ownerUserId: _ownerUserId,
         remoteId: 'remote-5',
@@ -2326,7 +2360,7 @@ void main() {
       ),
     ).called(1);
     verifyNever(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-5',
       ),
@@ -2359,27 +2393,27 @@ void main() {
     );
 
     verify(
-      () => localDatabase.enqueuePendingRemoteSessionDelete(
+      () => pendingDeleteDao.enqueuePendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-6',
       ),
     ).called(1);
     verify(() => api.deleteRemoteSession('remote-6')).called(1);
     verify(
-      () => localDatabase.markPendingRemoteSessionDeleteFailed(
+      () => pendingDeleteDao.markPendingRemoteSessionDeleteFailed(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-6',
         lastError: any(named: 'lastError'),
       ),
     ).called(1);
     verifyNever(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-6',
       ),
     );
     verifyNever(
-      () => localDatabase.deleteSessionCascade(
+      () => sessionDao.deleteSessionCascade(
         localSessionId: 6,
         ownerUserId: _ownerUserId,
         remoteId: 'remote-6',
@@ -2393,7 +2427,7 @@ void main() {
       'refreshRemoteSessionHistoryCache reconciles queued deletes and clears queue on success',
       () async {
     when(
-      () => localDatabase.listRetryablePendingRemoteDeletes(
+      () => pendingDeleteDao.listRetryablePendingRemoteDeletes(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer(
@@ -2407,14 +2441,14 @@ void main() {
     );
     when(() => api.deleteRemoteSession('remote-10')).thenAnswer((_) async {});
     when(
-      () => localDatabase.listPendingRemoteSessionDeleteIds(
+      () => pendingDeleteDao.listPendingRemoteSessionDeleteIds(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer((_) async => <String>{});
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
@@ -2423,7 +2457,7 @@ void main() {
     await repository.refreshRemoteSessionHistoryCache();
 
     verify(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-10',
       ),
@@ -2434,7 +2468,7 @@ void main() {
       'refreshRemoteSessionHistoryCache clears queued delete when reconciliation returns 404',
       () async {
     when(
-      () => localDatabase.listRetryablePendingRemoteDeletes(
+      () => pendingDeleteDao.listRetryablePendingRemoteDeletes(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer(
@@ -2457,14 +2491,14 @@ void main() {
     );
     when(() => api.deleteRemoteSession('remote-11')).thenThrow(notFound);
     when(
-      () => localDatabase.listPendingRemoteSessionDeleteIds(
+      () => pendingDeleteDao.listPendingRemoteSessionDeleteIds(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer((_) async => <String>{});
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
@@ -2473,7 +2507,7 @@ void main() {
     await repository.refreshRemoteSessionHistoryCache();
 
     verify(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-11',
       ),
@@ -2484,7 +2518,7 @@ void main() {
       'refreshRemoteSessionHistoryCache marks queued delete as failed on hard reconciliation error',
       () async {
     when(
-      () => localDatabase.listRetryablePendingRemoteDeletes(
+      () => pendingDeleteDao.listRetryablePendingRemoteDeletes(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer(
@@ -2508,14 +2542,14 @@ void main() {
     );
     when(() => api.deleteRemoteSession('remote-12')).thenThrow(unauthorized);
     when(
-      () => localDatabase.listPendingRemoteSessionDeleteIds(
+      () => pendingDeleteDao.listPendingRemoteSessionDeleteIds(
         ownerUserId: _ownerUserId,
       ),
     ).thenAnswer((_) async => <String>{});
     when(() => api.listRemoteSessions())
         .thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(
-      () => localDatabase.replaceCachedRemoteSessions(
+      () => remoteSessionCacheDao.replaceCachedRemoteSessions(
         ownerUserId: _ownerUserId,
         sessions: any(named: 'sessions'),
       ),
@@ -2524,14 +2558,14 @@ void main() {
     await repository.refreshRemoteSessionHistoryCache();
 
     verify(
-      () => localDatabase.markPendingRemoteSessionDeleteFailed(
+      () => pendingDeleteDao.markPendingRemoteSessionDeleteFailed(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-12',
         lastError: any(named: 'lastError'),
       ),
     ).called(1);
     verifyNever(
-      () => localDatabase.clearPendingRemoteSessionDelete(
+      () => pendingDeleteDao.clearPendingRemoteSessionDelete(
         ownerUserId: _ownerUserId,
         remoteId: 'remote-12',
       ),
@@ -2566,7 +2600,7 @@ void main() {
     );
 
     when(
-      () => localDatabase.readCachedResorts(
+      () => resortCacheDao.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer(
@@ -2585,7 +2619,7 @@ void main() {
     final label = await repository.resolveSessionResortLabel(explicit);
 
     expect(label, 'Whistler Blackcomb');
-    verifyNever(() => localDatabase.latestAcceptedPoint(any()));
+    verifyNever(() => sessionPointDao.latestAcceptedPoint(any()));
   });
 
   test(
@@ -2596,7 +2630,7 @@ void main() {
       state: LocalSessionState.synced,
     );
     when(
-      () => localDatabase.readCachedResorts(
+      () => resortCacheDao.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer(
@@ -2619,7 +2653,7 @@ void main() {
         },
       ],
     );
-    when(() => localDatabase.latestAcceptedPoint(21)).thenAnswer(
+    when(() => sessionPointDao.latestAcceptedPoint(21)).thenAnswer(
       (_) async => _buildPoint(
         offsetMs: 0,
         latitude: 49.0001,
@@ -2639,7 +2673,7 @@ void main() {
       state: LocalSessionState.synced,
     );
     when(
-      () => localDatabase.readCachedResorts(
+      () => resortCacheDao.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer(
@@ -2654,7 +2688,7 @@ void main() {
         },
       ],
     );
-    when(() => localDatabase.latestAcceptedPoint(31)).thenAnswer(
+    when(() => sessionPointDao.latestAcceptedPoint(31)).thenAnswer(
       (_) async => _buildPoint(
         offsetMs: 0,
         latitude: 49.0,

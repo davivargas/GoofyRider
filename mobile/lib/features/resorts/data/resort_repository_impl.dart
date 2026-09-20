@@ -54,7 +54,7 @@ class ResortRepositoryImpl implements ResortRepository {
         isStale: false,
       );
     } on DioException {
-      final cached = await _localDatabase.readCachedResorts(
+      final cached = await _localDatabase.resortCache.readCachedResorts(
         ownerUserId: _currentUserIdOrNull,
       );
       final resorts = cached
@@ -87,7 +87,7 @@ class ResortRepositoryImpl implements ResortRepository {
       await _cacheResortPayload(resort.id, resort.toJson());
       return (await _withCachedWeather(<ResortSummary>[resort])).first;
     } on DioException catch (exception) {
-      final cached = await _localDatabase.readCachedResort(
+      final cached = await _localDatabase.resortCache.readCachedResort(
         resortId,
         ownerUserId: _currentUserIdOrNull,
       );
@@ -137,7 +137,7 @@ class ResortRepositoryImpl implements ResortRepository {
 
       return await _withCachedWeather(resorts);
     } on DioException {
-      final cached = await _localDatabase.readCachedResorts(
+      final cached = await _localDatabase.resortCache.readCachedResorts(
         ownerUserId: ownerUserId,
       );
       return cached
@@ -151,7 +151,7 @@ class ResortRepositoryImpl implements ResortRepository {
     Set<String> favoriteIds, {
     required String ownerUserId,
   }) async {
-    final cached = await _localDatabase.readCachedResorts(
+    final cached = await _localDatabase.resortCache.readCachedResorts(
       ownerUserId: ownerUserId,
     );
     for (final raw in cached) {
@@ -169,7 +169,7 @@ class ResortRepositoryImpl implements ResortRepository {
       final updated = Map<String, dynamic>.from(raw)
         ..remove('cached_fetched_at')
         ..['is_favorite'] = shouldBeFavorite;
-      await _localDatabase.upsertCachedResort(
+      await _localDatabase.resortCache.upsertCachedResort(
         id,
         updated,
         ownerUserId: ownerUserId,
@@ -207,7 +207,8 @@ class ResortRepositoryImpl implements ResortRepository {
     final enriched = <ResortSummary>[];
 
     for (final resort in resorts) {
-      final weatherRaw = await _localDatabase.readCachedWeather(resort.id);
+      final weatherRaw =
+          await _localDatabase.weatherCache.readCachedWeather(resort.id);
       if (weatherRaw == null) {
         enriched.add(resort);
         continue;
@@ -258,7 +259,7 @@ class ResortRepositoryImpl implements ResortRepository {
     String resortId,
     Map<String, dynamic> payload,
   ) {
-    return _localDatabase.upsertCachedResort(
+    return _localDatabase.resortCache.upsertCachedResort(
       resortId,
       payload,
       ownerUserId: _currentUserIdOrNull,

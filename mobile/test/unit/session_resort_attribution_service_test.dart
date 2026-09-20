@@ -17,7 +17,7 @@ void main() {
   });
 
   test('resolve prefers explicit resort association from cache', () async {
-    await database.upsertCachedResort(
+    await database.resortCache.upsertCachedResort(
       'resort-1',
       <String, dynamic>{
         'id': 'resort-1',
@@ -40,7 +40,7 @@ void main() {
   });
 
   test('resolve infers nearest resort from latest accepted point', () async {
-    await database.upsertCachedResort(
+    await database.resortCache.upsertCachedResort(
       'resort-1',
       <String, dynamic>{
         'id': 'resort-1',
@@ -52,11 +52,11 @@ void main() {
       },
     );
 
-    final localId = await database.insertLocalSession(
+    final localId = await database.sessions.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
     );
-    await database.insertPoint(
+    await database.sessionPoints.insertPoint(
       localSessionId: localId,
       point: NewSessionPoint(
         recordedAt: DateTime.utc(2026, 1, 1),
@@ -71,8 +71,8 @@ void main() {
       ),
     );
 
-    final session =
-        (await database.getSessionById(localId, ownerUserId: 'user-1'))!;
+    final session = (await database.sessions
+        .getSessionById(localId, ownerUserId: 'user-1'))!;
     final resolved = await service.resolve(session);
 
     expect(resolved.label, 'Whistler Blackcomb');
@@ -81,7 +81,7 @@ void main() {
   });
 
   test('resolve returns unknown resort when no nearby match exists', () async {
-    await database.upsertCachedResort(
+    await database.resortCache.upsertCachedResort(
       'resort-1',
       <String, dynamic>{
         'id': 'resort-1',
@@ -93,11 +93,11 @@ void main() {
       },
     );
 
-    final localId = await database.insertLocalSession(
+    final localId = await database.sessions.insertLocalSession(
       startedAt: DateTime.utc(2026, 1, 1),
       ownerUserId: 'user-1',
     );
-    await database.insertPoint(
+    await database.sessionPoints.insertPoint(
       localSessionId: localId,
       point: NewSessionPoint(
         recordedAt: DateTime.utc(2026, 1, 1),
@@ -112,8 +112,8 @@ void main() {
       ),
     );
 
-    final session =
-        (await database.getSessionById(localId, ownerUserId: 'user-1'))!;
+    final session = (await database.sessions
+        .getSessionById(localId, ownerUserId: 'user-1'))!;
     final resolved = await service.resolve(session);
 
     expect(resolved.label, unknownSessionResortLabel);

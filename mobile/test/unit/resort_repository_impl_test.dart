@@ -9,6 +9,10 @@ import 'package:fall_line_mobile/features/resorts/domain/resort_models.dart';
 
 class MockDriftLocalDatabase extends Mock implements DriftLocalDatabase {}
 
+class MockResortCacheDao extends Mock implements ResortCacheDao {}
+
+class MockWeatherCacheDao extends Mock implements WeatherCacheDao {}
+
 class MockResortsApi extends Mock implements ResortsApi {}
 
 class FavoritesFailingResortRepository extends ResortRepositoryImpl {
@@ -54,6 +58,8 @@ void main() {
   });
 
   late MockDriftLocalDatabase localDatabase;
+  late MockResortCacheDao resortCache;
+  late MockWeatherCacheDao weatherCache;
   late MockResortsApi api;
   late FavoritesFailingResortRepository repository;
   late ResortRepositoryImpl baseRepository;
@@ -62,6 +68,10 @@ void main() {
   setUp(() {
     currentUserId = 'user-1';
     localDatabase = MockDriftLocalDatabase();
+    resortCache = MockResortCacheDao();
+    weatherCache = MockWeatherCacheDao();
+    when(() => localDatabase.resortCache).thenReturn(resortCache);
+    when(() => localDatabase.weatherCache).thenReturn(weatherCache);
     api = MockResortsApi();
     repository = FavoritesFailingResortRepository(
       api: api,
@@ -75,16 +85,16 @@ void main() {
     );
 
     when(
-      () => localDatabase.upsertCachedResort(
+      () => resortCache.upsertCachedResort(
         any(),
         any(),
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async {});
-    when(() => localDatabase.readCachedWeather(any()))
+    when(() => weatherCache.readCachedWeather(any()))
         .thenAnswer((_) async => null);
     when(
-      () => localDatabase.readCachedResorts(
+      () => resortCache.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer((_) async => <Map<String, dynamic>>[]);
@@ -110,7 +120,7 @@ void main() {
     expect(result.items.single.id, 'whistler');
     expect(result.items.single.isFavorite, isFalse);
     verify(
-      () => localDatabase.upsertCachedResort(
+      () => resortCache.upsertCachedResort(
         'whistler',
         any(),
         ownerUserId: 'user-1',
@@ -131,7 +141,7 @@ void main() {
     expect(result.isFavorite, isFalse);
     expect(result.isStale, isFalse);
     verify(
-      () => localDatabase.upsertCachedResort(
+      () => resortCache.upsertCachedResort(
         'whistler',
         any(),
         ownerUserId: 'user-1',
@@ -161,7 +171,7 @@ void main() {
 
     expect(updated.isFavorite, isFalse);
     final captured = verify(
-      () => localDatabase.upsertCachedResort(
+      () => resortCache.upsertCachedResort(
         captureAny(),
         captureAny(),
         ownerUserId: captureAny(named: 'ownerUserId'),
@@ -181,7 +191,7 @@ void main() {
       ],
     );
     when(
-      () => localDatabase.readCachedResorts(
+      () => resortCache.readCachedResorts(
         ownerUserId: any(named: 'ownerUserId'),
       ),
     ).thenAnswer(
@@ -205,7 +215,7 @@ void main() {
     expect(favorites.single.isFavorite, isTrue);
 
     final captured = verify(
-      () => localDatabase.upsertCachedResort(
+      () => resortCache.upsertCachedResort(
         captureAny(),
         captureAny(),
         ownerUserId: captureAny(named: 'ownerUserId'),

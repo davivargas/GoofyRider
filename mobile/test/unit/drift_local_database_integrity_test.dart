@@ -22,12 +22,12 @@ void main() {
 
     test('duplicate point offsets are ignored and point count stays consistent',
         () async {
-      final localSessionId = await database.insertLocalSession(
+      final localSessionId = await database.sessions.insertLocalSession(
         startedAt: DateTime.utc(2026, 1, 1, 8),
         ownerUserId: 'user-1',
       );
 
-      await database.insertPoint(
+      await database.sessionPoints.insertPoint(
         localSessionId: localSessionId,
         point: _point(
           recordedAt: DateTime.utc(2026, 1, 1, 8, 0, 1),
@@ -36,7 +36,7 @@ void main() {
           longitude: -123.0,
         ),
       );
-      await database.insertPoint(
+      await database.sessionPoints.insertPoint(
         localSessionId: localSessionId,
         point: _point(
           recordedAt: DateTime.utc(2026, 1, 1, 8, 0, 2),
@@ -46,11 +46,11 @@ void main() {
         ),
       );
 
-      final points = await database.listPoints(
+      final points = await database.sessionPoints.listPoints(
         localSessionId,
       );
-      final session =
-          await database.getSessionById(localSessionId, ownerUserId: 'user-1');
+      final session = await database.sessions
+          .getSessionById(localSessionId, ownerUserId: 'user-1');
 
       expect(points, hasLength(1));
       expect(points.single.latitude, 49.0);
@@ -61,7 +61,8 @@ void main() {
     test(
         'remote session summary upsert reuses the same local row and preserves points',
         () async {
-      final firstLocalId = await database.upsertRemoteSessionSummary(
+      final firstLocalId =
+          await database.remoteSessionCache.upsertRemoteSessionSummary(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
         startedAt: DateTime.utc(2026, 1, 1, 9),
@@ -75,7 +76,7 @@ void main() {
         resortId: 'resort-1',
       );
 
-      await database.insertPoint(
+      await database.sessionPoints.insertPoint(
         localSessionId: firstLocalId,
         point: _point(
           recordedAt: DateTime.utc(2026, 1, 1, 9, 0, 5),
@@ -85,7 +86,8 @@ void main() {
         ),
       );
 
-      final secondLocalId = await database.upsertRemoteSessionSummary(
+      final secondLocalId =
+          await database.remoteSessionCache.upsertRemoteSessionSummary(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
         startedAt: DateTime.utc(2026, 1, 1, 9),
@@ -99,12 +101,13 @@ void main() {
         resortId: 'resort-2',
       );
 
-      final sessions = await database.listSessions(ownerUserId: 'user-1');
-      final session = await database.getSessionByRemoteId(
+      final sessions =
+          await database.sessions.listSessions(ownerUserId: 'user-1');
+      final session = await database.sessions.getSessionByRemoteId(
         ownerUserId: 'user-1',
         remoteId: 'remote-1',
       );
-      final points = await database.listPoints(
+      final points = await database.sessionPoints.listPoints(
         firstLocalId,
       );
 
@@ -118,21 +121,23 @@ void main() {
 
     test('pending remote deletes stay hidden until their retry window opens',
         () async {
-      await database.enqueuePendingRemoteSessionDelete(
+      await database.pendingDeletes.enqueuePendingRemoteSessionDelete(
         ownerUserId: 'user-1',
         remoteId: 'remote-queued',
       );
-      await database.recordPendingRemoteSessionDeleteAttempt(
+      await database.pendingDeletes.recordPendingRemoteSessionDeleteAttempt(
         ownerUserId: 'user-1',
         remoteId: 'remote-queued',
         lastError: 'Network unavailable',
         nextAttemptAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
       );
 
-      final hiddenIds = await database.listPendingRemoteSessionDeleteIds(
+      final hiddenIds =
+          await database.pendingDeletes.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final retryableIds = await database.listPendingRemoteDeleteIds(
+      final retryableIds =
+          await database.pendingDeletes.listPendingRemoteDeleteIds(
         ownerUserId: 'user-1',
       );
 
@@ -142,20 +147,22 @@ void main() {
 
     test('failed remote deletes stop hiding history and stop automatic retries',
         () async {
-      await database.enqueuePendingRemoteSessionDelete(
+      await database.pendingDeletes.enqueuePendingRemoteSessionDelete(
         ownerUserId: 'user-1',
         remoteId: 'remote-failed',
       );
-      await database.markPendingRemoteSessionDeleteFailed(
+      await database.pendingDeletes.markPendingRemoteSessionDeleteFailed(
         ownerUserId: 'user-1',
         remoteId: 'remote-failed',
         lastError: 'Authentication required.',
       );
 
-      final hiddenIds = await database.listPendingRemoteSessionDeleteIds(
+      final hiddenIds =
+          await database.pendingDeletes.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
-      final retryableDeletes = await database.listRetryablePendingRemoteDeletes(
+      final retryableDeletes =
+          await database.pendingDeletes.listRetryablePendingRemoteDeletes(
         ownerUserId: 'user-1',
       );
 
@@ -232,7 +239,8 @@ void main() {
           .get();
       final columnNames =
           columns.map((QueryRow row) => row.data['name'] as String).toSet();
-      final pendingIds = await fileDatabase!.listPendingRemoteSessionDeleteIds(
+      final pendingIds =
+          await fileDatabase!.pendingDeletes.listPendingRemoteSessionDeleteIds(
         ownerUserId: 'user-1',
       );
       final migratedRows = await fileDatabase!.customSelect(
@@ -459,7 +467,7 @@ void main() {
     });
 
     test('cached resorts isolate favorite state per user', () async {
-      await database.upsertCachedResort(
+      await database.resortCache.upsertCachedResort(
         'resort-1',
         <String, dynamic>{
           'id': 'resort-1',
@@ -469,7 +477,7 @@ void main() {
           'is_favorite': false,
         },
       );
-      await database.upsertCachedResort(
+      await database.resortCache.upsertCachedResort(
         'resort-1',
         <String, dynamic>{
           'id': 'resort-1',
@@ -481,16 +489,16 @@ void main() {
         ownerUserId: 'user-1',
       );
 
-      final userOneResort = await database.readCachedResort(
+      final userOneResort = await database.resortCache.readCachedResort(
         'resort-1',
         ownerUserId: 'user-1',
       );
-      final userTwoResort = await database.readCachedResort(
+      final userTwoResort = await database.resortCache.readCachedResort(
         'resort-1',
         ownerUserId: 'user-2',
       );
       final userTwoResorts =
-          await database.readCachedResorts(ownerUserId: 'user-2');
+          await database.resortCache.readCachedResorts(ownerUserId: 'user-2');
 
       expect(userOneResort?['is_favorite'], isTrue);
       expect(userTwoResort?['is_favorite'], isFalse);
@@ -563,7 +571,7 @@ void main() {
           .get();
       final columnNames =
           columns.map((QueryRow row) => row.data['name'] as String).toSet();
-      final migratedResort = await fileDatabase!.readCachedResort(
+      final migratedResort = await fileDatabase!.resortCache.readCachedResort(
         'resort-legacy',
         ownerUserId: 'user-2',
       );
