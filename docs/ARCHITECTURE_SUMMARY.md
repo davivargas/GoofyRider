@@ -55,6 +55,29 @@ compatibility shim that re-exports the package's public API so existing
 imports keep working; new code should import from `app.services.analysis`
 directly.
 
+## Resort catalog
+
+- Sources write only `resort_source_records` (raw payload, sha256 hash,
+  snapshot build time, `missing_since`, link to a resort with
+  `match_status` / `match_method` / candidates). OpenSkiData is primary;
+  SkiAPI is Phase 2 enrichment.
+- `resort_matching.py` (pure) scores name similarity, distance or boundary
+  containment, and country agreement; auto-links at ≥ 0.85 with a 0.15 margin
+  and ≤ 5 km, queues ≥ 0.5 for review, never orphans a legacy row.
+- `resort_merge_service.py` recomputes every `resorts` column from linked
+  records plus `resort_field_overrides` using a fixed precedence
+  (OpenSkiData, then SkiAPI) and plausibility checks (elevations within the
+  lift envelope ±150 m, coordinates inside the boundary). Provenance per field
+  lives in `resorts.field_provenance`. Recency is never a rule.
+- Lifts come from the OpenSkiData `lifts.geojson` into `resort_lifts`
+  (`source = openskidata`, track id `osm:way:<id>`), replacing the per-resort
+  Overpass fetch. The analyzer contract (`polyline` JSON, `external_track_id`)
+  is unchanged.
+- Commands: `app/scripts/import_catalog.py` (explicit, idempotent, no boot
+  coupling) and `app/scripts/review_catalog_matches.py`.
+- Geometry is JSONB plus a bbox in plain Postgres; the column shape allows a
+  later PostGIS migration in one revision.
+
 ## Session sync protocol
 
 For locally completed sessions:

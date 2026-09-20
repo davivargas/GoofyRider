@@ -122,6 +122,13 @@ Delete it.
 key, a rate-limit response, or a SkiAPI outage prevents uvicorn from starting.
 The scheduler already syncs periodically; boot should not block on it.
 
+> **2026-09-19 update:** C3 is fixed. The boot command no longer imports
+> resorts and the in-process scheduler is removed; the catalog is loaded by
+> `python -m app.scripts.import_catalog`. The section 5.1 recommendation is
+> adopted: OpenSkiData is the primary catalog and lift source, SkiAPI is
+> Phase 2 enrichment. See
+> `docs/superpowers/specs/2026-09-19-resort-catalog-design.md`.
+
 ### High
 
 **H1. Backend lint and type gates are red on `main`.**
@@ -373,6 +380,8 @@ the `resort_lifts` polylines, and run names in one import, at no cost, under
 ODbL attribution. Recommendation: import an OpenSkiData snapshot as the
 primary catalog, keep SkiAPI as an optional enrichment, and move the import
 out of the boot command.
+
+> Adopted 2026-09-19; see the note under C3.
 
 Paid options that add live lift status and official snow reports:
 [Mountain News / OnTheSnow partner API](https://www.mountainnews.com/data-ai/)

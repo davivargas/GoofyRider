@@ -36,10 +36,14 @@ From the `goofyrider/` directory:
 docker compose up --build -d
 ```
 
-This builds the backend image, starts PostgreSQL, runs Alembic migrations,
-and imports the resort catalog from SkiAPI on first boot. The first start
-can take 1–2 minutes while the resort import finishes — tail the logs to
-watch progress:
+This builds the backend image, starts PostgreSQL, and runs Alembic
+migrations.
+
+The catalog is not imported at boot. After the backend is up, load the resort
+catalog once (see "Resort catalog" below); the first import downloads about
+140 MB from OpenSkiData and takes a few minutes.
+
+Tail the logs to watch progress:
 
 ```bash
 docker compose logs -f backend
@@ -88,10 +92,8 @@ Once the app is on the emulator:
   still running (`docker compose ps`) and that you are on an emulator —
   `10.0.2.2` only works inside Android emulators. On a physical device,
   substitute your host's LAN IP for `10.0.2.2`.
-- **Resort list is empty**: the initial SkiAPI import may still be
-  running. Re-check `docker compose logs -f backend` for
-  `Resort import complete`. Pull-to-refresh the Resorts tab once it
-  finishes.
+- **Resort list is empty**: run `python -m app.scripts.import_catalog` (or
+  `docker compose exec backend python -m app.scripts.import_catalog`).
 - **Map tiles are blank or show a watermark**: the `--dart-define-from-file`
   flag was not passed, or `mobile/mapbox.json` was edited. Re-check the
   file and re-run.
@@ -201,15 +203,9 @@ Containerized (recommended for parity):
 docker compose up --build backend
 ```
 
-Before first run, set `SKI_API_KEY` (and optionally `SKI_API_HOST`) in `.env`.
-
 This starts:
 - `db` (PostgreSQL)
-- `backend` (FastAPI + Alembic migration + SkiAPI resort import on startup + weekly resort sync)
-
-Optional sync controls:
-- `RESORT_SYNC_ENABLED` (default: `true`)
-- `RESORT_SYNC_INTERVAL_DAYS` (default: `7`)
+- `backend` (FastAPI + Alembic migration)
 
 API docs:
 - `http://127.0.0.1:8000/docs`
@@ -226,26 +222,45 @@ source .venv/bin/activate
 
 pip install -e .[dev]
 alembic upgrade head
-python -m app.scripts.import_resorts
+python -m app.scripts.import_catalog --countries CA
 uvicorn app.main:app --reload
 ```
 
-### Lift catalog
+### Resort catalog
 
-Lift lines come from OpenStreetMap through the public Overpass API and are
-needed for lift naming and the best run/lift detection. After
-`python -m app.scripts.import_resorts`, import the lifts for the resorts you
-ride (one request per resort, paced at one per second):
+Resorts and lift lines come from OpenSkiData (OpenStreetMap ski data behind
+OpenSkiMap.org). Import or refresh the catalog explicitly; nothing runs at boot:
 
 ```bash
-python -m app.scripts.import_resort_lifts --resort "Grouse Mountain"
-python -m app.scripts.import_resort_lifts --resort "Cypress Mountain"
-python -m app.scripts.import_resort_lifts --resort "Mount Seymour"
-# or everything you have favourited:
-python -m app.scripts.import_resort_lifts --all-favourites --user-email you@example.com
+python -m app.scripts.import_catalog                # full import from tiles.openskimap.org
+python -m app.scripts.import_catalog --countries CA # dev machines: one country
+python -m app.scripts.import_catalog --path /data   # offline: metadata.json, ski_areas.geojson, lifts.geojson
+python -m app.scripts.import_catalog --merge-only   # re-run the merge after an override
 ```
 
-Re-running updates existing rows in place (matched by OSM way id).
+Re-running is idempotent: unchanged records are skipped, resorts keep their
+ids, and ski areas that disappear from the snapshot are deactivated, never
+deleted. Schedule it weekly with cron or a CI job, for example
+`0 4 * * 1 docker compose exec -T backend python -m app.scripts.import_catalog`.
+
+Uncertain matches (a new snapshot record that looks like an existing resort)
+are held for review instead of merged:
+
+```bash
+python -m app.scripts.review_catalog_matches list
+python -m app.scripts.review_catalog_matches link openskidata <external_id> <resort_uuid>
+python -m app.scripts.review_catalog_matches reject openskidata <external_id>
+```
+
+Manual field fixes go in `resort_field_overrides` and beat every source.
+
+Attribution: the app shows "Data from OpenSkiData / OpenSkiMap.org,
+© OpenStreetMap contributors (ODbL), Skimap.org, Who's On First,
+© Mapterhorn" on the resort and profile screens. Keep it when adding screens
+that show catalog data.
+
+SkiAPI (RapidAPI) enrichment is Phase 2; `SKI_API_*` settings are optional
+until then.
 
 ### Re-analysis
 
