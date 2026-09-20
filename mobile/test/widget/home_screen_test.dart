@@ -6,7 +6,6 @@ import 'package:fall_line_mobile/app/shell/home_screen.dart';
 import 'package:fall_line_mobile/core/providers/distance_unit_preference_provider.dart';
 import 'package:fall_line_mobile/core/providers/speed_unit_preference_provider.dart';
 import 'package:fall_line_mobile/core/storage/app_preferences.dart';
-import 'package:fall_line_mobile/core/utils/date_time_formatting.dart';
 import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
 import 'package:fall_line_mobile/features/auth/domain/auth_repository.dart';
 import 'package:fall_line_mobile/features/auth/presentation/auth_controller.dart';
@@ -14,6 +13,7 @@ import 'package:fall_line_mobile/features/auth/presentation/auth_providers.dart'
 import 'package:fall_line_mobile/features/resorts/domain/resort_models.dart';
 import 'package:fall_line_mobile/features/resorts/presentation/resort_providers.dart';
 import 'package:fall_line_mobile/features/session/domain/session_models.dart';
+import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
 import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 import 'package:fall_line_mobile/features/weather/domain/weather_models.dart';
 import 'package:fall_line_mobile/features/weather/presentation/weather_providers.dart';
@@ -71,12 +71,27 @@ class _FakeAuthController extends AuthController {
   }
 }
 
-LocalRideSession _buildSession(DateTime startedAt) {
+/// Only resolves resort labels; the home screen touches nothing else.
+class _FakeSessionRepository implements SessionRepository {
+  _FakeSessionRepository(this.label);
+
+  final String label;
+
+  @override
+  Future<String> resolveSessionResortLabel(LocalRideSession session) async =>
+      label;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+LocalRideSession _buildSession(DateTime startedAt,
+    {String? resortId = 'Whistler'}) {
   return LocalRideSession(
     localId: 7,
     ownerUserId: 'user-1',
     remoteId: null,
-    resortId: 'Whistler',
+    resortId: resortId,
     startedAt: startedAt,
     endedAt: startedAt.add(const Duration(minutes: 6)),
     activeDurationS: 360,
@@ -156,6 +171,8 @@ void main() {
                   preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
+          sessionRepositoryProvider
+              .overrideWithValue(_FakeSessionRepository('Whistler')),
           favoriteResortsProvider
               .overrideWith((_) async => <ResortSummary>[_buildResort()]),
           resortWeatherProvider.overrideWith(
@@ -195,6 +212,8 @@ void main() {
                   preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
+          sessionRepositoryProvider
+              .overrideWithValue(_FakeSessionRepository('Whistler')),
           favoriteResortsProvider
               .overrideWith((_) async => <ResortSummary>[_buildResort()]),
           resortWeatherProvider.overrideWith(
@@ -212,7 +231,7 @@ void main() {
     expect(find.text('YOUR MOUNTAINS'), findsOneWidget);
   });
 
-  testWidgets('home recent session row renders formatted timestamp',
+  testWidgets('home last session card renders date column and data line',
       (WidgetTester tester) async {
     final startedAt = DateTime.utc(2026, 1, 1, 16, 30);
 
@@ -228,6 +247,8 @@ void main() {
                   preferences: AppPreferences.inMemory())),
           historyProvider.overrideWith(
               (_) async => <LocalRideSession>[_buildSession(startedAt)]),
+          sessionRepositoryProvider
+              .overrideWithValue(_FakeSessionRepository('Whistler')),
           favoriteResortsProvider
               .overrideWith((_) async => <ResortSummary>[_buildResort()]),
           resortWeatherProvider.overrideWith(
@@ -241,8 +262,49 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.textContaining(startedAt.toDayLabel()), findsOneWidget);
-    expect(find.textContaining(startedAt.toTimeLabel()), findsOneWidget);
+    expect(find.text('LAST SESSION'), findsOneWidget);
+    expect(find.text('JAN'), findsOneWidget);
+    expect(find.text('Whistler'), findsOneWidget);
+    expect(find.text('00:06 · MAX 64.8 KM/H'), findsOneWidget);
+    expect(find.textContaining('SYNCED'), findsNothing);
+    expect(find.textContaining('LOCAL ONLY'), findsNothing);
+  });
+
+  testWidgets('home last session card never renders a raw resort id',
+      (WidgetTester tester) async {
+    final startedAt = DateTime.utc(2026, 1, 1, 16, 30);
+    const opaqueResortId = '0b5a1c9e-1e5e-4a4a-9c8e-2f7b6d3a11ff';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authControllerProvider.overrideWith((_) => _FakeAuthController()),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          historyProvider.overrideWith((_) async => <LocalRideSession>[
+                _buildSession(startedAt, resortId: opaqueResortId),
+              ]),
+          sessionRepositoryProvider
+              .overrideWithValue(_FakeSessionRepository('Grouse Mountain')),
+          favoriteResortsProvider
+              .overrideWith((_) async => <ResortSummary>[_buildResort()]),
+          resortWeatherProvider.overrideWith(
+            (Ref ref, String resortId) async => null,
+          ),
+          unsyncedSessionCountProvider.overrideWith((_) async => 0),
+        ],
+        child: MaterialApp(theme: AppTheme.dark(), home: const HomeScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text(opaqueResortId), findsNothing);
+    expect(find.text('Grouse Mountain'), findsOneWidget);
   });
 
   testWidgets(

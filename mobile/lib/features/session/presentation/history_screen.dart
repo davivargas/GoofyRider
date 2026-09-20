@@ -5,11 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../../../app/router/route_paths.dart';
 import '../../../app/theme/app_theme.dart';
-import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
-import '../../../core/utils/distance_unit.dart';
-import '../../../core/utils/duration_formatting.dart';
+import '../../../core/providers/vertical_unit_preference_provider.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/utils/vertical_unit.dart';
 import '../../../core/widgets/app_empty_view.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
@@ -34,7 +33,7 @@ class HistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(historySectionsProvider);
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
-    final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final verticalUnit = ref.watch(verticalUnitPreferenceProvider);
     final unsyncedCount = ref.watch(unsyncedSessionCountProvider);
     final t = context.tokens;
 
@@ -96,16 +95,14 @@ class HistoryScreen extends ConsumerWidget {
                             in sections) ...<Widget>[
                           _SeasonHeader(
                               section: section,
-                              distanceUnit: distanceUnit,
+                              verticalUnit: verticalUnit,
                               speedUnit: speedUnit),
                           for (final SessionHistoryEntryViewModel item
                               in section.items)
                             Padding(
                               padding: const EdgeInsets.only(top: 10),
                               child: _HistorySessionCard(
-                                  item: item,
-                                  speedUnit: speedUnit,
-                                  distanceUnit: distanceUnit),
+                                  item: item, speedUnit: speedUnit),
                             ),
                         ],
                       ],
@@ -124,11 +121,11 @@ class HistoryScreen extends ConsumerWidget {
 class _SeasonHeader extends StatelessWidget {
   const _SeasonHeader(
       {required this.section,
-      required this.distanceUnit,
+      required this.verticalUnit,
       required this.speedUnit});
 
   final SessionHistorySeasonSection section;
-  final DistanceUnit distanceUnit;
+  final VerticalUnit verticalUnit;
   final SpeedUnit speedUnit;
 
   @override
@@ -150,6 +147,10 @@ class _SeasonHeader extends StatelessWidget {
         0,
         (double a, LocalRideSession s) =>
             s.maxSpeedMps > a ? s.maxSpeedMps : a);
+    final vertLabel = NumberFormat('#,###')
+        .format(verticalUnit.convertFromMeters(vert.toDouble()).round());
+    final topLabel =
+        speedUnit.convertFromMetersPerSecond(top).toStringAsFixed(1);
     return Padding(
       padding: const EdgeInsets.only(top: 20),
       child: Row(
@@ -159,6 +160,7 @@ class _SeasonHeader extends StatelessWidget {
           Text(
             shortSeasonLabel(section.label),
             style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  fontSize: 26,
                   foreground: Paint()
                     ..style = PaintingStyle.stroke
                     ..strokeWidth = 1.2
@@ -168,10 +170,11 @@ class _SeasonHeader extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: MonoLabel(
-              '$days days · ${distanceUnit.formatFromMeters(vert.toDouble())} vert · ${speedUnit.formatFromMetersPerSecond(top)} top',
-              size: 8,
-              tone: MonoTone.muted,
+              '$days ${days == 1 ? 'day' : 'days'} · $vertLabel ${verticalUnit.shortLabel} · MAX $topLabel ${speedUnit.shortLabel}',
+              size: 13,
+              letterSpacing: 0.78,
               maxLines: 1,
+              softWrap: false,
             ),
           ),
         ],
@@ -181,78 +184,22 @@ class _SeasonHeader extends StatelessWidget {
 }
 
 class _HistorySessionCard extends StatelessWidget {
-  const _HistorySessionCard(
-      {required this.item,
-      required this.speedUnit,
-      required this.distanceUnit});
+  const _HistorySessionCard({required this.item, required this.speedUnit});
 
   final SessionHistoryEntryViewModel item;
   final SpeedUnit speedUnit;
-  final DistanceUnit distanceUnit;
 
   @override
   Widget build(BuildContext context) {
-    final t = context.tokens;
     final session = item.session;
-    final local = session.startedAt.toLocal();
-    final (String syncLabel, Color syncColor) = switch (session.state) {
-      LocalSessionState.synced => ('● Synced', t.ice),
-      LocalSessionState.syncing => ('◌ Syncing', t.textSecondary),
-      LocalSessionState.syncFailed => ('! Failed', t.rec),
-      _ => ('○ Local only', t.textSecondary),
-    };
-
-    return SurfaceCard(
-      radius: 16,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+    return SessionDayCard(
+      date: session.startedAt,
+      title: item.resortLabel,
+      dataLine: sessionDataLine(session, speedUnit),
       onTap: session.localId > 0
           ? () => context.go(RoutePaths.sessionDetail
               .replaceAll(':sessionId', session.localId.toString()))
           : null,
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            width: 44,
-            child: Column(
-              children: <Widget>[
-                Text('${local.day}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontSize: 14)),
-                MonoLabel(DateFormat('MMM').format(local),
-                    size: 8, tone: MonoTone.muted, letterSpacing: 1),
-              ],
-            ),
-          ),
-          Container(width: 1, height: 36, color: t.line),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(item.resortLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 4),
-                MonoLabel(
-                  '${formatSecondsAsDuration(session.activeDurationS)} · ${distanceUnit.formatFromMeters(session.distanceM)} · ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)} max',
-                  size: 8,
-                  letterSpacing: 0.8,
-                  maxLines: 1,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          MonoLabel(syncLabel,
-              size: 7,
-              weight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: syncColor),
-        ],
-      ),
     );
   }
 }

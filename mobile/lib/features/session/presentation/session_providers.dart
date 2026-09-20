@@ -13,6 +13,7 @@ import '../data/native_android_tracking_repository.dart';
 import '../data/session_api.dart';
 import '../data/session_repository_impl.dart';
 import '../domain/location_tracking_repository.dart';
+import '../domain/session_models.dart';
 import '../domain/session_repository.dart';
 import 'history_view_models.dart';
 import 'recording_controller.dart';
@@ -107,6 +108,27 @@ final historySectionsProvider =
     );
   }
   return buildSessionHistorySections(items);
+});
+
+/// Newest session with its resort label resolved, for the home screen's
+/// "last session" card. `null` when there is no history yet.
+final latestSessionEntryProvider =
+    FutureProvider.autoDispose<SessionHistoryEntryViewModel?>((ref) async {
+  final sessions = await ref.watch(historyProvider.future);
+  if (sessions.isEmpty) {
+    return null;
+  }
+  final latest = sessions.reduce(
+    (LocalRideSession a, LocalRideSession b) =>
+        a.startedAt.isAfter(b.startedAt) ? a : b,
+  );
+  final resortLabel = await ref
+      .watch(sessionRepositoryProvider)
+      .resolveSessionResortLabel(latest);
+  return SessionHistoryEntryViewModel(
+    session: latest,
+    resortLabel: resortLabel,
+  );
 });
 
 final sessionDetailProvider = FutureProvider.family.autoDispose(

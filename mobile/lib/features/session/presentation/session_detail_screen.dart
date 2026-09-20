@@ -438,27 +438,42 @@ class SessionDetailScreen extends ConsumerWidget {
             child: Row(
               children: <Widget>[
                 SegmentSwatch(type: segment.type),
-                const SizedBox(width: 12),
-                SizedBox(
-                    width: 64,
-                    child: MonoLabel(
-                        segment.type == SessionActivityType.descent
-                            ? 'Ride'
-                            : segment.type.label,
-                        size: 10,
-                        weight: FontWeight.w700,
-                        tone: MonoTone.primary)),
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 64),
+                  child: MonoLabel(
+                      segment.type == SessionActivityType.descent
+                          ? 'Ride'
+                          : segment.type.label,
+                      size: 12,
+                      weight: FontWeight.w700,
+                      tone: MonoTone.primary,
+                      softWrap: false),
+                ),
+                const SizedBox(width: 8),
                 MonoLabel(
                     '${segment.startedAt.toTimeLabel()}–${segment.endedAt.toTimeLabel()}',
-                    size: 9,
+                    size: 11,
                     tone: MonoTone.muted,
                     letterSpacing: 0.4,
-                    uppercase: false),
-                const Spacer(),
-                MonoLabel(
-                    '${formatSecondsAsDuration(segment.durationS)} · ${distanceUnit.formatFromMeters(segment.distanceM)}',
-                    size: 9,
-                    letterSpacing: 0.4),
+                    uppercase: false,
+                    softWrap: false),
+                const SizedBox(width: 8),
+                // Scales down instead of overflowing on narrow screens; the
+                // label and time cells to its left never shrink.
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: MonoLabel(
+                          '${formatSecondsCompact(segment.durationS)} · ${distanceUnit.formatFromMeters(segment.distanceM)}',
+                          size: 11,
+                          letterSpacing: 0.4,
+                          softWrap: false),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

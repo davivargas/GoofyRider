@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/theme/app_theme.dart';
 import '../../features/session/domain/session_models.dart';
 import '../constants/app_constants.dart';
+import '../utils/duration_formatting.dart';
+import '../utils/speed_unit.dart';
 
 enum MonoTone { primary, secondary, muted, faint, volt, ice, rec }
 
@@ -192,9 +195,103 @@ class SurfaceCard extends StatelessWidget {
   }
 }
 
+/// `14 runs · 04:12 · MAX 58.1 km/h`: run count, ride time, top speed.
+///
+/// [runs] is left out of the line when null. Sessions do not carry a run count
+/// yet, so callers only pass it where one is known.
+String sessionDataLine(
+  LocalRideSession session,
+  SpeedUnit speedUnit, {
+  int? runs,
+}) {
+  final max = speedUnit
+      .convertFromMetersPerSecond(session.maxSpeedMps)
+      .toStringAsFixed(1);
+  return <String>[
+    if (runs != null) '$runs runs',
+    formatSecondsAsHoursMinutes(session.activeDurationS),
+    'MAX $max ${speedUnit.shortLabel}',
+  ].join(' · ');
+}
+
+/// One ride day: date column, hairline divider, resort name over a data line.
+/// Shared by the Seasons list and the Home "Last session" card.
+class SessionDayCard extends StatelessWidget {
+  const SessionDayCard({
+    super.key,
+    required this.date,
+    required this.title,
+    required this.dataLine,
+    this.onTap,
+  });
+
+  final DateTime date;
+  final String title;
+  final String dataLine;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final local = date.toLocal();
+    return SurfaceCard(
+      radius: 16,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      onTap: onTap,
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 44,
+            child: Column(
+              children: <Widget>[
+                Text(
+                  '${local.day}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontSize: 16),
+                ),
+                MonoLabel(
+                  DateFormat('MMM').format(local),
+                  size: 10,
+                  tone: MonoTone.muted,
+                  letterSpacing: 1,
+                ),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 36, color: t.line),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                MonoLabel(
+                  dataLine,
+                  size: 12,
+                  letterSpacing: 0.24,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 enum PillVariant { rec, volt, ice, ghost, muted }
 
-/// Small rounded status chip (REC, DESCENT, GPS, SYNCED...).
+/// Small rounded status chip (REC, DESCENT, GPS...).
 class StatusPill extends StatelessWidget {
   const StatusPill(
     this.text, {

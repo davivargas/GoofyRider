@@ -414,7 +414,9 @@ void main() {
     await tester.scrollUntilVisible(find.text('TIMELINE'), 200,
         scrollable: find.byType(Scrollable).first);
     expect(find.text('TIMELINE'), findsOneWidget);
-    expect(find.textContaining('00:02:00'), findsWidgets);
+    expect(find.textContaining('02:00 ·'), findsWidgets);
+    expect(find.textContaining('SYNCED'), findsNothing);
+    expect(find.textContaining('LOCAL ONLY'), findsNothing);
   });
 
   testWidgets('session detail screen falls back without timeline data',

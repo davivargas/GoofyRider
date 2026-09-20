@@ -207,7 +207,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('25/26'), findsOneWidget);
     expect(find.text('Whistler Blackcomb'), findsOneWidget);
-    expect(find.textContaining('00:06:00'), findsOneWidget);
-    expect(find.textContaining('LOCAL ONLY'), findsOneWidget);
+    expect(find.text('1 DAY · 200 M · MAX 66.6 KM/H'), findsOneWidget);
+    expect(find.text('00:06 · MAX 66.6 KM/H'), findsOneWidget);
+    expect(find.textContaining('LOCAL ONLY'), findsNothing);
+    expect(find.textContaining('SYNCED'), findsNothing);
   });
 }

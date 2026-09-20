@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/providers/distance_unit_preference_provider.dart';
 import '../../core/providers/speed_unit_preference_provider.dart';
-import '../../core/utils/date_time_formatting.dart';
 import '../../core/providers/vertical_unit_preference_provider.dart';
 import '../../core/utils/distance_unit.dart';
 import '../../core/utils/duration_formatting.dart';
@@ -17,6 +16,7 @@ import '../../features/auth/presentation/auth_providers.dart';
 import '../../features/resorts/domain/resort_models.dart';
 import '../../features/resorts/presentation/resort_providers.dart';
 import '../../features/session/domain/session_models.dart';
+import '../../features/session/presentation/history_view_models.dart';
 import '../../features/session/presentation/season_summary.dart';
 import '../../features/session/presentation/session_providers.dart';
 import '../../features/weather/domain/weather_models.dart';
@@ -36,6 +36,7 @@ class HomeScreen extends ConsumerWidget {
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
     final favorites = ref.watch(favoriteResortsProvider);
     final history = ref.watch(historyProvider);
+    final latestSession = ref.watch(latestSessionEntryProvider);
     final unsyncedCount = ref.watch(unsyncedSessionCountProvider);
     final showDebugDiagnostics = kDebugMode && AppConstants.isDebugDiagnostics;
     final t = context.tokens;
@@ -106,17 +107,17 @@ class HomeScreen extends ConsumerWidget {
                 error: (_, __) => const SizedBox.shrink(),
               ),
             const SizedBox(height: 26),
-            history.when(
+            latestSession.when(
               loading: () => const SizedBox.shrink(),
               error: (_, __) => const SizedBox.shrink(),
-              data: (List<LocalRideSession> sessions) {
-                if (sessions.isEmpty) {
+              data: (SessionHistoryEntryViewModel? latest) {
+                if (latest == null) {
                   return SurfaceCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         const MonoLabel('No sessions yet',
-                            size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                            size: 10, tone: MonoTone.muted, letterSpacing: 1.8),
                         const SizedBox(height: 10),
                         Text('Ready for your next run?',
                             style: Theme.of(context).textTheme.titleMedium),
@@ -128,18 +129,11 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   );
                 }
-                final latest = sessions.reduce(
-                  (LocalRideSession a, LocalRideSession b) =>
-                      a.startedAt.isAfter(b.startedAt) ? a : b,
-                );
-                return _LastSessionCard(
-                    session: latest,
-                    distanceUnit: distanceUnit,
-                    speedUnit: speedUnit);
+                return _LastSessionCard(entry: latest, speedUnit: speedUnit);
               },
             ),
             const SizedBox(height: 26),
-            const MonoLabel('Your mountains', size: 9, letterSpacing: 1.8),
+            const MonoLabel('Your mountains', size: 11, letterSpacing: 1.8),
             const SizedBox(height: 12),
             favorites.when(
               loading: () => const SizedBox(
@@ -249,69 +243,30 @@ class _SeasonHero extends StatelessWidget {
   }
 }
 
-String _kilometers(double meters, DistanceUnit unit) {
-  if (unit == DistanceUnit.feet) {
-    return (meters / 1609.344).toStringAsFixed(1);
-  }
-  return (meters / 1000).toStringAsFixed(1);
-}
+class _LastSessionCard extends StatelessWidget {
+  const _LastSessionCard({required this.entry, required this.speedUnit});
 
-String _distanceLabel(DistanceUnit unit) =>
-    unit == DistanceUnit.feet ? 'MI dist' : 'KM dist';
-
-class _LastSessionCard extends ConsumerWidget {
-  const _LastSessionCard(
-      {required this.session,
-      required this.distanceUnit,
-      required this.speedUnit});
-
-  final LocalRideSession session;
-  final DistanceUnit distanceUnit;
+  final SessionHistoryEntryViewModel entry;
   final SpeedUnit speedUnit;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final synced = session.state == LocalSessionState.synced;
-    return SurfaceCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      onTap: session.localId > 0
-          ? () => context.go(RoutePaths.sessionDetail
-              .replaceAll(':sessionId', session.localId.toString()))
-          : null,
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                MonoLabel(
-                  'LAST SESSION · ${session.startedAt.toDayLabel()}',
-                  size: 8,
-                  tone: MonoTone.muted,
-                  letterSpacing: 1.8,
-                  uppercase: false,
-                ),
-                const SizedBox(height: 5),
-                Text(session.resortId ?? 'Unknown resort',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontSize: 18)),
-                const SizedBox(height: 5),
-                MonoLabel(
-                  '${session.startedAt.toTimeLabel()} · ${formatSecondsAsDuration(session.activeDurationS)} ride · ${distanceUnit.formatFromMeters(session.distanceM)} · ${speedUnit.formatFromMetersPerSecond(session.maxSpeedMps)} max',
-                  size: 9,
-                  letterSpacing: 0.8,
-                  maxLines: 2,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          StatusPill(synced ? '● Synced' : '○ Local only',
-              variant: synced ? PillVariant.ice : PillVariant.muted),
-        ],
-      ),
+  Widget build(BuildContext context) {
+    final session = entry.session;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const MonoLabel('Last session', size: 11, letterSpacing: 1.76),
+        const SizedBox(height: 10),
+        SessionDayCard(
+          date: session.startedAt,
+          title: entry.resortLabel,
+          dataLine: sessionDataLine(session, speedUnit),
+          onTap: session.localId > 0
+              ? () => context.go(RoutePaths.sessionDetail
+                  .replaceAll(':sessionId', session.localId.toString()))
+              : null,
+        ),
+      ],
     );
   }
 }
