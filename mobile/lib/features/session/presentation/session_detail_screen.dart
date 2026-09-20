@@ -362,7 +362,7 @@ class SessionDetailScreen extends ConsumerWidget {
       BuildContext context,
       SessionDetail detail,
       MapTileProviderConfig activeMapTileProviderConfig,
-      TileProvider tileProvider) {
+      TileProvider? tileProvider) {
     final t = context.tokens;
     final routePoints = detail.acceptedPoints.isNotEmpty
         ? detail.acceptedPoints

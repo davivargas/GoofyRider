@@ -34,11 +34,17 @@ final activeMapTileProviderConfigProvider = Provider<MapTileProviderConfig>(
       'activeMapTileProviderConfigProvider must be overridden at app bootstrap'),
 );
 
-/// The [TileProvider] `FlutterMap` screens fetch tile images through.
+/// The [TileProvider] `FlutterMap` screens fetch tile images through, or
+/// `null` to let each `TileLayer` build (and own) its own provider.
 ///
-/// Defaults to the real network provider; widget tests override this with a
-/// no-op provider (see `test/support/noop_tile_provider.dart`) so that
-/// rendering a `FlutterMap` never performs network I/O.
-final mapTileProviderProvider = Provider<TileProvider>(
-  (ref) => NetworkTileProvider(),
-);
+/// `null` is the production value on purpose: `TileLayer` falls back to a
+/// fresh `NetworkTileProvider()` per layer, and `TileLayerState.dispose()`
+/// disposes it. A single shared `NetworkTileProvider` here would have its
+/// HTTP client closed by whichever map screen is torn down first, leaving
+/// every later screen throwing "Client is already closed" on every tile.
+///
+/// Widget tests override this with a no-op provider (see
+/// `test/support/noop_tile_provider.dart`) so that rendering a `FlutterMap`
+/// never performs network I/O; sharing one such instance across layers is
+/// safe because `TileProvider.dispose()` is a no-op.
+final mapTileProviderProvider = Provider<TileProvider?>((ref) => null);
