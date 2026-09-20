@@ -7,7 +7,12 @@ from app.scripts.review_catalog_matches import build_argument_parser
 
 def test_list_defaults_to_all_sources() -> None:
     args = build_argument_parser().parse_args(["list"])
-    assert args.command == "list" and args.source is None
+    assert args.command == "list" and args.source is None and args.legacy is False
+
+
+def test_list_accepts_the_legacy_flag() -> None:
+    args = build_argument_parser().parse_args(["list", "--legacy"])
+    assert args.command == "list" and args.legacy is True
 
 
 def test_link_parses_uuid() -> None:

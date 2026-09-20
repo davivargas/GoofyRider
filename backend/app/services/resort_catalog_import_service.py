@@ -31,9 +31,11 @@ from app.services.resort_matching import MatchKind
 from app.services.resort_matching import MatchQuery
 from app.services.resort_matching import ResortCandidate
 from app.services.resort_matching import match_resort
+from app.services.resort_merge_service import TEXT_FIELD_LIMITS
 from app.services.resort_merge_service import MergeSummary
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_merge_service import view_for_record
+from app.services.resort_plausibility import clamp_text
 from app.services.resort_source_record_service import RecordUpsertSummary
 from app.services.resort_source_record_service import ResortSourceRecordService
 
@@ -41,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 
 class OpenSkiDataSourceProtocol(Protocol):
+    @property
+    def countries(self) -> frozenset[str] | None: ...
+
     def snapshot_built_at(self) -> datetime | None: ...
 
     def iter_ski_areas(self) -> Iterator[ExternalSourceRecord]: ...
@@ -96,7 +101,10 @@ class ResortCatalogImportService:
     ) -> CatalogImportSummary:
         run_started_at = self._clock()
         records = self._record_service.upsert_records(
-            SOURCE_OPENSKIDATA, source.iter_ski_areas(), run_started_at
+            SOURCE_OPENSKIDATA,
+            source.iter_ski_areas(),
+            run_started_at,
+            mark_missing=source.countries is None,
         )
         auto, primary, pending = self.link_records(SOURCE_OPENSKIDATA, options)
         self.review_legacy_resorts()
@@ -141,32 +149,41 @@ class ResortCatalogImportService:
     def link_records(self, source: str, options: CatalogImportOptions) -> tuple[int, int, int]:
         """Link every matchable record of `source`. Candidate pool is built once per call."""
         auto = primary = pending = 0
-        primary_ids = {
-            r.resort_id
-            for r in self._records.list_by_source(SOURCE_OPENSKIDATA)
-            if r.match_status == "linked" and r.resort_id is not None
-        }
+        is_openskidata = source == SOURCE_OPENSKIDATA
+        primary_ids: set[uuid.UUID] = (
+            {
+                r.resort_id
+                for r in self._records.list_by_source(SOURCE_OPENSKIDATA)
+                if r.match_status == "linked" and r.resort_id is not None
+            }
+            if is_openskidata
+            else set()
+        )
         pool: dict[uuid.UUID, ResortCandidate] = {
             resort.id: _candidate_from_resort(resort, has_primary=resort.id in primary_ids)
             for resort in self._resorts.list_all_for_matching()
         }
+        # Kept in step with the links made below instead of rebuilt from `pool` per record:
+        # every resort a record may still claim. `match_resort` breaks ties on resort_id, so
+        # the set's iteration order does not affect any decision.
+        eligible_ids = set(pool) - primary_ids if is_openskidata else set(pool)
         for record in self._records.list_by_source(source):
             if not _should_match(record, options):
                 continue
-            if source == SOURCE_OPENSKIDATA and record.resort_id is not None:
+            if is_openskidata and record.resort_id is not None:
                 primary_ids.discard(record.resort_id)  # re-matching an auto link frees its resort
-            eligible = [
-                c
-                for rid, c in pool.items()
-                if source != SOURCE_OPENSKIDATA or rid not in primary_ids
-            ]
-            decision = match_resort(_query_for(view_for_record(record)), eligible)
+                if record.resort_id in pool:
+                    eligible_ids.add(record.resort_id)
+            decision = match_resort(
+                _query_for(view_for_record(record)), [pool[rid] for rid in eligible_ids]
+            )
             if decision.kind is MatchKind.AUTO and decision.resort_id is not None:
                 _link(record, decision.resort_id, "auto", decision.score)
-                if source == SOURCE_OPENSKIDATA:
+                if is_openskidata:
                     primary_ids.add(decision.resort_id)
+                    eligible_ids.discard(decision.resort_id)
                 auto += 1
-            elif decision.kind is MatchKind.NONE and source == SOURCE_OPENSKIDATA:
+            elif decision.kind is MatchKind.NONE and is_openskidata:
                 resort = _new_resort(view_for_record(record))
                 self._resorts.add(resort)
                 self._resorts.flush()
@@ -256,14 +273,14 @@ def _link(
 def _new_resort(view: SourceResortView) -> Resort:
     return Resort(
         id=uuid.uuid4(),
-        name=view.name or "Unnamed ski area",
-        country=view.country or "Unknown",
-        region=view.region or "Unknown",
-        city=view.city,
+        name=clamp_text(view.name, TEXT_FIELD_LIMITS["name"]) or "Unnamed ski area",
+        country=clamp_text(view.country, TEXT_FIELD_LIMITS["country"]) or "Unknown",
+        region=clamp_text(view.region, TEXT_FIELD_LIMITS["region"]) or "Unknown",
+        city=clamp_text(view.city, TEXT_FIELD_LIMITS["city"]),
         latitude=view.latitude,
         longitude=view.longitude,
         country_code=view.country_code,
-        region_code=view.region_code,
+        region_code=clamp_text(view.region_code, TEXT_FIELD_LIMITS["region_code"]),
         is_active=True,
         name_aliases=[],
         field_provenance={},

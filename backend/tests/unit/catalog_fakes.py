@@ -128,6 +128,12 @@ class FakeRecordRepository:
     def list_unlinked(self, source: str) -> list[ResortSourceRecord]:
         return [r for r in self.list_pending_review(source) if r.resort_id is None]
 
+    def list_legacy_with_candidates(self) -> list[ResortSourceRecord]:
+        return sorted(
+            (r for r in self.records if r.match_method == "legacy" and r.match_candidates),
+            key=lambda r: r.external_id,
+        )
+
     def add(self, record: ResortSourceRecord) -> None:
         if record.id is None:
             record.id = uuid.uuid4()
@@ -136,6 +142,8 @@ class FakeRecordRepository:
     def mark_missing_except(
         self, source: str, seen_external_ids: Collection[str], missing_since: datetime
     ) -> int:
+        if not seen_external_ids:
+            return 0
         count = 0
         for record in self.records:
             if (
@@ -261,13 +269,19 @@ class FakeLiftRepository:
 class FixtureOpenSkiDataSource:
     """Reads the checked-in fixture directory; never touches the network."""
 
-    def __init__(self, countries: frozenset[str] | None = None) -> None:
+    def __init__(
+        self, countries: frozenset[str] | None = None, local_dir: Path | None = None
+    ) -> None:
         self._inner = OpenSkiDataSource(
             base_url="https://unused.test",
             timeout_seconds=1,
-            local_dir=FIXTURES,
+            local_dir=local_dir or FIXTURES,
             countries=countries,
         )
+
+    @property
+    def countries(self) -> frozenset[str] | None:
+        return self._inner.countries
 
     def snapshot_built_at(self) -> datetime | None:
         return self._inner.snapshot_built_at()

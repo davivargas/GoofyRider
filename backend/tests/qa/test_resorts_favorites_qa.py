@@ -14,7 +14,6 @@ from app.repositories.resort_lift_repository import ResortLiftRepository
 from app.repositories.resort_repository import ResortRepository
 from app.repositories.resort_source_record_repository import ResortSourceRecordRepository
 from app.services.exceptions import ValidationError
-from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_review_service import ResortReviewService
 from tests.qa.catalog_helpers import run_fixture_import
@@ -223,7 +222,6 @@ def test_ski_api_only_record_appears_after_operator_creates_it(
         merge_service=ResortMergeService(
             ResortRepository(db), records, ResortFieldOverrideRepository(db), lifts
         ),
-        lift_sync_service=ResortLiftSyncService(records, lifts),
     )
     new_id = service.create("ski_api", "big-white")
 
@@ -256,7 +254,6 @@ def test_rejected_record_never_surfaces(client: TestClient, db: Session) -> None
         merge_service=ResortMergeService(
             ResortRepository(db), records, ResortFieldOverrideRepository(db), lifts
         ),
-        lift_sync_service=ResortLiftSyncService(records, lifts),
     )
 
     service.reject("ski_api", "ghost")

@@ -115,3 +115,21 @@ def test_sync_keeps_lifts_for_area_marked_missing() -> None:
 
     assert [lift.external_track_id for lift in lifts.list_by_resort(grouse.id)] == ["osm:way:1001"]
     assert summary.deleted == 0
+
+
+def test_empty_snapshot_for_a_resort_keeps_its_overpass_lifts() -> None:
+    grouse = Resort(id=uuid.uuid4(), name="Grouse Mountain", country="Canada", region="BC")
+    overpass = ResortLift(
+        resort_id=grouse.id,
+        name="Old Overpass Chair",
+        external_track_id="osm:way:999",
+        source="overpass",
+    )
+    records = FakeRecordRepository([_linked("osd-grouse", grouse)])
+    lifts = FakeLiftRepository([overpass])
+
+    summary = ResortLiftSyncService(record_repository=records, lift_repository=lifts).sync([])
+
+    # Nothing replaced them, so the legacy catalog survives instead of leaving the resort liftless.
+    assert [lift.external_track_id for lift in lifts.list_by_resort(grouse.id)] == ["osm:way:999"]
+    assert summary.deleted == 0

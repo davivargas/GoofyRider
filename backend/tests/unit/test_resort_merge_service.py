@@ -130,9 +130,55 @@ def test_override_beats_every_source() -> None:
 def test_not_null_columns_keep_unvalidated_or_current_values() -> None:
     result = _merge([LinkedView(_view(name="x" * 130, country=None, region=None), missing=False)])
 
-    assert result.name == "x" * 130 and result.provenance["name"] == "unvalidated"
+    # The `unvalidated` fallback routes past check_name, so the clamp is what keeps the
+    # value inside resorts.name (String(120)).
+    assert result.name == "x" * 120 and result.provenance["name"] == "unvalidated"
     assert result.country == "Old Country" and result.provenance["country"] == "none"
     assert result.region == "Old Region"
+
+
+def test_overlong_source_text_is_clamped_to_its_column_length() -> None:
+    result = _merge(
+        [
+            LinkedView(
+                _view(
+                    name="n" * 200,
+                    country="c" * 200,
+                    region="r" * 200,
+                    city="y" * 200,
+                    region_code="g" * 40,
+                ),
+                missing=False,
+            )
+        ]
+    )
+
+    assert len(result.name) == 120 and result.name == "n" * 120
+    assert len(result.country) == 100 and len(result.region) == 100
+    assert result.city is not None and len(result.city) == 100
+    assert result.region_code is not None and len(result.region_code) == 10
+
+
+def test_overlong_text_override_is_clamped() -> None:
+    result = _merge([LinkedView(_view(), missing=False)], {"name": "z" * 200})
+
+    assert result.name == "z" * 120 and result.provenance["name"] == "manual"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("elevation_top_m", "high"),
+        ("elevation_base_m", 12.5),
+        ("latitude", "north"),
+        ("longitude", None),
+        ("is_active", "yes"),
+        ("city", 7),
+    ],
+)
+def test_malformed_override_raises_validation_error(field: str, value: Any) -> None:
+    with pytest.raises(ValidationError, match=f"Invalid override {field!r}"):
+        _merge([LinkedView(_view(), missing=False)], {field: value})
 
 
 def test_coordinates_outside_boundary_fall_through() -> None:

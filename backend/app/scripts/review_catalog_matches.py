@@ -1,12 +1,13 @@
 """Resolve pending catalog matches.
 
 Usage (from backend/):
-    python -m app.scripts.review_catalog_matches list [--source openskidata|ski_api]
+    python -m app.scripts.review_catalog_matches list [--source openskidata|ski_api] [--legacy]
     python -m app.scripts.review_catalog_matches link openskidata <external_id> <resort_uuid>
     python -m app.scripts.review_catalog_matches reject openskidata <external_id>
     python -m app.scripts.review_catalog_matches create ski_api <slug>
 
-Lifts for a newly linked OpenSkiData record are written on the next import_catalog run.
+Lifts for a resort linked through the review script are written by the next `import_catalog`
+run. (Spec 7.1 says each resolution writes that ski area's lifts; this deviates on purpose.)
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ from app.repositories.resort_lift_repository import ResortLiftRepository
 from app.repositories.resort_repository import ResortRepository
 from app.repositories.resort_source_record_repository import ResortSourceRecordRepository
 from app.services.exceptions import ServiceError
-from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_review_service import ResortReviewService
 
@@ -36,6 +36,11 @@ def build_argument_parser() -> ArgumentParser:
 
     list_cmd = commands.add_parser("list", help="Show records waiting for review.")
     list_cmd.add_argument("--source", choices=SOURCES, default=None)
+    list_cmd.add_argument(
+        "--legacy",
+        action="store_true",
+        help="Show legacy records with match candidates instead of pending ones.",
+    )
 
     link_cmd = commands.add_parser("link", help="Link a record to an existing resort.")
     link_cmd.add_argument("source", choices=SOURCES)
@@ -64,12 +69,15 @@ def run(args: Namespace) -> int:
             merge_service=ResortMergeService(
                 resorts, records, ResortFieldOverrideRepository(db), lifts
             ),
-            lift_sync_service=ResortLiftSyncService(records, lifts),
         )
         if args.command == "list":
-            items = service.list_pending(args.source)
+            items = service.list_legacy() if args.legacy else service.list_pending(args.source)
             if not items:
-                print("No records pending review.")
+                print(
+                    "No legacy records with candidates."
+                    if args.legacy
+                    else "No records pending review."
+                )
             for item in items:
                 print(f"{item.source} {item.external_id} — {item.name or '(no name)'}")
                 for candidate in item.candidates:
@@ -77,6 +85,11 @@ def run(args: Namespace) -> int:
                         f"    {candidate.get('score')}  {candidate.get('name')}  "
                         f"{candidate.get('resort_id')}  {candidate.get('distance_m')} m"
                     )
+                    if args.legacy:
+                        print(
+                            f"        external_id={candidate.get('external_id')}  "
+                            f"linked_resort_id={candidate.get('linked_resort_id')}"
+                        )
             return 0
         if args.command == "link":
             service.link(args.source, args.external_id, args.resort_id)

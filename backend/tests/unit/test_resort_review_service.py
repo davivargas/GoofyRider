@@ -9,7 +9,6 @@ from app.models.resort_source_record import ResortSourceRecord
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
-from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_review_service import ResortReviewService
 from tests.unit.catalog_fakes import FakeLiftRepository
@@ -73,7 +72,6 @@ def _build(resorts: list[Resort], records: list[ResortSourceRecord]):  # type: i
         resort_repository=resort_repo,  # type: ignore[arg-type]
         record_repository=record_repo,
         merge_service=merge,
-        lift_sync_service=ResortLiftSyncService(record_repo, lift_repo),
     )
     return service, resort_repo, record_repo
 
@@ -181,3 +179,39 @@ def test_actions_require_pending_status() -> None:
 
     with pytest.raises(ValidationError):
         service.create("openskidata", "osd-x")
+
+
+def test_list_legacy_reports_candidates_that_list_pending_cannot_show() -> None:
+    legacy = ResortSourceRecord(
+        id=uuid.uuid4(),
+        source="ski_api",
+        external_id="big-white",
+        payload={"slug": "big-white", "name": "Big White", "country": "CA", "region": "BC"},
+        content_hash="h",
+        fetched_at=NOW,
+        resort_id=uuid.uuid4(),
+        match_status="linked",
+        match_method="legacy",
+        match_candidates=[
+            {
+                "resort_id": "r-1",
+                "name": "Big White Ski Resort",
+                "score": 0.62,
+                "external_id": "osd-big-white",
+                "linked_resort_id": None,
+            }
+        ],
+    )
+    service, _, _ = _build([], [legacy, _pending()])
+
+    assert [i.external_id for i in service.list_pending(None)] == ["osd-x"]  # legacy is invisible
+    items = service.list_legacy()
+
+    assert len(items) == 1
+    assert (items[0].source, items[0].external_id, items[0].name) == (
+        "ski_api",
+        "big-white",
+        "Big White",
+    )
+    assert items[0].candidates[0]["external_id"] == "osd-big-white"
+    assert items[0].candidates[0]["linked_resort_id"] is None

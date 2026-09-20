@@ -7,8 +7,9 @@ It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 
 Copy `goofyrider/.env.example` to `goofyrider/.env` and
 `goofyrider/mobile/mapbox.json.example` to `goofyrider/mobile/mapbox.json`,
-then fill in your own SkiAPI key and Mapbox public token. Never commit or
-share the filled-in files.
+then fill in your Mapbox public token (a SkiAPI key is optional and only used
+by `import_catalog --source ski_api`). Never commit or share the filled-in
+files.
 Follow the steps in order on a single machine.
 
 ### 1. Install prerequisites
@@ -233,7 +234,7 @@ OpenSkiMap.org). Import or refresh the catalog explicitly; nothing runs at boot:
 
 ```bash
 python -m app.scripts.import_catalog                # full import from tiles.openskimap.org
-python -m app.scripts.import_catalog --countries CA # dev machines: one country
+python -m app.scripts.import_catalog --countries CA # dev machines: one country (a filtered run never deactivates resorts; only a full run does)
 python -m app.scripts.import_catalog --path /data   # offline: metadata.json, ski_areas.geojson, lifts.geojson
 python -m app.scripts.import_catalog --merge-only   # re-run the merge after an override
 ```
@@ -248,11 +249,16 @@ are held for review instead of merged:
 
 ```bash
 python -m app.scripts.review_catalog_matches list
+python -m app.scripts.review_catalog_matches list --legacy  # legacy rows and their candidates
 python -m app.scripts.review_catalog_matches link openskidata <external_id> <resort_uuid>
 python -m app.scripts.review_catalog_matches reject openskidata <external_id>
 ```
 
-Manual field fixes go in `resort_field_overrides` and beat every source.
+Lifts for a resort linked through the review script are written by the next
+`import_catalog` run.
+
+Manual field fixes go in `resort_field_overrides` (inserted by a DBA for now;
+an override command is planned) and beat every source.
 
 Attribution: the app shows "Data from OpenSkiData / OpenSkiMap.org,
 © OpenStreetMap contributors (ODbL), Skimap.org, Who's On First,

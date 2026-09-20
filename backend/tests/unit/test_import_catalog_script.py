@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.config import AppSettings
 import app.scripts.import_catalog as import_catalog_module
 from app.scripts.import_catalog import build_argument_parser
 from app.scripts.import_catalog import main
@@ -42,7 +43,10 @@ def test_invalid_source_is_rejected() -> None:
 
 
 def test_ski_api_source_without_key_exits_with_code_2(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SKI_API_KEY", raising=False)
+    # Patch the settings object, not the env: a developer .env holding a real key must never
+    # let this test fall through the guard and reach the live API.
+    keyless = AppSettings(jwt_secret_key="k" * 32, ski_api_key=None)
+    monkeypatch.setattr(import_catalog_module, "get_settings", lambda: keyless)
 
     assert main(["--source", "ski_api"]) == 2
 

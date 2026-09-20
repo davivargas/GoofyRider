@@ -12,7 +12,16 @@ ELEVATION_MIN_M = 0
 ELEVATION_MAX_M = 6000
 ENVELOPE_TOLERANCE_M = 150
 NAME_MAX_LENGTH = 120
+TEXT_MAX_LENGTH = 100
+REGION_CODE_MAX_LENGTH = 10
 _COUNTRY_CODE = re.compile(r"^[A-Z]{2}$")
+
+
+def clamp_text(value: str | None, max_length: int) -> str | None:
+    """Fit third-party text into a length-limited column. `None` stays `None`."""
+    if value is None:
+        return None
+    return value.strip()[:max_length]
 
 
 def check_text(value: str | None) -> bool:

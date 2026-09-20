@@ -24,20 +24,34 @@ from app.services.catalog_types import SourceResortView
 from app.services.exceptions import ValidationError
 from app.services.openskidata_mapping import ACTIVE_STATUSES
 from app.services.openskidata_mapping import map_ski_area
+from app.services.resort_plausibility import NAME_MAX_LENGTH
+from app.services.resort_plausibility import REGION_CODE_MAX_LENGTH
+from app.services.resort_plausibility import TEXT_MAX_LENGTH
 from app.services.resort_plausibility import check_coordinates
 from app.services.resort_plausibility import check_country_code
 from app.services.resort_plausibility import check_elevations
 from app.services.resort_plausibility import check_name
 from app.services.resort_plausibility import check_text
+from app.services.resort_plausibility import clamp_text
 from app.services.ski_api_mapping import map_ski_api_view
 
 logger = logging.getLogger(__name__)
 
 PRECEDENCE: tuple[str, ...] = (SOURCE_OPENSKIDATA, SOURCE_SKI_API)
 PROVENANCE_MANUAL = "manual"
+PROVENANCE_RULE = "rule"
 PROVENANCE_DERIVED_LIFTS = "derived_lifts"
 PROVENANCE_UNVALIDATED = "unvalidated"
 PROVENANCE_NONE = "none"
+
+#: Mergeable text fields and the length of their `resorts` column.
+TEXT_FIELD_LIMITS: dict[str, int] = {
+    "name": NAME_MAX_LENGTH,
+    "country": TEXT_MAX_LENGTH,
+    "region": TEXT_MAX_LENGTH,
+    "city": TEXT_MAX_LENGTH,
+    "region_code": REGION_CODE_MAX_LENGTH,
+}
 
 _VIEW_MAPPERS: dict[str, Callable[[Mapping[str, Any]], SourceResortView]] = {
     SOURCE_OPENSKIDATA: map_ski_area,
@@ -122,6 +136,18 @@ def _pick_required(
     return current, PROVENANCE_NONE
 
 
+def _override_float(field: str, value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValidationError(f"Invalid override {field!r} for resort: {value!r}")
+    return float(value)
+
+
+def _override_int(field: str, value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValidationError(f"Invalid override {field!r} for resort: {value!r}")
+    return value
+
+
 def compute_merge(
     *,
     current_name: str,
@@ -158,6 +184,10 @@ def compute_merge(
         ordered, lambda v: v.region_code, check_text
     )
     values["city"], provenance["city"] = _pick(ordered, lambda v: v.city, check_text)
+    # Third-party text is unbounded; the columns are not. Clamp before anything downstream
+    # (including the `unvalidated` fallback, which bypasses the length check).
+    for field, max_length in TEXT_FIELD_LIMITS.items():
+        values[field] = clamp_text(values[field], max_length)
 
     latitude: float | None = None
     longitude: float | None = None
@@ -192,22 +222,29 @@ def compute_merge(
         )
         for lv in views
     )
-    provenance["is_active"] = "rule" if views else PROVENANCE_NONE
+    provenance["is_active"] = PROVENANCE_RULE if views else PROVENANCE_NONE
 
     for field, value in overrides.items():
-        if field in ("latitude", "longitude", "elevation_base_m", "elevation_top_m", "is_active"):
+        if field in ("latitude", "longitude"):
+            coordinate = _override_float(field, value)
             if field == "latitude":
-                latitude = float(value)
-            elif field == "longitude":
-                longitude = float(value)
-            elif field == "elevation_base_m":
-                base_m = int(value)
-            elif field == "elevation_top_m":
-                top_m = int(value)
+                latitude = coordinate
             else:
-                is_active = bool(value)
+                longitude = coordinate
+        elif field in ("elevation_base_m", "elevation_top_m"):
+            elevation = _override_int(field, value)
+            if field == "elevation_base_m":
+                base_m = elevation
+            else:
+                top_m = elevation
+        elif field == "is_active":
+            if not isinstance(value, bool):
+                raise ValidationError(f"Invalid override {field!r} for resort: {value!r}")
+            is_active = value
         else:
-            values[field] = value
+            if not isinstance(value, str):
+                raise ValidationError(f"Invalid override {field!r} for resort: {value!r}")
+            values[field] = clamp_text(value, TEXT_FIELD_LIMITS.get(field, TEXT_MAX_LENGTH))
         provenance[field] = PROVENANCE_MANUAL
 
     display_name = str(values["name"])

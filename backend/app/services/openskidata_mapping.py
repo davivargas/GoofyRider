@@ -147,8 +147,9 @@ def map_lift(feature: Mapping[str, Any]) -> ExternalLiftRecord | None:
     polyline = tuple((float(p[1]), float(p[0])) for p in positions)
     first, last = positions[0], positions[-1]
     has_altitudes = len(first) >= 3 and len(last) >= 3
-    base_alt = float(first[2]) if has_altitudes else None
-    top_alt = float(last[2]) if has_altitudes else None
+    # A downhill-digitised way puts the summit first; base/top are an envelope, not endpoints.
+    base_alt = min(float(first[2]), float(last[2])) if has_altitudes else None
+    top_alt = max(float(first[2]), float(last[2])) if has_altitudes else None
 
     track_id = f"openskidata:{external_id}"
     sources = props.get("sources")

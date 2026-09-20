@@ -60,6 +60,11 @@ class OpenSkiDataSource:
         self._snapshot_built_at: datetime | None = None
         self._metadata_loaded = False
 
+    @property
+    def countries(self) -> frozenset[str] | None:
+        """ISO codes this snapshot is filtered to, or `None` for the whole catalog."""
+        return self._countries
+
     def __enter__(self) -> OpenSkiDataSource:
         return self
 

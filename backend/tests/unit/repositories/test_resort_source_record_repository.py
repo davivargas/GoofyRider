@@ -84,6 +84,45 @@ def test_mark_missing_except_sets_only_unseen_and_unset(
     assert other is not None and other.missing_since is None
 
 
+def test_mark_missing_except_with_no_seen_ids_marks_nothing(
+    db: Session, create_resort: Callable[..., Resort]
+) -> None:
+    resort = create_resort()
+    repo = ResortSourceRecordRepository(db)
+    repo.add(_record(external_id="a", resort=resort))
+    repo.add(_record(external_id="b", resort=resort))
+    repo.commit()
+
+    # An empty snapshot means the fetch failed, not that the source emptied out.
+    count = repo.mark_missing_except("openskidata", set(), NOW)
+    repo.commit()
+
+    assert count == 0
+    assert all(r.missing_since is None for r in repo.list_by_source("openskidata"))
+
+
+def test_list_legacy_with_candidates(db: Session, create_resort: Callable[..., Resort]) -> None:
+    resort = create_resort()
+    repo = ResortSourceRecordRepository(db)
+    with_candidates = _record(
+        source="ski_api", external_id="big-white", resort=resort, match_method="legacy"
+    )
+    with_candidates.match_candidates = [
+        {"resort_id": "r-1", "name": "Big White", "external_id": "osd-big-white"}
+    ]
+    repo.add(with_candidates)
+    repo.add(
+        _record(source="ski_api", external_id="a-legacy", resort=resort, match_method="legacy")
+    )
+    repo.add(_record(external_id="primary", resort=resort))
+    repo.commit()
+
+    found = repo.list_legacy_with_candidates()
+
+    assert [r.external_id for r in found] == ["big-white"]
+    assert found[0].match_candidates is not None
+
+
 def test_resort_repository_lists_without_source_and_stale(
     db: Session, create_resort: Callable[..., Resort]
 ) -> None:

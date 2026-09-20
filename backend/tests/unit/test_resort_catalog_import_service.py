@@ -1,6 +1,8 @@
 from datetime import UTC
 from datetime import datetime
 import json
+from pathlib import Path
+import shutil
 import uuid
 
 import pytest
@@ -173,8 +175,34 @@ def test_second_run_is_a_no_op() -> None:
     )
 
 
-def test_missing_record_deactivates_resort_on_next_run() -> None:
+def _shrunken_snapshot(tmp_path: Path, drop_id: str) -> Path:
+    """A copy of the fixture snapshot with one ski area genuinely removed."""
+    snapshot = tmp_path / "openskidata"
+    shutil.copytree(FIXTURES, snapshot)
+    areas_file = snapshot / "ski_areas.geojson"
+    areas = json.loads(areas_file.read_text(encoding="utf-8"))
+    areas["features"] = [f for f in areas["features"] if f["properties"].get("id") != drop_id]
+    areas_file.write_text(json.dumps(areas), encoding="utf-8")
+    return snapshot
+
+
+def test_missing_record_deactivates_resort_on_next_run(tmp_path: Path) -> None:
     service, resort_repo, _record_repo, _ = _build([], [])
+    service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+    grouse_us = next(r for r in resort_repo.resorts if r.country_code == "US")
+    resort_repo.dirty.add(grouse_us.id)
+    snapshot = _shrunken_snapshot(tmp_path, "osd-grouse-us")
+
+    summary = service.import_openskidata(
+        FixtureOpenSkiDataSource(local_dir=snapshot), CatalogImportOptions()
+    )
+
+    assert summary.records.marked_missing == 1
+    assert grouse_us.is_active is False
+
+
+def test_country_filtered_run_never_marks_records_missing() -> None:
+    service, resort_repo, record_repo, _ = _build([], [])
     service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
     grouse_us = next(r for r in resort_repo.resorts if r.country_code == "US")
     resort_repo.dirty.add(grouse_us.id)
@@ -183,8 +211,35 @@ def test_missing_record_deactivates_resort_on_next_run() -> None:
         FixtureOpenSkiDataSource(countries=frozenset({"CA"})), CatalogImportOptions()
     )
 
-    assert summary.records.marked_missing == 1
-    assert grouse_us.is_active is False
+    assert summary.records.marked_missing == 0
+    us_record = record_repo.get_by_source_and_external_id("openskidata", "osd-grouse-us")
+    assert us_record is not None and us_record.missing_since is None
+    assert grouse_us.is_active is True
+
+
+def test_new_resort_clamps_an_overlong_source_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    long_name = "L" * 200
+    snapshot = tmp_path / "openskidata"
+    shutil.copytree(FIXTURES, snapshot)
+    areas_file = snapshot / "ski_areas.geojson"
+    areas = json.loads(areas_file.read_text(encoding="utf-8"))
+    for feature in areas["features"]:
+        if feature["properties"].get("id") == "osd-cypress":
+            feature["properties"]["name"] = long_name
+    areas_file.write_text(json.dumps(areas), encoding="utf-8")
+    # The merge would clamp on its own; pin _new_resort's own clamp by neutering the merge.
+    monkeypatch.setattr(ResortMergeService, "merge_resort", lambda self, resort: False)
+
+    service, resort_repo, record_repo, _ = _build([], [])
+    service.import_openskidata(FixtureOpenSkiDataSource(local_dir=snapshot), CatalogImportOptions())
+
+    record = record_repo.get_by_source_and_external_id("openskidata", "osd-cypress")
+    assert record is not None and record.match_method == "primary"
+    created = resort_repo.get_by_id(record.resort_id)  # type: ignore[arg-type]
+    assert created is not None
+    assert created.name == "L" * 120 and len(created.name) == 120
 
 
 def test_manual_and_rejected_records_are_never_rematched() -> None:

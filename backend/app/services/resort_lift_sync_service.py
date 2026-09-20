@@ -68,13 +68,6 @@ class ResortLiftSyncService:
                 deleted += removed
         return LiftSyncSummary(upserted=upserted, deleted=deleted, skipped_unlinked=skipped)
 
-    def sync_for_record(
-        self, record: ResortSourceRecord, lifts: Sequence[ExternalLiftRecord]
-    ) -> int:
-        matching = [lift for lift in lifts if record.external_id in lift.ski_area_ids]
-        count, _ = self._write(record, matching)
-        return count
-
     def _write(
         self, record: ResortSourceRecord, lifts: Sequence[ExternalLiftRecord]
     ) -> tuple[int, int]:
@@ -97,7 +90,11 @@ class ResortLiftSyncService:
             )
             for lift in sorted(lifts, key=lambda item: item.external_track_id)
         ]
-        removed = self._lifts.delete_by_source_for_resort(resort_id, LIFT_SOURCE_OVERPASS)
+        # Overpass rows are the legacy catalog; drop them only when OpenSkiData rows replace
+        # them, never when this snapshot simply has no lifts for the resort.
+        removed = (
+            self._lifts.delete_by_source_for_resort(resort_id, LIFT_SOURCE_OVERPASS) if rows else 0
+        )
         count = self._lifts.upsert_by_external_track_id(resort_id, rows)
         removed += self._lifts.delete_missing_for_resort(
             resort_id,

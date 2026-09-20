@@ -14,9 +14,10 @@ from app.services.catalog_types import SOURCE_OPENSKIDATA
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import ValidationError
-from app.services.resort_lift_sync_service import ResortLiftSyncService
+from app.services.resort_merge_service import TEXT_FIELD_LIMITS
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_merge_service import view_for_record
+from app.services.resort_plausibility import clamp_text
 
 
 @dataclass(frozen=True)
@@ -33,12 +34,10 @@ class ResortReviewService:
         resort_repository: ResortRepositoryProtocol,
         record_repository: ResortSourceRecordRepositoryProtocol,
         merge_service: ResortMergeService,
-        lift_sync_service: ResortLiftSyncService,
     ) -> None:
         self._resorts = resort_repository
         self._records = record_repository
         self._merge = merge_service
-        self._lift_sync = lift_sync_service
 
     def list_pending(self, source: str | None) -> list[PendingItem]:
         items: list[PendingItem] = []
@@ -53,6 +52,18 @@ class ResortReviewService:
                 )
             )
         return items
+
+    def list_legacy(self) -> list[PendingItem]:
+        """Legacy records stay `linked`, so their candidates never reach `list_pending`."""
+        return [
+            PendingItem(
+                record.source,
+                record.external_id,
+                view_for_record(record).name,
+                list(record.match_candidates or []),
+            )
+            for record in self._records.list_legacy_with_candidates()
+        ]
 
     def link(self, source: str, external_id: str, resort_id: uuid.UUID) -> None:
         record = self._pending_record(source, external_id)
@@ -80,14 +91,14 @@ class ResortReviewService:
         view = view_for_record(record)
         resort = Resort(
             id=uuid.uuid4(),
-            name=view.name or external_id,
-            country=view.country or "Unknown",
-            region=view.region or "Unknown",
-            city=view.city,
+            name=clamp_text(view.name, TEXT_FIELD_LIMITS["name"]) or external_id,
+            country=clamp_text(view.country, TEXT_FIELD_LIMITS["country"]) or "Unknown",
+            region=clamp_text(view.region, TEXT_FIELD_LIMITS["region"]) or "Unknown",
+            city=clamp_text(view.city, TEXT_FIELD_LIMITS["city"]),
             latitude=view.latitude,
             longitude=view.longitude,
             country_code=view.country_code,
-            region_code=view.region_code,
+            region_code=clamp_text(view.region_code, TEXT_FIELD_LIMITS["region_code"]),
             is_active=True,
             name_aliases=[],
             field_provenance={},

@@ -1,12 +1,19 @@
 from collections.abc import Collection
 from datetime import datetime
+import logging
 import uuid
 
+from sqlalchemy import Text
+from sqlalchemy import cast
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import ARRAY
 
 from app.models.resort_source_record import ResortSourceRecord
 from app.repositories.base import SqlAlchemyRepository
+
+logger = logging.getLogger(__name__)
 
 
 class ResortSourceRecordRepository(SqlAlchemyRepository):
@@ -53,18 +60,36 @@ class ResortSourceRecordRepository(SqlAlchemyRepository):
         )
         return list(self._db.scalars(stmt).all())
 
+    def list_legacy_with_candidates(self) -> list[ResortSourceRecord]:
+        stmt = (
+            select(ResortSourceRecord)
+            .where(
+                ResortSourceRecord.match_method == "legacy",
+                ResortSourceRecord.match_candidates.is_not(None),
+            )
+            .order_by(ResortSourceRecord.external_id.asc())
+        )
+        return list(self._db.scalars(stmt).all())
+
     def add(self, record: ResortSourceRecord) -> None:
         self._db.add(record)
 
     def mark_missing_except(
         self, source: str, seen_external_ids: Collection[str], missing_since: datetime
     ) -> int:
+        if not seen_external_ids:
+            # An empty snapshot is a failed fetch, not an emptied catalog: marking here would
+            # take the whole source out of service.
+            logger.warning("Refusing to mark every %s record missing: no ids were seen.", source)
+            return 0
+        # One array bind instead of one literal per id: the full catalog is ~12k ski areas.
+        seen = select(func.unnest(cast(list(seen_external_ids), ARRAY(Text))))
         stmt = (
             update(ResortSourceRecord)
             .where(
                 ResortSourceRecord.source == source,
                 ResortSourceRecord.missing_since.is_(None),
-                ResortSourceRecord.external_id.not_in(list(seen_external_ids)),
+                ResortSourceRecord.external_id.not_in(seen),
             )
             .values(missing_since=missing_since)
         )

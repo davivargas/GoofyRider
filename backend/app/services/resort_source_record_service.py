@@ -37,7 +37,12 @@ class ResortSourceRecordService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def upsert_records(
-        self, source: str, records: Iterable[ExternalSourceRecord], run_started_at: datetime
+        self,
+        source: str,
+        records: Iterable[ExternalSourceRecord],
+        run_started_at: datetime,
+        *,
+        mark_missing: bool = True,
     ) -> RecordUpsertSummary:
         created = updated = unchanged = 0
         seen: set[str] = set()
@@ -84,7 +89,13 @@ class ResortSourceRecordService:
             existing.snapshot_built_at = external.snapshot_built_at
             updated += 1
         self._records.flush()
-        marked_missing = self._records.mark_missing_except(source, seen, run_started_at)
+        if mark_missing:
+            marked_missing = self._records.mark_missing_except(source, seen, run_started_at)
+        else:
+            # A filtered run only ever sees part of the catalog, so "not seen" does not mean
+            # "gone from the source"; marking would deactivate the whole out-of-filter catalog.
+            marked_missing = 0
+            logger.info("Filtered run: missing-marking disabled for %s", source)
         logger.info(
             "%s records: created=%d updated=%d unchanged=%d missing=%d",
             source,
