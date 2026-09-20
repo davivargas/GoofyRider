@@ -117,47 +117,6 @@ def test_jwt_secret_key_normalizes_whitespace(
     assert get_settings().jwt_secret_key == "12345678901234567890123456789012"
 
 
-def test_ski_api_base_url_normalizes_trailing_slash(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SKI_API_BASE_URL", " https://api.skiapi.com/v1/ ")
-
-    assert get_settings().ski_api_base_url == "https://api.skiapi.com/v1"
-
-
-def test_ski_api_key_returns_none_when_blank(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SKI_API_KEY", "   ")
-
-    assert get_settings().ski_api_key is None
-
-
-def test_ski_api_page_size_rejects_non_positive(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SKI_API_PAGE_SIZE", "0")
-
-    with pytest.raises(ValueError, match=r"SKI_API_PAGE_SIZE must be a positive integer."):
-        get_settings()
-
-
-def test_ski_api_timeout_seconds_from_env(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SKI_API_TIMEOUT_SECONDS", "25")
-
-    assert get_settings().ski_api_timeout_seconds == 25
-
-
-def test_ski_api_host_returns_none_when_blank(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SKI_API_HOST", "   ")
-
-    assert get_settings().ski_api_host is None
-
-
 def test_debug_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DEBUG", raising=False)
 

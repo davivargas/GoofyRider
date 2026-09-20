@@ -186,7 +186,12 @@ def test_list_legacy_reports_candidates_that_list_pending_cannot_show() -> None:
         id=uuid.uuid4(),
         source="ski_api",
         external_id="big-white",
-        payload={"slug": "big-white", "name": "Big White", "country": "CA", "region": "BC"},
+        payload={
+            "legacy": True,
+            "name": "Big White",
+            "country": "Canada",
+            "region": "British Columbia",
+        },
         content_hash="h",
         fetched_at=NOW,
         resort_id=uuid.uuid4(),

@@ -22,6 +22,7 @@ from app.services.catalog_types import SOURCE_SKI_API
 from app.services.catalog_types import BBox
 from app.services.catalog_types import SourceResortView
 from app.services.exceptions import ValidationError
+from app.services.legacy_resort_mapping import map_legacy_resort_view
 from app.services.openskidata_mapping import ACTIVE_STATUSES
 from app.services.openskidata_mapping import map_ski_area
 from app.services.resort_plausibility import NAME_MAX_LENGTH
@@ -33,7 +34,6 @@ from app.services.resort_plausibility import check_elevations
 from app.services.resort_plausibility import check_name
 from app.services.resort_plausibility import check_text
 from app.services.resort_plausibility import clamp_text
-from app.services.ski_api_mapping import map_ski_api_view
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ TEXT_FIELD_LIMITS: dict[str, int] = {
 
 _VIEW_MAPPERS: dict[str, Callable[[Mapping[str, Any]], SourceResortView]] = {
     SOURCE_OPENSKIDATA: map_ski_area,
-    SOURCE_SKI_API: map_ski_api_view,
+    SOURCE_SKI_API: map_legacy_resort_view,
 }
 
 

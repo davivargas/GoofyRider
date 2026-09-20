@@ -7,8 +7,7 @@ It includes a Flutter mobile app and a FastAPI backend with PostgreSQL.
 
 Copy `goofyrider/.env.example` to `goofyrider/.env` and
 `goofyrider/mobile/mapbox.json.example` to `goofyrider/mobile/mapbox.json`,
-then fill in your Mapbox public token (a SkiAPI key is optional and only used
-by `import_catalog --source ski_api`). Never commit or share the filled-in
+then fill in your Mapbox public token. Never commit or share the filled-in
 files.
 Follow the steps in order on a single machine.
 
@@ -264,14 +263,6 @@ Attribution: the app shows "Data from OpenSkiData / OpenSkiMap.org,
 © OpenStreetMap contributors (ODbL), Skimap.org, Who's On First,
 © Mapterhorn" on the resort and profile screens. Keep it when adding screens
 that show catalog data.
-
-With a RapidAPI key in `SKI_API_KEY`, `python -m app.scripts.import_catalog
---source ski_api` adds SkiAPI records as enrichment: they link to existing
-resorts by name and location, fill gaps (alias names, missing city or
-elevations that pass the lift-envelope check), and never create resorts on
-their own. SkiAPI-only records wait in `review_catalog_matches list` until an
-operator runs `create`. Conditions data in the raw payload is stored but not
-exposed.
 
 ### Re-analysis
 

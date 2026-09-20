@@ -51,12 +51,6 @@ class AppSettings(BaseSettings):
 
     sqlalchemy_echo: bool = False
 
-    ski_api_base_url: str = "https://api.skiapi.com/v1"
-    ski_api_host: str | None = None
-    ski_api_key: str | None = None
-    ski_api_page_size: PositiveInt = 50
-    ski_api_timeout_seconds: PositiveInt = 10
-
     openskidata_base_url: str = "https://tiles.openskimap.org"
     openskidata_timeout_seconds: PositiveInt = 120
 
@@ -69,21 +63,6 @@ class AppSettings(BaseSettings):
             return None
         if len(value) < 32:
             raise ValueError("JWT_SECRET_KEY must be at least 32 characters long.")
-        return value
-
-    @field_validator("ski_api_base_url")
-    @classmethod
-    def _validate_ski_api_base_url(cls, value: str) -> str:
-        normalized = value.rstrip("/")
-        if not normalized:
-            raise ValueError("SKI_API_BASE_URL must not be empty.")
-        return normalized
-
-    @field_validator("ski_api_host", "ski_api_key")
-    @classmethod
-    def _blank_string_becomes_none(cls, value: str | None) -> str | None:
-        if value is None or value == "":
-            return None
         return value
 
     @field_validator("openskidata_base_url")

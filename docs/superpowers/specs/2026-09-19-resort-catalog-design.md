@@ -508,6 +508,16 @@ alias names and gap filling, base URL confirmation.
 
 Later, not planned here: runs, PostGIS, live conditions.
 
+Note (2026-09-20): Phase 2 (SkiAPI enrichment) was implemented and then
+removed. The provider this design was written against (`api.skiapi.com/v1`) is
+deprecated, and no available RapidAPI product serves the `/resort` list
+contract Phase 2 needed — the subscribable products are forecast/conditions
+APIs. OpenSkiData, already primary for every field, is now the only source.
+The legacy `ski_api` source records created by migration 0016 remain in the
+database and are still read for the merge by
+`app/services/legacy_resort_mapping.py`; `ski_api` therefore stays a valid
+`source` value and keeps its place in the merge precedence.
+
 ## 12. Risks and mitigations
 
 - Large downloads on a slow link: streaming to disk, configurable timeout,

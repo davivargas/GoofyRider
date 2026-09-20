@@ -59,16 +59,17 @@ directly.
 
 - Sources write only `resort_source_records` (raw payload, sha256 hash,
   snapshot build time, `missing_since`, link to a resort with
-  `match_status` / `match_method` / candidates). OpenSkiData is primary;
-  SkiAPI is an enrichment source (list plus detail for linked records only;
-  no automatic resort creation).
+  `match_status` / `match_method` / candidates). OpenSkiData is the only
+  source. The legacy `ski_api` records written by migration 0016 (for resorts
+  that predate the multi-source catalog) are still read for merge purposes via
+  `legacy_resort_mapping.py`; nothing writes new `ski_api` records.
 - `resort_matching.py` (pure) scores name similarity, distance or boundary
   containment, and country agreement; auto-links at ≥ 0.85 with a 0.15 margin
   and ≤ 5 km, queues ≥ 0.5 for review, never orphans a legacy row.
 - `resort_merge_service.py` recomputes every `resorts` column from linked
   records plus `resort_field_overrides` using a fixed precedence
-  (OpenSkiData, then SkiAPI) and plausibility checks (elevations within the
-  lift envelope ±150 m, coordinates inside the boundary). Provenance per field
+  (OpenSkiData, then legacy `ski_api`) and plausibility checks (elevations
+  within the lift envelope ±150 m, coordinates inside the boundary). Provenance per field
   lives in `resorts.field_provenance`. Recency is never a rule.
 - Lifts come from the OpenSkiData `lifts.geojson` into `resort_lifts`
   (`source = openskidata`, track id `osm:way:<id>`), replacing the per-resort

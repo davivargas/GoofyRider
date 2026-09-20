@@ -19,6 +19,32 @@ from app.services.resort_review_service import ResortReviewService
 from tests.qa.catalog_helpers import run_fixture_import
 
 
+def _ski_area_feature(
+    *, external_id: str, name: str, longitude: float, latitude: float
+) -> dict[str, object]:
+    """A minimal OpenSkiData ski-area feature, the shape a pending record really holds."""
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [longitude, latitude]},
+        "properties": {
+            "type": "skiArea",
+            "id": external_id,
+            "name": name,
+            "activities": ["downhill"],
+            "status": "operating",
+            "places": [
+                {
+                    "iso3166_1Alpha2": "CA",
+                    "iso3166_2": "CA-BC",
+                    "localized": {
+                        "en": {"country": "Canada", "region": "British Columbia"},
+                    },
+                }
+            ],
+        },
+    }
+
+
 def test_resorts_list_filter_and_detail(
     client: TestClient,
     create_resort: Callable[..., Resort],
@@ -191,22 +217,19 @@ def test_deactivated_resort_is_hidden_from_list_and_returns_404(
     assert client.get(f"/v1/resorts/{resort.id}").status_code == 404
 
 
-def test_ski_api_only_record_appears_after_operator_creates_it(
-    client: TestClient, db: Session
-) -> None:
+def test_pending_record_appears_after_operator_creates_it(client: TestClient, db: Session) -> None:
     run_fixture_import(db)
     records = ResortSourceRecordRepository(db)
     records.add(
         ResortSourceRecord(
-            source="ski_api",
-            external_id="big-white",
-            payload={
-                "slug": "big-white",
-                "name": "Big White",
-                "country": "CA",
-                "region": "BC",
-                "location": {"latitude": 49.72, "longitude": -118.93},
-            },
+            source="openskidata",
+            external_id="osd-big-white",
+            payload=_ski_area_feature(
+                external_id="osd-big-white",
+                name="Big White",
+                longitude=-118.93,
+                latitude=49.72,
+            ),
             content_hash="h",
             fetched_at=datetime.now(UTC),
             match_status="pending_review",
@@ -223,7 +246,7 @@ def test_ski_api_only_record_appears_after_operator_creates_it(
             ResortRepository(db), records, ResortFieldOverrideRepository(db), lifts
         ),
     )
-    new_id = service.create("ski_api", "big-white")
+    new_id = service.create("openskidata", "osd-big-white")
 
     listed = client.get("/v1/resorts", params={"query": "Big White"}).json()
     assert listed["total"] == 1 and listed["items"][0]["id"] == str(new_id)
@@ -238,9 +261,11 @@ def test_rejected_record_never_surfaces(client: TestClient, db: Session) -> None
     records = ResortSourceRecordRepository(db)
     records.add(
         ResortSourceRecord(
-            source="ski_api",
-            external_id="ghost",
-            payload={"slug": "ghost", "name": "Ghost", "country": "CA", "region": "BC"},
+            source="openskidata",
+            external_id="osd-ghost",
+            payload=_ski_area_feature(
+                external_id="osd-ghost", name="Ghost", longitude=-118.10, latitude=50.40
+            ),
             content_hash="h",
             fetched_at=datetime.now(UTC),
             match_status="pending_review",
@@ -256,8 +281,8 @@ def test_rejected_record_never_surfaces(client: TestClient, db: Session) -> None
         ),
     )
 
-    service.reject("ski_api", "ghost")
+    service.reject("openskidata", "osd-ghost")
 
     assert client.get("/v1/resorts", params={"query": "Ghost"}).json()["total"] == 0
     with pytest.raises(ValidationError):
-        service.create("ski_api", "ghost")
+        service.create("openskidata", "osd-ghost")

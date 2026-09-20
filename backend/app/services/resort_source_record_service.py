@@ -11,9 +11,7 @@ import logging
 
 from app.models.resort_source_record import ResortSourceRecord
 from app.repositories.protocols import ResortSourceRecordRepositoryProtocol
-from app.services.catalog_types import SOURCE_SKI_API
 from app.services.catalog_types import ExternalSourceRecord
-from app.services.catalog_types import content_hash
 from app.services.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -70,21 +68,11 @@ class ResortSourceRecordService:
                 created += 1
                 continue
             existing.missing_since = None
-            has_detail = existing.source == SOURCE_SKI_API and "detail" in existing.payload
-            comparison_hash = (
-                content_hash({k: v for k, v in existing.payload.items() if k != "detail"})
-                if has_detail
-                else existing.content_hash
-            )
-            if comparison_hash == external.content_hash:
+            if existing.content_hash == external.content_hash:
                 unchanged += 1
                 continue
-            if has_detail:
-                existing.payload = {**external.payload, "detail": existing.payload["detail"]}
-                existing.content_hash = content_hash(existing.payload)
-            else:
-                existing.payload = external.payload
-                existing.content_hash = external.content_hash
+            existing.payload = external.payload
+            existing.content_hash = external.content_hash
             existing.fetched_at = self._clock()
             existing.snapshot_built_at = external.snapshot_built_at
             updated += 1
