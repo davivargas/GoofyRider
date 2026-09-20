@@ -24,6 +24,14 @@ import '../../../app/shell/app_tab_bar.dart';
 /// HUD-first canvas (1c).
 enum RecordLayout { map, hud }
 
+/// Height available to the HUD below which its fixed rows no longer fit on
+/// one screen, so it falls back to scrolling instead of overflowing.
+const double _hudMinFitHeight = 560;
+
+/// Height available to the HUD at or above which the speed readout is shown
+/// at full size.
+const double _hudFullHeroHeight = 640;
+
 class RecordScreen extends ConsumerStatefulWidget {
   const RecordScreen({
     super.key,
@@ -250,27 +258,29 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           buildMap(interactive: true),
           Positioned(top: 0, left: 0, right: 0, child: topRow),
           Positioned(
-            right: 12,
-            bottom: sheetAnchor + 214,
-            child: FloatingActionButton.small(
-              heroTag: 'recenter-record-map',
-              onPressed: () =>
-                  _recenterOnRider(route, warmupLatLng: warmupLatLng),
-              child: const Icon(Icons.my_location),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            bottom: sheetAnchor + 214,
-            child: _speedHero(state, speedUnit, size: 84, shadow: true),
-          ),
-          Positioned(
             left: 12,
             right: 12,
             bottom: sheetAnchor,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 0, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: <Widget>[
+                      _speedHero(state, speedUnit, size: 84, shadow: true),
+                      const Spacer(),
+                      FloatingActionButton.small(
+                        heroTag: 'recenter-record-map',
+                        onPressed: () =>
+                            _recenterOnRider(route, warmupLatLng: warmupLatLng),
+                        child: const Icon(Icons.my_location),
+                      ),
+                    ],
+                  ),
+                ),
                 if (state.autoPaused) _autoPauseBanner(),
                 _statsSheet(state, speedUnit, distanceUnit),
               ],
@@ -279,75 +289,89 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
         ],
       );
     } else {
+      final hudMapThumbnail = GestureDetector(
+        onTap: () => setState(() => _layout = RecordLayout.map),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: t.line),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                IgnorePointer(child: buildMap(interactive: false)),
+                const Positioned(
+                  right: 10,
+                  bottom: 8,
+                  child: MonoLabel('Tap for map ↗', size: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
       body = Column(
         children: <Widget>[
           topRow,
           Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                30,
-                24,
-                barClearance + 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Center(
-                    child: MonoLabel(
-                      '${_phaseLabel(state)} · Session',
-                      size: 10,
-                      tone: MonoTone.muted,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Center(
-                    child: _speedHero(
-                      state,
-                      speedUnit,
-                      size: 148,
-                      shadow: false,
-                      centered: true,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Center(child: _sessionMax(state, speedUnit)),
-                  const SizedBox(height: 30),
-                  _hudTiles(state, distanceUnit),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () => setState(() => _layout = RecordLayout.map),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        height: 96,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: t.line),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: <Widget>[
-                            IgnorePointer(child: buildMap(interactive: false)),
-                            const Positioned(
-                              right: 10,
-                              bottom: 8,
-                              child: MonoLabel('Tap for map ↗', size: 8),
-                            ),
-                          ],
-                        ),
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                // The HUD is meant to fill exactly one screen. Everything but
+                // the map thumbnail has a fixed height, so the thumbnail takes
+                // whatever is left over. Under `_hudMinFitHeight` the fixed
+                // rows alone no longer fit, and it scrolls rather than
+                // overflowing.
+                final fits = constraints.maxHeight >= _hudMinFitHeight;
+                final heroSize =
+                    constraints.maxHeight >= _hudFullHeroHeight ? 148.0 : 112.0;
+                final column = Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: fits ? MainAxisSize.max : MainAxisSize.min,
+                  children: <Widget>[
+                    Center(
+                      child: MonoLabel(
+                        '${_phaseLabel(state)} · Session',
+                        size: 12,
+                        tone: MonoTone.muted,
+                        letterSpacing: 2,
                       ),
                     ),
-                  ),
-                  if (state.autoPaused) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: _speedHero(
+                        state,
+                        speedUnit,
+                        size: heroSize,
+                        shadow: false,
+                        centered: true,
+                      ),
+                    ),
                     const SizedBox(height: 12),
-                    _autoPauseBanner(),
+                    Center(child: _sessionMax(state, speedUnit)),
+                    const SizedBox(height: 18),
+                    _hudTiles(state, distanceUnit),
+                    const SizedBox(height: 12),
+                    if (fits)
+                      Expanded(child: hudMapThumbnail)
+                    else
+                      SizedBox(height: 96, child: hudMapThumbnail),
+                    if (state.autoPaused) ...<Widget>[
+                      const SizedBox(height: 10),
+                      _autoPauseBanner(),
+                    ],
+                    const SizedBox(height: 14),
+                    _controlRow(state),
                   ],
-                  const SizedBox(height: 18),
-                  _controlRow(state),
-                ],
-              ),
+                );
+                final padding =
+                    EdgeInsets.fromLTRB(24, 16, 24, barClearance + 12);
+                return fits
+                    ? Padding(padding: padding, child: column)
+                    : SingleChildScrollView(padding: padding, child: column);
+              },
             ),
           ),
         ],
@@ -543,8 +567,17 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   ) {
     final t = context.tokens;
     final stats = state.tracking.liveStats;
+    // Rows rather than a GridView: a fixed childAspectRatio left slack under
+    // every cell, and the bottom row's slack read as dead space above the
+    // controls. Rows size to their content at any width.
+    Widget statRow(List<Widget> blocks) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            for (final Widget block in blocks) Expanded(child: block),
+          ],
+        );
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
       decoration: BoxDecoration(
         color: t.surface.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(22),
@@ -553,45 +586,40 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 10,
-            childAspectRatio: 2.6,
-            children: <Widget>[
-              StatBlock(
-                value: speedUnit
-                    .convertFromMetersPerSecond(stats.maxSpeedMps)
-                    .toStringAsFixed(1),
-                label: 'Max ${speedUnit.shortLabel}',
-              ),
-              StatBlock(
-                value: _verticalLabel(state, distanceUnit),
-                label: 'Vert',
-              ),
-              StatBlock(
-                value: distanceUnit.formatFromMeters(stats.distanceM),
-                label: 'Dist',
-              ),
-              StatBlock(
-                value: _altitudeLabel(state, distanceUnit),
-                label: 'Alt',
-              ),
-              StatBlock(
-                value: speedUnit
-                    .convertFromMetersPerSecond(stats.rideAvgSpeedMps)
-                    .toStringAsFixed(1),
-                label: 'Ride avg',
-              ),
-              StatBlock(
-                value: state.tracking.elapsed.toHoursMinutesSeconds(),
-                label: 'Ride time',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          statRow(<Widget>[
+            StatBlock(
+              value: speedUnit
+                  .convertFromMetersPerSecond(stats.maxSpeedMps)
+                  .toStringAsFixed(1),
+              label: 'Max ${speedUnit.shortLabel}',
+            ),
+            StatBlock(
+              value: _verticalLabel(state, distanceUnit),
+              label: 'Vert',
+            ),
+            StatBlock(
+              value: distanceUnit.formatFromMeters(stats.distanceM),
+              label: 'Dist',
+            ),
+          ]),
+          const SizedBox(height: 12),
+          statRow(<Widget>[
+            StatBlock(
+              value: _altitudeLabel(state, distanceUnit),
+              label: 'Alt',
+            ),
+            StatBlock(
+              value: speedUnit
+                  .convertFromMetersPerSecond(stats.rideAvgSpeedMps)
+                  .toStringAsFixed(1),
+              label: 'Ride avg',
+            ),
+            StatBlock(
+              value: state.tracking.elapsed.toHoursMinutesSeconds(),
+              label: 'Ride time',
+            ),
+          ]),
+          const SizedBox(height: 14),
           _controlRow(state),
         ],
       ),

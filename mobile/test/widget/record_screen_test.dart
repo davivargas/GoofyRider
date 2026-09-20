@@ -328,6 +328,50 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('HUD layout fits a phone screen without scrolling',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final fakeRepository = FakeSessionRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sessionRepositoryProvider.overrideWithValue(fakeRepository),
+          locationTrackingRepositoryProvider
+              .overrideWithValue(FakeLocationRepository()),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
+        ],
+        child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('HUD'));
+    await tester.pumpAndSettle();
+
+    // No scroll view means the whole HUD is on screen at once; the controls
+    // and the map thumbnail are both reachable without scrolling.
+    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    final surfaceHeight = tester.view.physicalSize.height;
+    for (final finder in <Finder>[
+      find.text('TAP FOR MAP ↗'),
+      find.text('START RECORDING'),
+      find.text('SESSION MAX'),
+    ]) {
+      final rect = tester.getRect(finder);
+      expect(rect.top, greaterThanOrEqualTo(0.0), reason: '$finder above view');
+      expect(rect.bottom, lessThanOrEqualTo(surfaceHeight),
+          reason: '$finder below view');
+    }
+  });
+
   testWidgets('record screen renders vertical and altitude cards in meters',
       (WidgetTester tester) async {
     final fakeRepository = FakeSessionRepository();
