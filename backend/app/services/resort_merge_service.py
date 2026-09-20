@@ -21,6 +21,7 @@ from app.services.catalog_types import SOURCE_OPENSKIDATA
 from app.services.catalog_types import SOURCE_SKI_API
 from app.services.catalog_types import BBox
 from app.services.catalog_types import SourceResortView
+from app.services.exceptions import ValidationError
 from app.services.openskidata_mapping import ACTIVE_STATUSES
 from app.services.openskidata_mapping import map_ski_area
 from app.services.resort_plausibility import check_coordinates
@@ -79,7 +80,7 @@ class MergeSummary:
 def view_for_record(record: ResortSourceRecord) -> SourceResortView:
     mapper = _VIEW_MAPPERS.get(record.source)
     if mapper is None:
-        raise ValueError(f"No view mapper for source {record.source!r}.")
+        raise ValidationError(f"No view mapper for source {record.source!r}.")
     return mapper(record.payload)
 
 

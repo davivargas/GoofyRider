@@ -3,6 +3,8 @@ from datetime import datetime
 from typing import Any
 import uuid
 
+import pytest
+
 from app.models.resort import Resort
 from app.models.resort_field_override import ResortFieldOverride
 from app.models.resort_lift import ResortLift
@@ -10,10 +12,12 @@ from app.models.resort_source_record import ResortSourceRecord
 from app.services.catalog_types import SOURCE_OPENSKIDATA
 from app.services.catalog_types import SOURCE_SKI_API
 from app.services.catalog_types import SourceResortView
+from app.services.exceptions import ValidationError
 from app.services.resort_merge_service import LinkedView
 from app.services.resort_merge_service import MergeResult
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_merge_service import compute_merge
+from app.services.resort_merge_service import view_for_record
 
 NOW = datetime(2026, 9, 19, 12, 0, tzinfo=UTC)
 
@@ -171,6 +175,20 @@ def test_merge_is_order_independent() -> None:
     b = LinkedView(_view(SOURCE_SKI_API, name="Grouse Mtn"), missing=False)
 
     assert _merge([a, b]) == _merge([b, a])
+
+
+def test_view_for_record_raises_validation_error_for_unknown_source() -> None:
+    record = ResortSourceRecord(
+        source="unknown",
+        external_id="x",
+        payload={},
+        content_hash="h",
+        fetched_at=NOW,
+        match_status="linked",
+    )
+
+    with pytest.raises(ValidationError):
+        view_for_record(record)
 
 
 class FakeResortRepository:
