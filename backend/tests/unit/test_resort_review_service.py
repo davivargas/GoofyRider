@@ -168,9 +168,10 @@ def test_reject_and_create() -> None:
     )
 
     other = _pending("osd-y")
-    service2, _, _ = _build([], [other])
+    service2, resort_repo2, _ = _build([], [other])
     service2.reject("openskidata", "osd-y")
     assert (other.match_status, other.resort_id, other.match_candidates) == ("rejected", None, None)
+    assert resort_repo2.commits == 1
 
 
 def test_actions_require_pending_status() -> None:

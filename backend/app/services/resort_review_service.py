@@ -72,7 +72,8 @@ class ResortReviewService:
         record.match_method = None
         record.resort_id = None
         record.match_candidates = None
-        self._records.commit()
+        self._records.flush()
+        self._resorts.commit()
 
     def create(self, source: str, external_id: str) -> uuid.UUID:
         record = self._pending_record(source, external_id)
