@@ -2,8 +2,15 @@ from collections.abc import Callable
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.models.resort import Resort
+from app.repositories.resort_field_override_repository import ResortFieldOverrideRepository
+from app.repositories.resort_lift_repository import ResortLiftRepository
+from app.repositories.resort_repository import ResortRepository
+from app.repositories.resort_source_record_repository import ResortSourceRecordRepository
+from app.services.resort_merge_service import ResortMergeService
+from tests.qa.catalog_helpers import run_fixture_import
 
 
 def test_resorts_list_filter_and_detail(
@@ -129,3 +136,50 @@ def test_resorts_pagination(
     assert two_payload["page"] == 2
     assert two_payload["total"] == 3
     assert len(two_payload["items"]) == 1
+
+
+def test_list_resorts_serves_merged_openskidata_rows(client: TestClient, db: Session) -> None:
+    run_fixture_import(db)
+
+    response = client.get("/v1/resorts", params={"query": "Grouse", "page_size": 10})
+
+    assert response.status_code == 200
+    body = response.json()
+    names = sorted(item["name"] for item in body["items"])
+    assert names == ["Grouse Mountain", "Grouse Mountain"]
+    grouse_ca = next(item for item in body["items"] if item["country"] == "Canada")
+    assert grouse_ca["city"] == "North Vancouver"
+    assert grouse_ca["elevation_base_m"] == 880 and grouse_ca["elevation_top_m"] == 1250
+    assert set(grouse_ca) == {
+        "id",
+        "name",
+        "country",
+        "region",
+        "city",
+        "latitude",
+        "longitude",
+        "elevation_base_m",
+        "elevation_top_m",
+        "created_at",
+    }
+
+
+def test_deactivated_resort_is_hidden_from_list_and_returns_404(
+    client: TestClient, db: Session
+) -> None:
+    run_fixture_import(db)
+    resort = ResortRepository(db).get_by_name("Cypress Mountain")
+    assert resort is not None
+    ResortFieldOverrideRepository(db).upsert(resort.id, "is_active", False, note="qa")
+    db.commit()
+    ResortMergeService(
+        ResortRepository(db),
+        ResortSourceRecordRepository(db),
+        ResortFieldOverrideRepository(db),
+        ResortLiftRepository(db),
+    ).merge_stale()
+    db.commit()
+
+    listed = client.get("/v1/resorts", params={"query": "Cypress"}).json()["items"]
+    assert listed == []
+    assert client.get(f"/v1/resorts/{resort.id}").status_code == 404

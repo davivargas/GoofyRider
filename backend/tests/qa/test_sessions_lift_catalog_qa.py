@@ -1,8 +1,12 @@
+from collections.abc import Callable
 import json
 import uuid
 
 from app.models.resort_lift import ResortLift
 from app.models.ride_session_action import RideSessionAction
+from app.repositories.resort_lift_repository import ResortLiftRepository
+from app.repositories.resort_repository import ResortRepository
+from tests.qa.catalog_helpers import run_fixture_import
 
 DEG_LAT_PER_M = 1.0 / 110_540.0
 
@@ -100,3 +104,22 @@ def test_session_without_catalog_still_analyzes(client, create_resort, register_
     )
     detail = client.get(f"/v1/sessions/{session_id}", headers=headers).json()
     assert [a["action_type"] for a in detail["actions"]] == ["lift"]
+
+
+def test_analysis_anchors_to_openskidata_lifts(
+    client, db, register_user: Callable[..., dict[str, str]]
+) -> None:
+    run_fixture_import(db)
+    # "Grouse Mountain" matches two resorts in the fixture (Canada and the
+    # United States); get_by_name is not ordering-safe when a name is
+    # ambiguous, so pick the Canadian one explicitly.
+    resort = next(
+        r
+        for r in ResortRepository(db).list_all_for_matching()
+        if r.name == "Grouse Mountain" and r.country == "Canada"
+    )
+    lifts = ResortLiftRepository(db).list_by_resort(resort.id)
+    assert {lift.source for lift in lifts} == {"openskidata"}
+    assert len(lifts) == 3
+    skyride = next(lift for lift in lifts if lift.external_track_id == "osm:way:1002")
+    assert skyride.base_altitude_m == 290.0 and skyride.top_altitude_m == 1100.0

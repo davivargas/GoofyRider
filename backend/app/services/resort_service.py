@@ -30,4 +30,6 @@ class ResortService:
         if resort is None:
             logger.warning("Resort not found: %s", resort_id)
             raise NotFoundError("Resort not found.")
+        if not resort.is_active:
+            raise NotFoundError("Resort not found.")
         return resort
