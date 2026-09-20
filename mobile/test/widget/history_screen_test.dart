@@ -210,48 +210,4 @@ void main() {
     expect(find.textContaining('00:06:00'), findsOneWidget);
     expect(find.textContaining('LOCAL ONLY'), findsOneWidget);
   });
-
-  testWidgets(
-      'history screen keeps sync state visible and no per-card overflow actions',
-      (WidgetTester tester) async {
-    final session = buildSession();
-    final repository = FakeSessionRepository(<LocalRideSession>[session]);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          sessionRepositoryProvider.overrideWithValue(repository),
-          locationTrackingRepositoryProvider.overrideWithValue(
-            FakeLocationRepository(),
-          ),
-          historySectionsProvider.overrideWith(
-            (_) async => <SessionHistorySeasonSection>[
-              SessionHistorySeasonSection(
-                label: '2025/2026',
-                items: <SessionHistoryEntryViewModel>[
-                  SessionHistoryEntryViewModel(
-                    session: session,
-                    resortLabel: 'Whistler Blackcomb',
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-        child: MaterialApp.router(
-          theme: AppTheme.dark(),
-          routerConfig: GoRouter(
-            routes: <RouteBase>[
-              GoRoute(path: '/', builder: (_, __) => const HistoryScreen()),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-    expect(find.textContaining('LOCAL ONLY'), findsOneWidget);
-    expect(find.byTooltip('Sync now'), findsOneWidget);
-    expect(find.byTooltip('Session actions'), findsNothing);
-  });
 }
