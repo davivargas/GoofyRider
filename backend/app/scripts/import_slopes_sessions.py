@@ -32,7 +32,6 @@ from app.repositories.ride_session_repository import RideSessionRepository
 from app.repositories.session_override_repository import SessionOverrideRepository
 from app.repositories.session_point_repository import SessionPointRepository
 from app.repositories.user_repository import UserRepository
-from app.services.exceptions import ServiceError
 from app.services.session_service import SessionService
 from app.services.slopes_import_service import SlopesImportService
 from app.services.slopes_import_service import SlopesImportSummary
@@ -108,7 +107,13 @@ def analyze_imported_sessions(
         try:
             service.reanalyze_stored_session(ride_session)
             done += 1
-        except ServiceError as exc:
+        # Deliberately broad: one bad session must not cost the operator the
+        # import summary. The analyzer can fail with more than `ServiceError`
+        # (a ValueError or an arithmetic error on odd data), and letting that
+        # escape aborts `main()` before it prints which archives were imported
+        # and under which session ids. The session itself is unharmed - it
+        # stays queued for `reanalyze_sessions`.
+        except Exception as exc:
             sessions_repo.rollback()
             failed += 1
             print(f"- {session_id}: analysis failed ({exc})")

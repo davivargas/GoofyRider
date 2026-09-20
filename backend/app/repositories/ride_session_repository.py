@@ -18,6 +18,27 @@ from app.models.ride_session_action import RideSessionAction
 from app.models.ride_session_override import RideSessionOverride
 from app.repositories.base import SqlAlchemyRepository
 
+# The analyzer-owned summary columns, with the value each carries before any
+# analysis has run. Keep in sync with `_summary_to_fields` in `SessionService`:
+# every field that an analysis writes must be resettable by `clear_analysis`.
+_ANALYSIS_SUMMARY_DEFAULTS: Mapping[str, float | int | None] = {
+    "total_duration_s": 0.0,
+    "descent_duration_s": 0.0,
+    "lift_duration_s": 0.0,
+    "descent_distance_m": 0.0,
+    "lift_distance_m": 0.0,
+    "descent_vertical_m": 0.0,
+    "lift_vertical_m": 0.0,
+    "avg_descent_speed_mps": 0.0,
+    "break_count": 0,
+    "break_duration_s": 0.0,
+    "max_speed_mps": None,
+    "peak_altitude_m": None,
+    "center_lat": None,
+    "center_long": None,
+    "altitude_offset_m": None,
+}
+
 
 class RideSessionRepository(SqlAlchemyRepository):
     def add(self, ride_session: RideSession) -> None:
@@ -106,7 +127,19 @@ class RideSessionRepository(SqlAlchemyRepository):
 
         return session
 
-    def clear_analysis(self, session_id: uuid.UUID) -> RideSession | None:
+    def clear_analysis(
+        self,
+        session_id: uuid.UUID,
+        *,
+        keep_overrides: bool = False,
+    ) -> RideSession | None:
+        """Undo everything an analysis wrote, back to the pre-analysis state.
+
+        `keep_overrides` retains the override spans. They are rider intent
+        rather than derived data — the analyzer only ever echoes them back —
+        so a caller that is replacing a session's points, not the session
+        itself, keeps them for the next analysis to consume as presets.
+        """
         session = self._db.get(RideSession, session_id)
         if session is None:
             return None
@@ -114,9 +147,13 @@ class RideSessionRepository(SqlAlchemyRepository):
         self._db.execute(
             delete(RideSessionAction).where(RideSessionAction.session_id == session_id)
         )
-        self._db.execute(
-            delete(RideSessionOverride).where(RideSessionOverride.session_id == session_id)
-        )
+        if not keep_overrides:
+            self._db.execute(
+                delete(RideSessionOverride).where(RideSessionOverride.session_id == session_id)
+            )
+
+        for field_name, default_value in _ANALYSIS_SUMMARY_DEFAULTS.items():
+            setattr(session, field_name, default_value)
 
         session.processed_by_version = None
         session.processed_at = None

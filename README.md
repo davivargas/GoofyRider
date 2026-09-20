@@ -280,11 +280,16 @@ python -m app.scripts.import_slopes_sessions --source-dir ~/slopes --user-email 
 The resort is matched by exact name, so the catalog must be imported first, and
 the `--user-email` account must already exist. Archives that match an existing
 session are skipped unless `--repair-existing` is passed, which replaces their
-points and clears the stale analysis so they are re-analyzed.
+points and resets the previous analysis — statistics back to zero, action spans
+deleted, `processed_by_version` unset — so nothing from the old points is served
+before the re-analysis lands. Overrides a rider made by hand are kept: they are
+not derived from the points, and the next analysis feeds them back in.
 
 `--skip-analysis` imports without analyzing. Sessions left that way keep
 `processed_by_version` unset, so the re-analysis step below picks them up; their
-statistics stay at zero until it runs.
+statistics stay at zero until it runs. The same is true of a session whose
+analysis fails: the failure is reported next to the import summary and the
+session stays queued.
 
 ### Re-analysis
 

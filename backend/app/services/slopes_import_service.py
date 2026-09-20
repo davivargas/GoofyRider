@@ -315,11 +315,13 @@ class SlopesImportService:
         ride_session.started_at = parsed.started_at
         ride_session.ended_at = parsed.ended_at
         ride_session.status = RideSessionStatus.COMPLETED
-        # The points are being replaced, so any statistics a previous analysis
-        # produced are stale. Clearing the marker makes the session eligible for
-        # `reanalyze_sessions` instead of leaving the old numbers in place.
-        ride_session.processed_by_version = None
-        ride_session.processed_at = None
+        # The points are being replaced, so every number, action span and marker
+        # a previous analysis produced is stale: drop them all rather than serve
+        # the old analysis against a different set of points until the next
+        # analysis run lands. Rider-made overrides are kept — they are not
+        # derived from the points, and the record window they are anchored to is
+        # the one this repair matched on.
+        self._ride_session_repository.clear_analysis(ride_session.id, keep_overrides=True)
 
         self._session_point_repository.delete_by_session(ride_session.id)
         self._session_point_repository.flush()

@@ -113,7 +113,12 @@ class RideSessionRepositoryProtocol(Protocol):
         version: str,
     ) -> RideSession | None: ...
 
-    def clear_analysis(self, session_id: uuid.UUID) -> RideSession | None: ...
+    def clear_analysis(
+        self,
+        session_id: uuid.UUID,
+        *,
+        keep_overrides: bool = False,
+    ) -> RideSession | None: ...
 
     def get_detail_with_actions(self, session_id: uuid.UUID) -> RideSession | None: ...
 
