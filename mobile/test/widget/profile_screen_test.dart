@@ -145,6 +145,45 @@ void main() {
     expect(find.text('Sign in to export debug info.'), findsOneWidget);
   });
 
+  testWidgets('shows the OpenSkiData attribution', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authControllerProvider.overrideWith(
+            (_) => _FakeAuthController(
+              initialState: const AuthState(status: AuthStatus.unauthenticated),
+            ),
+          ),
+          speedUnitPreferenceProvider.overrideWith((_) =>
+              SpeedUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          distanceUnitPreferenceProvider.overrideWith((_) =>
+              DistanceUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+          debugExportActionProvider.overrideWithValue(
+            ({
+              required String ownerUserId,
+              required String? userEmail,
+              required speedUnit,
+              required distanceUnit,
+            }) async =>
+                r'C:\tmp\goofyrider_debug.json',
+          ),
+        ],
+        child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text(CatalogAttribution.openSkiData),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text(CatalogAttribution.openSkiData), findsOneWidget);
+  });
+
   testWidgets('export debug info shows failure snackbar on export error',
       (WidgetTester tester) async {
     const authState = AuthState(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router/route_paths.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
@@ -246,6 +247,13 @@ class ProfileScreen extends ConsumerWidget {
           //     },
           //   ),
           // ),
+          const SizedBox(height: 18),
+          const MonoLabel(
+            CatalogAttribution.openSkiData,
+            size: 8,
+            tone: MonoTone.faint,
+            uppercase: false,
+          ),
           const SizedBox(height: 22),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

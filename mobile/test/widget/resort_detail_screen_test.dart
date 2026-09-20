@@ -147,4 +147,17 @@ void main() {
     expect(find.textContaining('SKIABLE VERT'), findsOneWidget);
     expect(find.text('START RECORDING HERE'), findsOneWidget);
   });
+
+  testWidgets('shows the OpenSkiData attribution footer',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      _buildTestHost(
+        repository:
+            _FakeResortRepository(initialResort: _resort(isFavorite: false)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(CatalogAttribution.openSkiData), findsOneWidget);
+  });
 }

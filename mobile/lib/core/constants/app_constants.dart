@@ -139,3 +139,13 @@ class MapTileProviderConfig {
     attributionLines: <String>['© OpenStreetMap contributors'],
   );
 }
+
+/// Attribution required by the OpenSkiData licence. Shown wherever catalog
+/// data (resorts, lifts) is displayed. Do not shorten or reword.
+class CatalogAttribution {
+  CatalogAttribution._();
+
+  static const String openSkiData =
+      'Data from OpenSkiData / OpenSkiMap.org, © OpenStreetMap contributors (ODbL), '
+      'Skimap.org, Who\'s On First, © Mapterhorn';
+}

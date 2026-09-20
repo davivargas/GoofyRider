@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../app/router/route_paths.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
@@ -228,6 +229,13 @@ class ResortDetailScreen extends ConsumerWidget {
                         label: 'Start recording here',
                         onPressed: () => context.go(
                             '${RoutePaths.record}?resortId=${Uri.encodeComponent(resort.id)}'),
+                      ),
+                      const SizedBox(height: 18),
+                      const MonoLabel(
+                        CatalogAttribution.openSkiData,
+                        size: 8,
+                        tone: MonoTone.faint,
+                        uppercase: false,
                       ),
                     ],
                   ),
