@@ -160,7 +160,7 @@ class ResortDetailScreen extends ConsumerWidget {
                       Text(resort.name.toUpperCase(),
                           style: Theme.of(context).textTheme.displaySmall),
                       const SizedBox(height: 4),
-                      MonoLabel(location, size: 9, letterSpacing: 1.6),
+                      MonoLabel(location, size: 11, letterSpacing: 1.6),
                       const SizedBox(height: 16),
                       weather.when(
                         loading: () => const _WeatherTiles(
@@ -193,9 +193,9 @@ class ResortDetailScreen extends ConsumerWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: <Widget>[
                                 MonoLabel('Base ${base ?? '--'} m',
-                                    size: 8, tone: MonoTone.muted),
+                                    size: 10, tone: MonoTone.muted),
                                 MonoLabel('Top ${top ?? '--'} m',
-                                    size: 8, tone: MonoTone.muted),
+                                    size: 10, tone: MonoTone.muted),
                               ],
                             ),
                             const SizedBox(height: 10),
@@ -221,7 +221,7 @@ class ResortDetailScreen extends ConsumerWidget {
                               alignment: Alignment.centerLeft,
                               child: MonoLabel(
                                   '${skiable ?? '--'} m skiable vert',
-                                  size: 8),
+                                  size: 10),
                             ),
                           ],
                         ),
@@ -235,7 +235,7 @@ class ResortDetailScreen extends ConsumerWidget {
                       const SizedBox(height: 18),
                       const MonoLabel(
                         CatalogAttribution.openSkiData,
-                        size: 8,
+                        size: 10,
                         tone: MonoTone.faint,
                         uppercase: false,
                       ),
@@ -315,6 +315,7 @@ class _WeatherTiles extends StatelessWidget {
             child: StatBlock(
                 value: value,
                 label: label,
+                labelLetterSpacing: 0.8,
                 valueColor: volt ? t.voltText : null),
           ),
         );
@@ -337,7 +338,7 @@ class _WeatherTiles extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: MonoLabel('Showing stale cached data.',
-                  size: 8, tone: MonoTone.muted, uppercase: false),
+                  size: 10, tone: MonoTone.muted, uppercase: false),
             ),
           ),
       ],

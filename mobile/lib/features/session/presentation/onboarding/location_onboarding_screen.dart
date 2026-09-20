@@ -79,7 +79,7 @@ class _LocationOnboardingScreenState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     const MonoLabel('STEP 1 OF 2',
-                        size: 9, tone: MonoTone.volt, letterSpacing: 1.8),
+                        size: 11, tone: MonoTone.volt, letterSpacing: 1.8),
                     const SizedBox(height: 12),
                     Text(
                       'YOUR LINE,\nDRAWN LIVE.',

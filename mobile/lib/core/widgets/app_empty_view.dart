@@ -21,7 +21,7 @@ class AppEmptyView extends StatelessWidget {
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
             MonoLabel(subtitle,
-                size: 9,
+                size: 11,
                 uppercase: false,
                 letterSpacing: 0.4,
                 textAlign: TextAlign.center),

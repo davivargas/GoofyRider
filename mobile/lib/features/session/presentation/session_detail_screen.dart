@@ -305,15 +305,15 @@ class SessionDetailScreen extends ConsumerWidget {
           children: <Widget>[
             MonoLabel(
                 'Time split · ${formatSecondsAsDuration(stats.durationS)}',
-                size: 8,
+                size: 10,
                 tone: MonoTone.muted),
             Row(
               children: <Widget>[
-                MonoLabel('■ Ride', size: 8, color: t.voltText),
+                MonoLabel('■ Ride', size: 10, color: t.voltText),
                 const SizedBox(width: 8),
-                MonoLabel('■ Lift', size: 8, color: t.ice),
+                MonoLabel('■ Lift', size: 10, color: t.ice),
                 const SizedBox(width: 8),
-                const MonoLabel('■ Idle', size: 8, tone: MonoTone.muted),
+                const MonoLabel('■ Idle', size: 10, tone: MonoTone.muted),
               ],
             ),
           ],
@@ -370,7 +370,7 @@ class SessionDetailScreen extends ConsumerWidget {
     if (routePoints.isEmpty) {
       return const SurfaceCard(
           child: MonoLabel('No route points available.',
-              size: 9, uppercase: false, tone: MonoTone.muted));
+              size: 11, uppercase: false, tone: MonoTone.muted));
     }
     LatLng toLatLng(LocalSessionPoint p) => LatLng(
         p.filteredLatitude ?? p.latitude, p.filteredLongitude ?? p.longitude);
@@ -433,7 +433,7 @@ class SessionDetailScreen extends ConsumerWidget {
               ],
             ),
             const Positioned(
-                left: 12, bottom: 10, child: MonoLabel('Full route', size: 8)),
+                left: 12, bottom: 10, child: MonoLabel('Full route', size: 10)),
           ],
         ),
       ),
@@ -448,7 +448,7 @@ class SessionDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const MonoLabel('Timeline', size: 9, letterSpacing: 1.8),
+            const MonoLabel('Timeline', size: 11, letterSpacing: 1.8),
             const SizedBox(height: 8),
             Text('Motion segments are not available for this session yet.',
                 style: Theme.of(context)
@@ -462,7 +462,7 @@ class SessionDetailScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const MonoLabel('Timeline', size: 9, letterSpacing: 1.8),
+        const MonoLabel('Timeline', size: 11, letterSpacing: 1.8),
         const SizedBox(height: 6),
         for (final SessionTimelineSegment segment in detail.timeline)
           Container(

@@ -96,7 +96,7 @@ class _ResortsListScreenState extends ConsumerState<ResortsListScreen> {
                             padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
                             child: MonoLabel(
                                 hasFavorite ? 'Favorites first' : 'All resorts',
-                                size: 8,
+                                size: 10,
                                 tone: MonoTone.muted,
                                 letterSpacing: 1.8),
                           );
@@ -149,7 +149,7 @@ class _ResortRow extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 4),
                   MonoLabel('${resort.region}, ${resort.country}',
-                      size: 8,
+                      size: 10,
                       tone: MonoTone.muted,
                       letterSpacing: 1.1,
                       maxLines: 1),
@@ -163,7 +163,7 @@ class _ResortRow extends ConsumerWidget {
                 decoration: BoxDecoration(
                     color: t.raised, borderRadius: BorderRadius.circular(6)),
                 child: MonoLabel(chip,
-                    size: 9,
+                    size: 11,
                     weight: FontWeight.w700,
                     letterSpacing: 1,
                     maxLines: 1),

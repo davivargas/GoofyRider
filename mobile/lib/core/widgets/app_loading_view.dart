@@ -19,7 +19,7 @@ class AppLoadingView extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2)),
           if (label != null) ...<Widget>[
             const SizedBox(height: 14),
-            MonoLabel(label!, size: 9, tone: MonoTone.muted),
+            MonoLabel(label!, size: 11, tone: MonoTone.muted),
           ],
         ],
       ),

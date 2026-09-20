@@ -54,7 +54,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         const Wordmark(size: 44),
                         const SizedBox(height: 12),
                         const MonoLabel('Create your account',
-                            size: 10, letterSpacing: 2.4),
+                            size: 12, letterSpacing: 2.4),
                         const SizedBox(height: 44),
                         TextFormField(
                           controller: _nameController,

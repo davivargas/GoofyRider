@@ -443,7 +443,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           const SizedBox(height: 8),
           MonoLabel(
             speedUnit.shortLabel,
-            size: 11,
+            size: 13,
             tone: MonoTone.volt,
             letterSpacing: 2.6,
           ),
@@ -458,7 +458,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
         const SizedBox(width: 8),
         MonoLabel(
           speedUnit.shortLabel,
-          size: 11,
+          size: 13,
           tone: MonoTone.volt,
           letterSpacing: 1.6,
         ),
@@ -474,11 +474,11 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        const MonoLabel('Session max', size: 9),
+        const MonoLabel('Session max', size: 11),
         const SizedBox(width: 8),
         Text(
           speedUnit.convertFromMetersPerSecond(max).toStringAsFixed(1),
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 14),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 16),
         ),
         const SizedBox(width: 8),
         Container(
@@ -675,7 +675,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           padding: EdgeInsets.only(top: 6),
           child: MonoLabel(
             'Map tiles failing, check network signal.',
-            size: 8,
+            size: 10,
             tone: MonoTone.muted,
             uppercase: false,
           ),

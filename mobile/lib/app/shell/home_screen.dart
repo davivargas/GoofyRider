@@ -59,7 +59,7 @@ class HomeScreen extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: <Widget>[
-                const Wordmark(size: 16),
+                const Wordmark(size: 18),
                 InitialsAvatar(name: displayName),
               ],
             ),
@@ -333,21 +333,22 @@ class _FavoriteResortCard extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           MonoLabel('$temp · $conditions',
-              size: 9, letterSpacing: 0.6, maxLines: 1),
+              size: 11, letterSpacing: 0.6, maxLines: 1),
           if (snow != null) ...<Widget>[
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
               decoration: BoxDecoration(
                 color: powDay ? t.volt : t.raised,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: powDay ? t.volt : t.line),
               ),
               child: MonoLabel(
-                '${snow.round()} cm · ${powDay ? 'Pow day' : '24h'}',
-                size: 9,
+                '${snow.round()} cm · ${powDay ? 'Pow' : '24h'}',
+                size: 11,
                 weight: FontWeight.w700,
                 letterSpacing: 1,
+                softWrap: false,
                 color: powDay ? t.voltInk : t.textSecondary,
               ),
             ),

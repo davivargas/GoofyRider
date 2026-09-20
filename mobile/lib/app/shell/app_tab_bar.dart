@@ -168,7 +168,7 @@ class AppTabBar extends StatelessWidget {
             glyphArea,
             const SizedBox(height: 5),
             MonoLabel(labels[index],
-                size: 8, weight: FontWeight.w600, color: color),
+                size: 10, weight: FontWeight.w600, color: color),
             const SizedBox(height: 5),
             Container(
               key: ValueKey<String>('tab-dot-$index'),

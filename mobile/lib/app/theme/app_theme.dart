@@ -31,14 +31,14 @@ class AppTheme {
     final mono = TextStyle(fontFamily: AppFonts.mono, color: t.textSecondary);
     final textTheme = TextTheme(
       displayLarge: archivo.copyWith(
-          fontSize: 68,
+          fontSize: 52,
           fontWeight: FontWeight.w800,
-          letterSpacing: -2,
+          letterSpacing: -1.6,
           height: 0.95),
       displayMedium: archivo.copyWith(
-          fontSize: 58,
+          fontSize: 44,
           fontWeight: FontWeight.w800,
-          letterSpacing: -1.7,
+          letterSpacing: -1.3,
           height: 0.95),
       displaySmall: archivo.copyWith(
           fontSize: 40,
@@ -48,29 +48,29 @@ class AppTheme {
       headlineLarge: archivo.copyWith(
           fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.7),
       headlineMedium:
-          archivo.copyWith(fontSize: 24, fontWeight: FontWeight.w700),
+          archivo.copyWith(fontSize: 26, fontWeight: FontWeight.w700),
       headlineSmall: archivo.copyWith(
-          fontSize: 22,
+          fontSize: 24,
           fontWeight: FontWeight.w800,
           fontStyle: FontStyle.italic),
-      titleLarge: archivo.copyWith(fontSize: 20, fontWeight: FontWeight.w800),
-      titleMedium: archivo.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-      titleSmall: archivo.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+      titleLarge: archivo.copyWith(fontSize: 22, fontWeight: FontWeight.w800),
+      titleMedium: archivo.copyWith(fontSize: 18, fontWeight: FontWeight.w700),
+      titleSmall: archivo.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
       bodyLarge: archivo.copyWith(
-          fontSize: 15, fontWeight: FontWeight.w400, height: 1.5),
+          fontSize: 17, fontWeight: FontWeight.w400, height: 1.5),
       bodyMedium: archivo.copyWith(
-          fontSize: 13, fontWeight: FontWeight.w400, height: 1.5),
+          fontSize: 15, fontWeight: FontWeight.w400, height: 1.5),
       bodySmall: archivo.copyWith(
-          fontSize: 11, fontWeight: FontWeight.w400, color: t.textMuted),
+          fontSize: 13, fontWeight: FontWeight.w400, color: t.textMuted),
       labelLarge: mono.copyWith(
-          fontSize: 12,
+          fontSize: 14,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.4,
           color: t.text),
       labelMedium: mono.copyWith(
-          fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.4),
+          fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1.4),
       labelSmall: mono.copyWith(
-          fontSize: 8,
+          fontSize: 10,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.1,
           color: t.textMuted),
@@ -83,7 +83,7 @@ class AppTheme {
           borderSide: BorderSide(color: color),
         );
     final fieldLabel = mono.copyWith(
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.7,
         color: t.textMuted);
@@ -128,7 +128,7 @@ class AppTheme {
         focusedBorder: inputBorder(t.voltText),
         errorBorder: inputBorder(t.rec),
         focusedErrorBorder: inputBorder(t.rec),
-        errorStyle: archivo.copyWith(fontSize: 11, color: t.rec),
+        errorStyle: archivo.copyWith(fontSize: 13, color: t.rec),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -137,6 +137,7 @@ class AppTheme {
           disabledBackgroundColor: t.raised,
           disabledForegroundColor: t.textMuted,
           minimumSize: const Size.fromHeight(52),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           shape: shape14,
           textStyle: textTheme.labelLarge,
         ),
@@ -147,6 +148,7 @@ class AppTheme {
           disabledForegroundColor: t.textMuted,
           minimumSize: const Size.fromHeight(52),
           side: BorderSide(color: t.text.withValues(alpha: 0.16)),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           shape: shape14,
           textStyle: textTheme.labelLarge,
         ),
@@ -154,7 +156,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: t.textSecondary,
-          textStyle: textTheme.labelLarge?.copyWith(fontSize: 11),
+          textStyle: textTheme.labelLarge?.copyWith(fontSize: 13),
         ),
       ),
       iconTheme: IconThemeData(color: t.textSecondary, size: 20),

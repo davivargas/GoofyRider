@@ -51,7 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const Wordmark(size: 44),
                         const SizedBox(height: 12),
                         const MonoLabel('Track every line.',
-                            size: 10, letterSpacing: 2.4),
+                            size: 12, letterSpacing: 2.4),
                         const SizedBox(height: 44),
                         TextFormField(
                           controller: _emailController,

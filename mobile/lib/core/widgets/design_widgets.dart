@@ -30,13 +30,14 @@ class MonoLabel extends StatelessWidget {
   const MonoLabel(
     this.text, {
     super.key,
-    this.size = 9,
+    this.size = 11,
     this.tone = MonoTone.secondary,
     this.letterSpacing = 1.4,
     this.weight = FontWeight.w600,
     this.uppercase = true,
     this.textAlign,
     this.maxLines,
+    this.softWrap,
     this.color,
   });
 
@@ -48,6 +49,9 @@ class MonoLabel extends StatelessWidget {
   final bool uppercase;
   final TextAlign? textAlign;
   final int? maxLines;
+
+  /// `false` keeps the label on one line (CSS `white-space: nowrap`).
+  final bool? softWrap;
   final Color? color;
 
   @override
@@ -56,6 +60,7 @@ class MonoLabel extends StatelessWidget {
       uppercase ? text.toUpperCase() : text,
       textAlign: textAlign,
       maxLines: maxLines,
+      softWrap: softWrap,
       overflow: maxLines == null ? null : TextOverflow.ellipsis,
       style: TextStyle(
         fontFamily: AppFonts.mono,
@@ -81,6 +86,10 @@ class StatBlock extends StatelessWidget {
     this.labelTone = MonoTone.muted,
     this.valueColor,
     this.alignment = CrossAxisAlignment.start,
+    this.valueSize,
+    this.labelSize = 10,
+    this.labelLetterSpacing = 1.4,
+    this.labelGap,
   });
 
   final String value;
@@ -90,15 +99,23 @@ class StatBlock extends StatelessWidget {
   final Color? valueColor;
   final CrossAxisAlignment alignment;
 
+  /// Overrides the [size] preset's value font size.
+  final double? valueSize;
+  final double labelSize;
+  final double labelLetterSpacing;
+
+  /// Overrides the [size] preset's gap between value and label.
+  final double? labelGap;
+
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final (double fontSize, FontWeight weight, double spacing, double gap) =
         switch (size) {
       StatSize.hero => (68, FontWeight.w800, -2.0, 8),
-      StatSize.large => (24, FontWeight.w700, -0.3, 3),
-      StatSize.medium => (18, FontWeight.w700, 0, 2),
-      StatSize.small => (15, FontWeight.w700, 0, 2),
+      StatSize.large => (26, FontWeight.w700, -0.3, 3),
+      StatSize.medium => (20, FontWeight.w700, 0, 2),
+      StatSize.small => (17, FontWeight.w700, 0, 2),
     };
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -110,15 +127,21 @@ class StatBlock extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontFamily: AppFonts.archivo,
-            fontSize: fontSize,
+            fontSize: valueSize ?? fontSize,
             fontWeight: weight,
             letterSpacing: spacing,
             height: 1,
             color: valueColor ?? t.text,
           ),
         ),
-        SizedBox(height: gap),
-        MonoLabel(label, size: 8, tone: labelTone),
+        SizedBox(height: labelGap ?? gap),
+        MonoLabel(
+          label,
+          size: labelSize,
+          tone: labelTone,
+          letterSpacing: labelLetterSpacing,
+          maxLines: 1,
+        ),
       ],
     );
   }
@@ -207,7 +230,7 @@ class StatusPill extends StatelessWidget {
       PillVariant.muted => (t.textSecondary, Colors.transparent, t.line),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
@@ -217,8 +240,14 @@ class StatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (leading != null) ...<Widget>[leading!, const SizedBox(width: 6)],
-          MonoLabel(text,
-              size: 9, weight: FontWeight.w700, letterSpacing: 1.1, color: fg),
+          MonoLabel(
+            text,
+            size: 11,
+            weight: FontWeight.w700,
+            letterSpacing: 0.88,
+            softWrap: false,
+            color: fg,
+          ),
         ],
       ),
     );
@@ -250,7 +279,23 @@ class VoltButton extends StatelessWidget {
               child:
                   CircularProgressIndicator(strokeWidth: 2, color: t.voltInk),
             )
-          : Text(label.toUpperCase()),
+          : _ButtonLabel(label),
+    );
+  }
+}
+
+/// Button label that stays on one line, scaling down only when the button is
+/// too narrow for it.
+class _ButtonLabel extends StatelessWidget {
+  const _ButtonLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(label.toUpperCase(), maxLines: 1, softWrap: false),
     );
   }
 }
@@ -266,7 +311,7 @@ class GhostButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton(
       onPressed: onPressed,
-      child: Text(label.toUpperCase()),
+      child: _ButtonLabel(label),
     );
   }
 }
@@ -374,7 +419,7 @@ class InitialsAvatar extends StatelessWidget {
         initialsFor(name),
         style: TextStyle(
           fontFamily: ring ? AppFonts.archivo : AppFonts.mono,
-          fontSize: size * (ring ? 0.32 : 0.34),
+          fontSize: size * (ring ? 0.36 : 0.4),
           fontWeight: ring ? FontWeight.w800 : FontWeight.w700,
           color: t.voltText,
         ),
@@ -422,7 +467,7 @@ class PillToggle<T> extends StatelessWidget {
                 ),
                 child: MonoLabel(
                   label,
-                  size: 9,
+                  size: 11,
                   weight: FontWeight.w700,
                   letterSpacing: 0.7,
                   color: value == selected ? t.voltInk : t.textSecondary,

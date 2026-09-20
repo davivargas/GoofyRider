@@ -74,7 +74,7 @@ class ProfileScreen extends ConsumerWidget {
                     Text(name, style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 3),
                     MonoLabel(email,
-                        size: 9,
+                        size: 11,
                         tone: MonoTone.muted,
                         letterSpacing: 0.8,
                         uppercase: false,
@@ -134,7 +134,7 @@ class ProfileScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 const MonoLabel('Units',
-                    size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                    size: 10, tone: MonoTone.muted, letterSpacing: 1.8),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -250,7 +250,7 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 18),
           const MonoLabel(
             CatalogAttribution.openSkiData,
-            size: 8,
+            size: 10,
             tone: MonoTone.faint,
             uppercase: false,
           ),
@@ -271,7 +271,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               const MonoLabel('v0.1.0 · Sync ok',
-                  size: 8, tone: MonoTone.faint),
+                  size: 10, tone: MonoTone.faint),
             ],
           ),
         ],
