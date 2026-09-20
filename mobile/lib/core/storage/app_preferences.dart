@@ -1,5 +1,3 @@
-import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Non-secret app preferences (units, onboarding flags). Backed by
@@ -18,26 +16,12 @@ class AppPreferences {
   /// Unit for horizontal distance travelled.
   static const String distanceUnitKey = 'distance_unit';
   static const String locationOnboardingSeenKey = 'location_onboarding_seen';
-  static const String _legacyMigratedKey = 'legacy_secure_prefs_migrated';
-
-  /// Legacy secure-storage keys (left side) and the preference key each one
-  /// migrates into. Values are copied verbatim; `'true'` becomes a bool.
-  static const Map<String, String> _legacyKeys = <String, String>{
-    'goofyrider_speed_unit': speedUnitKey,
-    'goofyrider_distance_unit': distanceUnitKey,
-    'gps_warmup.foreground_permission_requested': locationOnboardingSeenKey,
-  };
 
   final _PreferenceStore _store;
 
-  static Future<AppPreferences> load({
-    FlutterSecureStorage? legacyStorage,
-  }) async {
+  static Future<AppPreferences> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final instance = AppPreferences._(_SharedPreferencesStore(prefs));
-    await instance
-        ._migrateLegacy(legacyStorage ?? const FlutterSecureStorage());
-    return instance;
+    return AppPreferences._(_SharedPreferencesStore(prefs));
   }
 
   String? getString(String key) => _store.getString(key);
@@ -49,46 +33,6 @@ class AppPreferences {
       _store.getBool(key) ?? defaultValue;
 
   Future<void> setBool(String key, bool value) => _store.setBool(key, value);
-
-  Future<void> _migrateLegacy(FlutterSecureStorage legacy) async {
-    if (_store.getBool(_legacyMigratedKey) ?? false) {
-      return;
-    }
-    // Only latch the migrated flag when every legacy key was actually read;
-    // otherwise a transient secure-storage failure would drop the values for
-    // good.
-    var migrationComplete = true;
-    for (final entry in _legacyKeys.entries) {
-      String? value;
-      try {
-        value = await legacy.read(key: entry.key);
-      } on PlatformException {
-        migrationComplete = false;
-        continue;
-      } on MissingPluginException {
-        migrationComplete = false;
-        continue;
-      }
-      if (value == null) {
-        continue;
-      }
-      if (entry.value == locationOnboardingSeenKey) {
-        await _store.setBool(entry.value, value == 'true');
-      } else {
-        await _store.setString(entry.value, value);
-      }
-      try {
-        await legacy.delete(key: entry.key);
-      } on PlatformException {
-        // Best effort; the migrated flag below stops repeat attempts.
-      } on MissingPluginException {
-        // Same.
-      }
-    }
-    if (migrationComplete) {
-      await _store.setBool(_legacyMigratedKey, true);
-    }
-  }
 }
 
 abstract class _PreferenceStore {
