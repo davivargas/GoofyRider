@@ -5,6 +5,7 @@ import 'package:fall_line_mobile/app/theme/app_theme.dart';
 import 'package:fall_line_mobile/core/constants/app_constants.dart';
 import 'package:fall_line_mobile/core/providers.dart';
 import 'package:fall_line_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:fall_line_mobile/core/providers/vertical_unit_preference_provider.dart';
 import 'package:fall_line_mobile/core/providers/speed_unit_preference_provider.dart';
 import 'package:fall_line_mobile/core/storage/app_preferences.dart';
 import 'package:fall_line_mobile/features/auth/domain/auth_models.dart';
@@ -72,6 +73,9 @@ void main() {
           distanceUnitPreferenceProvider.overrideWith((_) =>
               DistanceUnitPreferenceController(
                   preferences: AppPreferences.inMemory())),
+          verticalUnitPreferenceProvider.overrideWith((_) =>
+              VerticalUnitPreferenceController(
+                  preferences: AppPreferences.inMemory())),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
           debugExportActionProvider.overrideWithValue(
@@ -79,6 +83,7 @@ void main() {
               required String ownerUserId,
               required String? userEmail,
               required speedUnit,
+              required verticalUnit,
               required distanceUnit,
             }) async =>
                 r'C:\tmp\goofyrider_debug.json',
@@ -94,5 +99,50 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text(CatalogAttribution.openSkiData), findsOneWidget);
+  });
+
+  testWidgets('units card offers separate vertical and distance toggles',
+      (WidgetTester tester) async {
+    final preferences = AppPreferences.inMemory();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authControllerProvider.overrideWith(
+            (_) => _FakeAuthController(
+              initialState: const AuthState(status: AuthStatus.unauthenticated),
+            ),
+          ),
+          appPreferencesProvider.overrideWithValue(preferences),
+          activeMapTileProviderConfigProvider
+              .overrideWithValue(MapTileProviderConfig.devFallback),
+          debugExportActionProvider.overrideWithValue(
+            ({
+              required String ownerUserId,
+              required String? userEmail,
+              required speedUnit,
+              required verticalUnit,
+              required distanceUnit,
+            }) async =>
+                r'C:	mp\goofyrider_debug.json',
+          ),
+        ],
+        child: MaterialApp(theme: AppTheme.dark(), home: const ProfileScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vertical'), findsOneWidget);
+    expect(find.text('Distance'), findsOneWidget);
+    // Vertical keeps m/ft; distance is the new km/mi choice.
+    expect(find.text('M'), findsOneWidget);
+    expect(find.text('FT'), findsOneWidget);
+    expect(find.text('KM'), findsOneWidget);
+    expect(find.text('MI'), findsOneWidget);
+
+    await tester.tap(find.text('MI'));
+    await tester.pumpAndSettle();
+
+    expect(preferences.getString(AppPreferences.distanceUnitKey), 'mi');
+    expect(preferences.getString(AppPreferences.verticalUnitKey), isNull);
   });
 }

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/storage/drift_local_database.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/utils/vertical_unit.dart';
 import '../../session/domain/session_models.dart';
 
 const int _debugExportSchemaVersion = 2;
@@ -29,6 +30,7 @@ class DebugExportService {
     required String ownerUserId,
     required String? userEmail,
     required SpeedUnit speedUnit,
+    required VerticalUnit verticalUnit,
     required DistanceUnit distanceUnit,
   }) async {
     final now = DateTime.now().toUtc();
@@ -59,6 +61,7 @@ class DebugExportService {
       },
       'settings': <String, dynamic>{
         'speed_unit': speedUnit.name,
+        'vertical_unit': verticalUnit.name,
         'distance_unit': distanceUnit.name,
       },
       'summary': <String, dynamic>{

@@ -7,9 +7,11 @@ import '../../core/constants/app_constants.dart';
 import '../../core/providers/distance_unit_preference_provider.dart';
 import '../../core/providers/speed_unit_preference_provider.dart';
 import '../../core/utils/date_time_formatting.dart';
+import '../../core/providers/vertical_unit_preference_provider.dart';
 import '../../core/utils/distance_unit.dart';
 import '../../core/utils/duration_formatting.dart';
 import '../../core/utils/speed_unit.dart';
+import '../../core/utils/vertical_unit.dart';
 import '../../core/widgets/design_widgets.dart';
 import '../../features/auth/presentation/auth_providers.dart';
 import '../../features/resorts/domain/resort_models.dart';
@@ -30,6 +32,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
+    final verticalUnit = ref.watch(verticalUnitPreferenceProvider);
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
     final favorites = ref.watch(favoriteResortsProvider);
     final history = ref.watch(historyProvider);
@@ -72,6 +75,7 @@ class HomeScreen extends ConsumerWidget {
                   SurfaceCard(child: Text('Unable to load history: $error')),
               data: (List<LocalRideSession> sessions) => _SeasonHero(
                 sessions: sessions,
+                verticalUnit: verticalUnit,
                 distanceUnit: distanceUnit,
                 speedUnit: speedUnit,
               ),
@@ -175,13 +179,25 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
+Widget _heroStat(String value, String label) => StatBlock(
+      value: value,
+      label: label,
+      size: StatSize.large,
+      valueSize: 24,
+      labelSize: 11,
+      labelLetterSpacing: 1.32,
+      labelGap: 4,
+    );
+
 class _SeasonHero extends StatelessWidget {
   const _SeasonHero(
       {required this.sessions,
+      required this.verticalUnit,
       required this.distanceUnit,
       required this.speedUnit});
 
   final List<LocalRideSession> sessions;
+  final VerticalUnit verticalUnit;
   final DistanceUnit distanceUnit;
   final SpeedUnit speedUnit;
 
@@ -189,14 +205,14 @@ class _SeasonHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = buildSeasonSummary(sessions, now: DateTime.now());
     final vert = summary.totalVertM > 0
-        ? distanceUnit.convertFromMeters(summary.totalVertM).round().toString()
+        ? verticalUnit.convertFromMeters(summary.totalVertM).round().toString()
         : '--';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         MonoLabel(
             'Season ${shortSeasonLabel(summary.label)} · ${summary.daysRidden} days ridden',
-            size: 9,
+            size: 11,
             letterSpacing: 1.8),
         const SizedBox(height: 8),
         Row(
@@ -205,33 +221,27 @@ class _SeasonHero extends StatelessWidget {
           children: <Widget>[
             Text(vert, style: Theme.of(context).textTheme.displayLarge),
             const SizedBox(width: 10),
-            MonoLabel('${distanceUnit.shortLabel} vert',
-                size: 10, tone: MonoTone.volt, letterSpacing: 1.6),
+            MonoLabel('${verticalUnit.shortLabel} vert',
+                size: 12, tone: MonoTone.volt, letterSpacing: 1.6),
           ],
         ),
         const SizedBox(height: 18),
         Wrap(
-          spacing: 26,
+          spacing: 22,
           runSpacing: 14,
           children: <Widget>[
-            StatBlock(
-                value: speedUnit
+            _heroStat(
+                speedUnit
                     .convertFromMetersPerSecond(summary.topSpeedMps)
                     .toStringAsFixed(1),
-                label: 'Top ${speedUnit.shortLabel}',
-                size: StatSize.small),
-            StatBlock(
-                value: _kilometers(summary.totalDistanceM, distanceUnit),
-                label: _distanceLabel(distanceUnit),
-                size: StatSize.small),
-            StatBlock(
-                value: '${summary.sessionCount}',
-                label: 'Sessions',
-                size: StatSize.small),
-            StatBlock(
-                value: formatSecondsAsDuration(summary.rideTimeS),
-                label: 'Ride time',
-                size: StatSize.small),
+                'Top ${speedUnit.shortLabel}'),
+            _heroStat(
+                distanceUnit
+                    .convertFromMeters(summary.totalDistanceM)
+                    .toStringAsFixed(1),
+                '${distanceUnit.shortLabel.toUpperCase()} dist'),
+            _heroStat('${summary.sessionCount}', 'Sessions'),
+            _heroStat(formatSecondsAsDuration(summary.rideTimeS), 'Ride time'),
           ],
         ),
       ],

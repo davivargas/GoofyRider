@@ -8,8 +8,10 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/providers/vertical_unit_preference_provider.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/utils/vertical_unit.dart';
 import '../../../core/widgets/design_widgets.dart';
 import '../../auth/presentation/auth_providers.dart';
 import '../../session/domain/session_models.dart';
@@ -22,6 +24,7 @@ typedef DebugExportAction = Future<String> Function({
   required String ownerUserId,
   required String? userEmail,
   required SpeedUnit speedUnit,
+  required VerticalUnit verticalUnit,
   required DistanceUnit distanceUnit,
 });
 
@@ -33,12 +36,14 @@ final debugExportActionProvider = Provider<DebugExportAction>((ref) {
     required String ownerUserId,
     required String? userEmail,
     required SpeedUnit speedUnit,
+    required VerticalUnit verticalUnit,
     required DistanceUnit distanceUnit,
   }) async {
     final file = await service.export(
       ownerUserId: ownerUserId,
       userEmail: userEmail,
       speedUnit: speedUnit,
+      verticalUnit: verticalUnit,
       distanceUnit: distanceUnit,
     );
     return file.path;
@@ -52,6 +57,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final verticalUnit = ref.watch(verticalUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final history = ref.watch(historyProvider);
     final t = context.tokens;
@@ -96,18 +102,14 @@ class ProfileScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     MonoLabel('Season ${shortSeasonLabel(s.label)}',
-                        size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
+                        size: 10, tone: MonoTone.muted, letterSpacing: 1.8),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 26,
                       runSpacing: 12,
                       children: <Widget>[
                         StatBlock(
-                            value: '${s.daysRidden}',
-                            label: 'Days',
-                            size: StatSize.large),
-                        StatBlock(
-                            value: distanceUnit.formatFromMeters(s.totalVertM),
+                            value: verticalUnit.formatFromMeters(s.totalVertM),
                             label: 'Vert',
                             size: StatSize.large),
                         StatBlock(
@@ -117,8 +119,11 @@ class ProfileScreen extends ConsumerWidget {
                             label: 'Top ${speedUnit.shortLabel}',
                             size: StatSize.large),
                         StatBlock(
-                            value: '${s.sessionCount}',
-                            label: 'Sessions',
+                            value: distanceUnit
+                                .convertFromMeters(s.totalDistanceM)
+                                .toStringAsFixed(1),
+                            label:
+                                '${distanceUnit.shortLabel.toUpperCase()} dist',
                             size: StatSize.large),
                       ],
                     ),
@@ -160,14 +165,34 @@ class ProfileScreen extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
+                    Text('Vertical',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: t.textSecondary,
+                            fontWeight: FontWeight.w600)),
+                    PillToggle<VerticalUnit>(
+                      options: const <(VerticalUnit, String)>[
+                        (VerticalUnit.meters, 'M'),
+                        (VerticalUnit.feet, 'FT')
+                      ],
+                      selected: verticalUnit,
+                      onChanged: (VerticalUnit v) => ref
+                          .read(verticalUnitPreferenceProvider.notifier)
+                          .setVerticalUnit(v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
                     Text('Distance',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: t.textSecondary,
                             fontWeight: FontWeight.w600)),
                     PillToggle<DistanceUnit>(
                       options: const <(DistanceUnit, String)>[
-                        (DistanceUnit.meters, 'M'),
-                        (DistanceUnit.feet, 'FT')
+                        (DistanceUnit.kilometers, 'KM'),
+                        (DistanceUnit.miles, 'MI')
                       ],
                       selected: distanceUnit,
                       onChanged: (DistanceUnit v) => ref

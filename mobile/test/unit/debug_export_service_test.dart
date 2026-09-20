@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fall_line_mobile/core/storage/drift_local_database.dart';
 import 'package:fall_line_mobile/core/utils/distance_unit.dart';
+import 'package:fall_line_mobile/core/utils/vertical_unit.dart';
 import 'package:fall_line_mobile/core/utils/speed_unit.dart';
 import 'package:fall_line_mobile/features/profile/presentation/debug_export_service.dart';
 import 'package:fall_line_mobile/features/session/domain/session_models.dart';
@@ -104,7 +105,8 @@ void main() {
       ownerUserId: 'user-1',
       userEmail: 'rider@example.com',
       speedUnit: SpeedUnit.kilometersPerHour,
-      distanceUnit: DistanceUnit.meters,
+      verticalUnit: VerticalUnit.meters,
+      distanceUnit: DistanceUnit.kilometers,
     );
 
     expect(await file.exists(), isTrue);
@@ -115,7 +117,8 @@ void main() {
     expect(payload['summary']['unsynced_session_count'], 1);
     expect(payload['summary']['cached_weather_count'], 1);
     expect(payload['settings']['speed_unit'], 'kilometersPerHour');
-    expect(payload['settings']['distance_unit'], 'meters');
+    expect(payload['settings']['vertical_unit'], 'meters');
+    expect(payload['settings']['distance_unit'], 'kilometers');
     expect(payload['user_context']['masked_email'], 'ri***@example.com');
     expect(payload['user_context']['masked_email'], isNot('rider@example.com'));
     expect(payload['cached_remote_sessions'], isNotEmpty);

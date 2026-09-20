@@ -7,9 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fall_line_mobile/app/theme/app_theme.dart';
 import 'package:fall_line_mobile/core/constants/app_constants.dart';
 import 'package:fall_line_mobile/core/providers.dart';
-import 'package:fall_line_mobile/core/providers/distance_unit_preference_provider.dart';
+import 'package:fall_line_mobile/core/providers/vertical_unit_preference_provider.dart';
 import 'package:fall_line_mobile/core/storage/app_preferences.dart';
-import 'package:fall_line_mobile/core/utils/distance_unit.dart';
+import 'package:fall_line_mobile/core/utils/vertical_unit.dart';
 import 'package:fall_line_mobile/features/session/domain/location_tracking_repository.dart';
 import 'package:fall_line_mobile/features/session/domain/session_models.dart';
 import 'package:fall_line_mobile/features/session/domain/session_repository.dart';
@@ -198,9 +198,9 @@ class FakeSessionRepository implements SessionRepository {
   }
 }
 
-class _FakeDistanceUnitPreferenceController
-    extends DistanceUnitPreferenceController {
-  _FakeDistanceUnitPreferenceController(DistanceUnit unit)
+class _FakeVerticalUnitPreferenceController
+    extends VerticalUnitPreferenceController {
+  _FakeVerticalUnitPreferenceController(VerticalUnit unit)
       : super(preferences: AppPreferences.inMemory()) {
     state = unit;
   }
@@ -411,8 +411,8 @@ void main() {
           locationTrackingRepositoryProvider
               .overrideWithValue(fakeLocationRepository),
           recordingControllerProvider.overrideWith((_) => fakeController),
-          distanceUnitPreferenceProvider.overrideWith(
-            (_) => _FakeDistanceUnitPreferenceController(DistanceUnit.meters),
+          verticalUnitPreferenceProvider.overrideWith(
+            (_) => _FakeVerticalUnitPreferenceController(VerticalUnit.meters),
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
@@ -469,8 +469,8 @@ void main() {
           locationTrackingRepositoryProvider
               .overrideWithValue(fakeLocationRepository),
           recordingControllerProvider.overrideWith((_) => fakeController),
-          distanceUnitPreferenceProvider.overrideWith(
-            (_) => _FakeDistanceUnitPreferenceController(DistanceUnit.feet),
+          verticalUnitPreferenceProvider.overrideWith(
+            (_) => _FakeVerticalUnitPreferenceController(VerticalUnit.feet),
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),

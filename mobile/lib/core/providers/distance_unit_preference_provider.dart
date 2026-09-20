@@ -6,8 +6,8 @@ import '../utils/distance_unit.dart';
 import 'enum_preference_controller.dart';
 
 const Map<DistanceUnit, String> distanceUnitWireValues = <DistanceUnit, String>{
-  DistanceUnit.meters: 'm',
-  DistanceUnit.feet: 'ft',
+  DistanceUnit.kilometers: 'km',
+  DistanceUnit.miles: 'mi',
 };
 
 class DistanceUnitPreferenceController
@@ -15,7 +15,7 @@ class DistanceUnitPreferenceController
   DistanceUnitPreferenceController({required super.preferences})
       : super(
           key: AppPreferences.distanceUnitKey,
-          initial: DistanceUnit.meters,
+          initial: DistanceUnit.kilometers,
           wireValues: distanceUnitWireValues,
         );
 

@@ -11,10 +11,12 @@ import '../../../core/errors/failures.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/providers/vertical_unit_preference_provider.dart';
 import '../../../core/utils/date_time_formatting.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/utils/vertical_unit.dart';
 import '../../../core/widgets/app_error_view.dart';
 import '../../../core/widgets/app_loading_view.dart';
 import '../../../core/widgets/design_widgets.dart';
@@ -38,11 +40,11 @@ class SessionDetailScreen extends ConsumerWidget {
     final resortLabel =
         ref.watch(sessionResortLabelProvider(localSessionId)).valueOrNull;
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final verticalUnit = ref.watch(verticalUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
     final tileProvider = ref.watch(mapTileProviderProvider);
-    final showDebugDiagnostics = kDebugMode && AppConstants.isDebugDiagnostics;
     final t = context.tokens;
 
     return Scaffold(
@@ -127,14 +129,14 @@ class SessionDetailScreen extends ConsumerWidget {
                         Text(
                             vert == null
                                 ? '--'
-                                : distanceUnit
+                                : verticalUnit
                                     .convertFromMeters(vert.toDouble())
                                     .round()
                                     .toString(),
                             style: Theme.of(context).textTheme.displayMedium),
                         const SizedBox(width: 8),
-                        MonoLabel('${distanceUnit.shortLabel} vert',
-                            size: 10, tone: MonoTone.volt, letterSpacing: 1.6),
+                        MonoLabel('${verticalUnit.shortLabel} vert',
+                            size: 12, tone: MonoTone.volt, letterSpacing: 1.6),
                       ],
                     ),
                     const SizedBox(width: 22),

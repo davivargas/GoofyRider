@@ -11,6 +11,11 @@ class AppPreferences {
   factory AppPreferences.inMemory() => AppPreferences._(_MemoryStore());
 
   static const String speedUnitKey = 'speed_unit';
+
+  /// Unit for vertical measurements (elevation loss, altitude).
+  static const String verticalUnitKey = 'vertical_unit';
+
+  /// Unit for horizontal distance travelled.
   static const String distanceUnitKey = 'distance_unit';
   static const String locationOnboardingSeenKey = 'location_onboarding_seen';
   static const String _legacyMigratedKey = 'legacy_secure_prefs_migrated';

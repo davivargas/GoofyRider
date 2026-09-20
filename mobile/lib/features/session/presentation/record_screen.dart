@@ -9,9 +9,11 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/providers/distance_unit_preference_provider.dart';
 import '../../../core/providers/speed_unit_preference_provider.dart';
+import '../../../core/providers/vertical_unit_preference_provider.dart';
 import '../../../core/utils/distance_unit.dart';
 import '../../../core/utils/duration_formatting.dart';
 import '../../../core/utils/speed_unit.dart';
+import '../../../core/utils/vertical_unit.dart';
 import '../../../core/widgets/design_widgets.dart';
 import '../../../core/widgets/map_attribution.dart';
 import '../domain/location_tracking_repository.dart';
@@ -87,6 +89,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   Widget build(BuildContext context) {
     final state = ref.watch(recordingControllerProvider);
     final speedUnit = ref.watch(speedUnitPreferenceProvider);
+    final verticalUnit = ref.watch(verticalUnitPreferenceProvider);
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
@@ -282,7 +285,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                   ),
                 ),
                 if (state.autoPaused) _autoPauseBanner(),
-                _statsSheet(state, speedUnit, distanceUnit),
+                _statsSheet(state, speedUnit, verticalUnit, distanceUnit),
               ],
             ),
           ),
@@ -352,7 +355,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
                     const SizedBox(height: 12),
                     Center(child: _sessionMax(state, speedUnit)),
                     const SizedBox(height: 18),
-                    _hudTiles(state, distanceUnit),
+                    _hudTiles(state, verticalUnit, distanceUnit),
                     const SizedBox(height: 12),
                     if (fits)
                       Expanded(child: hudMapThumbnail)
@@ -527,17 +530,21 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     );
   }
 
-  String _verticalLabel(RecordingViewState state, DistanceUnit distanceUnit) {
+  String _verticalLabel(RecordingViewState state, VerticalUnit verticalUnit) {
     final loss = state.tracking.liveStats.elevationLossM;
-    return loss == null ? '--' : distanceUnit.formatFromMeters(loss.toDouble());
+    return loss == null ? '--' : verticalUnit.formatFromMeters(loss.toDouble());
   }
 
-  String _altitudeLabel(RecordingViewState state, DistanceUnit distanceUnit) {
+  String _altitudeLabel(RecordingViewState state, VerticalUnit verticalUnit) {
     final alt = state.tracking.currentAltitudeM;
-    return alt == null ? '--' : distanceUnit.formatFromMeters(alt);
+    return alt == null ? '--' : verticalUnit.formatFromMeters(alt);
   }
 
-  Widget _hudTiles(RecordingViewState state, DistanceUnit distanceUnit) {
+  Widget _hudTiles(
+    RecordingViewState state,
+    VerticalUnit verticalUnit,
+    DistanceUnit distanceUnit,
+  ) {
     final stats = state.tracking.liveStats;
     Widget tile(String value, String label) => SurfaceCard(
           radius: 16,
@@ -552,10 +559,10 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
       crossAxisSpacing: 12,
       childAspectRatio: 2.2,
       children: <Widget>[
-        tile(_verticalLabel(state, distanceUnit), 'Vert'),
+        tile(_verticalLabel(state, verticalUnit), 'Vert'),
         tile(distanceUnit.formatFromMeters(stats.distanceM), 'Dist'),
         tile(state.tracking.elapsed.toHoursMinutesSeconds(), 'Ride time'),
-        tile(_altitudeLabel(state, distanceUnit), 'Alt'),
+        tile(_altitudeLabel(state, verticalUnit), 'Alt'),
       ],
     );
   }
@@ -563,6 +570,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
   Widget _statsSheet(
     RecordingViewState state,
     SpeedUnit speedUnit,
+    VerticalUnit verticalUnit,
     DistanceUnit distanceUnit,
   ) {
     final t = context.tokens;
@@ -594,7 +602,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
               label: 'Max ${speedUnit.shortLabel}',
             ),
             StatBlock(
-              value: _verticalLabel(state, distanceUnit),
+              value: _verticalLabel(state, verticalUnit),
               label: 'Vert',
             ),
             StatBlock(
@@ -605,7 +613,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
           const SizedBox(height: 12),
           statRow(<Widget>[
             StatBlock(
-              value: _altitudeLabel(state, distanceUnit),
+              value: _altitudeLabel(state, verticalUnit),
               label: 'Alt',
             ),
             StatBlock(
