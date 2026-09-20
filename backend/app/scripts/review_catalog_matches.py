@@ -4,7 +4,11 @@ Usage (from backend/):
     python -m app.scripts.review_catalog_matches list [--source openskidata|ski_api] [--legacy]
     python -m app.scripts.review_catalog_matches link openskidata <external_id> <resort_uuid>
     python -m app.scripts.review_catalog_matches reject openskidata <external_id>
-    python -m app.scripts.review_catalog_matches create ski_api <slug>
+    python -m app.scripts.review_catalog_matches create openskidata <external_id>
+
+`link`, `reject` and `create` act on records awaiting review, which only OpenSkiData
+produces. `ski_api` stays a valid --source for `list` because migration 0016 left legacy
+`ski_api` records behind; `list --legacy` is how you see them.
 
 Lifts for a resort linked through the review script are written by the next `import_catalog`
 run. (Spec 7.1 says each resolution writes that ski area's lifts; this deviates on purpose.)
