@@ -33,20 +33,20 @@ class DebugExportService {
   }) async {
     final now = DateTime.now().toUtc();
     final sessions =
-        await _localDatabase.listSessions(ownerUserId: ownerUserId);
+        await _localDatabase.sessions.listSessions(ownerUserId: ownerUserId);
     final orderedSessions = List<LocalRideSession>.from(
       sessions,
     )..sort((LocalRideSession a, LocalRideSession b) {
         return b.startedAt.compareTo(a.startedAt);
       });
-    final pendingSync =
-        await _localDatabase.listPendingSyncSessions(ownerUserId: ownerUserId);
-    final cachedRemote =
-        await _localDatabase.readCachedRemoteSessions(ownerUserId: ownerUserId);
-    final cachedResorts =
-        await _localDatabase.readCachedResorts(ownerUserId: ownerUserId);
+    final pendingSync = await _localDatabase.sessions
+        .listPendingSyncSessions(ownerUserId: ownerUserId);
+    final cachedRemote = await _localDatabase.remoteSessionCache
+        .readCachedRemoteSessions(ownerUserId: ownerUserId);
+    final cachedResorts = await _localDatabase.resortCache
+        .readCachedResorts(ownerUserId: ownerUserId);
     final cachedWeatherMetadata =
-        await _localDatabase.readCachedWeatherMetadata();
+        await _localDatabase.weatherCache.readCachedWeatherMetadata();
     final cachedResortById = _buildCachedResortIndex(cachedResorts);
 
     final payload = <String, dynamic>{
@@ -82,7 +82,8 @@ class DebugExportService {
     final sessionMaps = payload['sessions'] as List<Map<String, dynamic>>;
     for (var index = 0; index < orderedSessions.length; index++) {
       final session = orderedSessions[index];
-      final diagnostics = await _localDatabase.listTrackingDiagnostics(
+      final diagnostics =
+          await _localDatabase.trackingDiagnostics.listTrackingDiagnostics(
         session.localId,
         limit: _trackingDiagnosticsLimit,
       );
@@ -96,7 +97,8 @@ class DebugExportService {
       final cachedRemoteSummary =
           session.remoteId == null || session.remoteId!.trim().isEmpty
               ? null
-              : await _localDatabase.readCachedRemoteSessionSummary(
+              : await _localDatabase.remoteSessionCache
+                  .readCachedRemoteSessionSummary(
                   ownerUserId: ownerUserId,
                   remoteId: session.remoteId!,
                 );
@@ -252,14 +254,14 @@ class DebugExportService {
 
   Future<List<LocalSessionPoint>> _readPointCandidates(
       int localSessionId) async {
-    final accepted = await _localDatabase.listPoints(
+    final accepted = await _localDatabase.sessionPoints.listPoints(
       localSessionId,
       onlyAccepted: true,
     );
     if (accepted.isNotEmpty) {
       return accepted;
     }
-    return _localDatabase.listPoints(localSessionId);
+    return _localDatabase.sessionPoints.listPoints(localSessionId);
   }
 
   List<LocalSessionPoint> _sampleSessionPoints(List<LocalSessionPoint> points) {
