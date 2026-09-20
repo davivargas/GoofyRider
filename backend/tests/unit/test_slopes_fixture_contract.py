@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path
 import re
 import statistics
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 
 import pytest
 
@@ -23,9 +23,7 @@ _METRIC_ABS_TOL = 1e-5
 _PEAK_ALTITUDE_NOT_GPS_TOL_M = 0.1
 _CYPRESS_MEAN_RUN_KMH = 23.1
 _CYPRESS_MEAN_RUN_KMH_TOL = 0.1
-_OVERRIDE_SEGMENT_PATTERN = re.compile(
-    r"^(?P<start>\d+)-(?P<end>\d+):(?P<state>ignore|lift|run)$"
-)
+_OVERRIDE_SEGMENT_PATTERN = re.compile(r"^(?P<start>\d+)-(?P<end>\d+):(?P<state>ignore|lift|run)$")
 _ALLOWED_ACTION_TYPES = {"Run", "Lift"}
 
 
@@ -61,8 +59,7 @@ class ParsedSlopesFixture:
 @pytest.fixture(scope="module")
 def slopes_fixtures() -> dict[str, ParsedSlopesFixture]:
     return {
-        filename: _parse_slopes_fixture(_FIXTURE_DIR / filename)
-        for filename in _FIXTURE_FILENAMES
+        filename: _parse_slopes_fixture(_FIXTURE_DIR / filename) for filename in _FIXTURE_FILENAMES
     }
 
 
@@ -95,10 +92,7 @@ def test_slopes_fixture_session_reconciliation_contract(
             max_action_altitude_m,
             abs=_METRIC_ABS_TOL,
         )
-        assert (
-            abs(fixture.peak_altitude_m - max_gps_altitude_m)
-            > _PEAK_ALTITUDE_NOT_GPS_TOL_M
-        )
+        assert abs(fixture.peak_altitude_m - max_gps_altitude_m) > _PEAK_ALTITUDE_NOT_GPS_TOL_M
 
 
 def test_slopes_fixture_override_contract(slopes_fixtures: dict[str, ParsedSlopesFixture]) -> None:
@@ -123,7 +117,9 @@ def test_cypress_fixture_mean_run_average_speed_kmh(
 ) -> None:
     cypress = slopes_fixtures["cypress_2026-03-21.slopes"]
 
-    mean_run_speed_kmh = statistics.mean(action.avg_speed_mps for action in cypress.run_actions) * 3.6
+    mean_run_speed_kmh = (
+        statistics.mean(action.avg_speed_mps for action in cypress.run_actions) * 3.6
+    )
 
     assert mean_run_speed_kmh == pytest.approx(
         _CYPRESS_MEAN_RUN_KMH,

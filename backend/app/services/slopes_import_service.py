@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+import csv
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
-from pathlib import Path
-from typing import Iterable
-from uuid import UUID
-import csv
 import io
 import math
-import zipfile
+from pathlib import Path
+from uuid import UUID
 import xml.etree.ElementTree as ET
+import zipfile
 
 from app.models.resort import Resort
 from app.models.ride_session import RideSession
@@ -627,9 +627,7 @@ def haversine_distance_meters(
 
     a = (
         math.sin(delta_lat / 2) ** 2
-        + math.cos(start_lat_rad)
-        * math.cos(end_lat_rad)
-        * math.sin(delta_lng / 2) ** 2
+        + math.cos(start_lat_rad) * math.cos(end_lat_rad) * math.sin(delta_lng / 2) ** 2
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return earth_radius_m * c

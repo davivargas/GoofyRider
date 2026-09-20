@@ -14,9 +14,7 @@ from app.models.base import Base
 
 class FavoriteResort(Base):
     __tablename__ = "favorite_resorts"
-    __table_args__ = (
-        Index("ix_favorite_resorts_resort_id", "resort_id"),
-    )
+    __table_args__ = (Index("ix_favorite_resorts_resort_id", "resort_id"),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

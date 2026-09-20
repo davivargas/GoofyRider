@@ -260,9 +260,7 @@ def test_create_override_writes_span_and_returns_detail(
 
     stored = list(
         db.scalars(
-            select(RideSessionOverride).where(
-                RideSessionOverride.session_id == UUID(session_id)
-            )
+            select(RideSessionOverride).where(RideSessionOverride.session_id == UUID(session_id))
         ).all()
     )
     assert len(stored) == 1
@@ -294,9 +292,7 @@ def test_create_override_rejects_client_created_by_value(
     assert response.status_code == 200
     stored = list(
         db.scalars(
-            select(RideSessionOverride).where(
-                RideSessionOverride.session_id == UUID(session_id)
-            )
+            select(RideSessionOverride).where(RideSessionOverride.session_id == UUID(session_id))
         ).all()
     )
     assert len(stored) == 1
@@ -411,9 +407,7 @@ def test_delete_override_removes_row(
 
     remaining = list(
         db.scalars(
-            select(RideSessionOverride).where(
-                RideSessionOverride.session_id == UUID(session_id)
-            )
+            select(RideSessionOverride).where(RideSessionOverride.session_id == UUID(session_id))
         ).all()
     )
     assert remaining == []

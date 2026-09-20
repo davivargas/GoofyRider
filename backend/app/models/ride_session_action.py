@@ -29,7 +29,9 @@ if TYPE_CHECKING:
 class RideSessionAction(Base):
     __tablename__ = "ride_session_actions"
     __table_args__ = (
-        CheckConstraint("action_type IN ('lift','run')", name="ck_ride_session_actions_action_type"),
+        CheckConstraint(
+            "action_type IN ('lift','run')", name="ck_ride_session_actions_action_type"
+        ),
         CheckConstraint("sequence_index >= 1", name="ck_ride_session_actions_sequence_index"),
         CheckConstraint("time_of_day IN (1,2,3)", name="ck_ride_session_actions_time_of_day"),
         CheckConstraint(
@@ -153,8 +155,7 @@ class RideSessionAction(Base):
         server_default=func.now(),
     )
 
-    session: Mapped["RideSession"] = relationship(
+    session: Mapped[RideSession] = relationship(
         "RideSession",
         back_populates="actions",
     )
-

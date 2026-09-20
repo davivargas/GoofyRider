@@ -195,14 +195,14 @@ class RideSession(Base):
         server_default=func.now(),
     )
 
-    resort: Mapped["Resort | None"] = relationship("Resort", lazy="joined")
-    actions: Mapped[list["RideSessionAction"]] = relationship(
+    resort: Mapped[Resort | None] = relationship("Resort", lazy="joined")
+    actions: Mapped[list[RideSessionAction]] = relationship(
         "RideSessionAction",
         back_populates="session",
         cascade="all, delete-orphan",
         order_by="RideSessionAction.started_at",
     )
-    overrides: Mapped[list["RideSessionOverride"]] = relationship(
+    overrides: Mapped[list[RideSessionOverride]] = relationship(
         "RideSessionOverride",
         back_populates="session",
         cascade="all, delete-orphan",

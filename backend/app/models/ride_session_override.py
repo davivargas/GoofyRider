@@ -67,8 +67,7 @@ class RideSessionOverride(Base):
         server_default=func.now(),
     )
 
-    session: Mapped["RideSession"] = relationship(
+    session: Mapped[RideSession] = relationship(
         "RideSession",
         back_populates="overrides",
     )
-

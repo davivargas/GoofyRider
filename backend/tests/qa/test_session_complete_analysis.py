@@ -91,9 +91,7 @@ def test_complete_session_runs_analyzer_and_writes_actions(
 
     action_rows = list(
         db.scalars(
-            select(RideSessionAction).where(
-                RideSessionAction.session_id == UUID(session_id)
-            )
+            select(RideSessionAction).where(RideSessionAction.session_id == UUID(session_id))
         ).all()
     )
     assert len(action_rows) >= 1

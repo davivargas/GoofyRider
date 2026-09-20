@@ -33,9 +33,7 @@ def test_add_persists_single_override(
     ride_session = create_ride_session()
     repo = SessionOverrideRepository(db)
 
-    repo.add(
-        _build_override(ride_session.id, datetime(2026, 4, 19, 9, 0, tzinfo=UTC))
-    )
+    repo.add(_build_override(ride_session.id, datetime(2026, 4, 19, 9, 0, tzinfo=UTC)))
     repo.commit()
 
     rows = repo.list_by_session(ride_session.id)

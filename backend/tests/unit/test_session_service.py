@@ -128,9 +128,7 @@ class FakeSessionOverrideRepository:
     def delete(self, override):
         self.deleted_overrides.append(override)
         siblings = self.overrides_by_session.get(override.session_id, [])
-        self.overrides_by_session[override.session_id] = [
-            o for o in siblings if o is not override
-        ]
+        self.overrides_by_session[override.session_id] = [o for o in siblings if o is not override]
 
     def add(self, override):
         if getattr(override, "id", None) is None:
