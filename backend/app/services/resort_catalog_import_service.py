@@ -24,6 +24,7 @@ from app.services.catalog_types import ExternalLiftRecord
 from app.services.catalog_types import ExternalSourceRecord
 from app.services.catalog_types import SourceResortView
 from app.services.catalog_types import content_hash
+from app.services.exceptions import ServiceUnavailableError
 from app.services.resort_lift_sync_service import LiftSyncSummary
 from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_matching import MatchKind
@@ -121,7 +122,11 @@ class ResortCatalogImportService:
                 continue
             if "detail" in record.payload:
                 continue
-            detail = source.fetch_detail(record.external_id)
+            try:
+                detail = source.fetch_detail(record.external_id)
+            except ServiceUnavailableError as exc:
+                logger.warning("SkiAPI detail fetch failed for %s: %s", record.external_id, exc)
+                continue
             record.payload = {**record.payload, "detail": detail}
             record.content_hash = content_hash(record.payload)
         self._records.flush()

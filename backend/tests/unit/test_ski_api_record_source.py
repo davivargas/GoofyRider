@@ -57,3 +57,16 @@ def test_fetch_detail_returns_data_object_and_maps_errors() -> None:
     assert detail["elevation"] == {"base_m": 274, "top_m": 1250}
     with pytest.raises(ServiceUnavailableError):
         source.fetch_detail("missing")
+
+
+def test_fetch_detail_percent_encodes_the_slug() -> None:
+    seen: dict[str, bytes] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["raw_path"] = request.url.raw_path
+        return httpx.Response(200, content=b'{"data": {"slug": "x"}}')
+
+    source = _source(handler)
+    source.fetch_detail("weird slug/with?stuff")
+
+    assert seen["raw_path"] == b"/v1/resort/weird%20slug%2Fwith%3Fstuff"

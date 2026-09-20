@@ -5,6 +5,7 @@ import re
 from typing import Any
 from typing import Protocol
 from typing import cast
+from urllib.parse import quote
 
 import httpx
 
@@ -157,7 +158,7 @@ class SkiApiResortSource:
             next_page = _parse_next_page(payload.get("next_page"))
 
     def fetch_detail(self, slug: str) -> dict[str, Any]:
-        payload = self._get_json(f"{self._base_url}/resort/{slug}", params=None)
+        payload = self._get_json(f"{self._base_url}/resort/{quote(slug, safe='')}", params=None)
         data = payload.get("data", payload)
         return _require_object_payload(
             data, error_message="Ski API resort detail must be an object."

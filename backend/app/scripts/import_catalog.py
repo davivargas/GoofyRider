@@ -156,7 +156,7 @@ def _print_summary(name: str, summary: CatalogImportSummary) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
-    if args.source in ("ski_api", "all") and not get_settings().ski_api_key:
+    if args.source in ("ski_api", "all") and not args.merge_only and not get_settings().ski_api_key:
         print("SKI_API_KEY is not set; cannot import from SkiAPI.", file=sys.stderr)
         return 2
     try:

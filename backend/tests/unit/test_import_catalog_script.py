@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import app.scripts.import_catalog as import_catalog_module
 from app.scripts.import_catalog import build_argument_parser
 from app.scripts.import_catalog import main
 
@@ -44,3 +45,10 @@ def test_ski_api_source_without_key_exits_with_code_2(monkeypatch: pytest.Monkey
     monkeypatch.delenv("SKI_API_KEY", raising=False)
 
     assert main(["--source", "ski_api"]) == 2
+
+
+def test_merge_only_skips_the_ski_api_key_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SKI_API_KEY", raising=False)
+    monkeypatch.setattr(import_catalog_module, "run", lambda args: [])
+
+    assert main(["--source", "all", "--merge-only"]) == 0

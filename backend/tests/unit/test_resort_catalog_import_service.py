@@ -9,6 +9,7 @@ from app.models.resort import Resort
 from app.models.resort_source_record import ResortSourceRecord
 from app.services.catalog_types import ExternalSourceRecord
 from app.services.catalog_types import content_hash
+from app.services.exceptions import ServiceUnavailableError
 from app.services.resort_catalog_import_service import CatalogImportOptions
 from app.services.resort_catalog_import_service import ResortCatalogImportService
 from app.services.resort_lift_sync_service import ResortLiftSyncService
@@ -324,10 +325,14 @@ def test_rematch_of_an_auto_linked_record_relinks_the_same_resort() -> None:
 
 class FakeSkiApiSource:
     def __init__(
-        self, entries: list[dict[str, object]], details: dict[str, dict[str, object]]
+        self,
+        entries: list[dict[str, object]],
+        details: dict[str, dict[str, object]],
+        fail_slugs: frozenset[str] = frozenset(),
     ) -> None:
         self._entries = entries
         self._details = details
+        self._fail_slugs = fail_slugs
         self.detail_calls: list[str] = []
 
     def iter_records(self):  # type: ignore[no-untyped-def]
@@ -338,6 +343,8 @@ class FakeSkiApiSource:
 
     def fetch_detail(self, slug: str) -> dict[str, object]:
         self.detail_calls.append(slug)
+        if slug in self._fail_slugs:
+            raise ServiceUnavailableError("Ski API provider unavailable.")
         return dict(self._details[slug])
 
 
@@ -412,3 +419,60 @@ def test_ski_api_detail_is_fetched_once() -> None:
     service.import_ski_api(source, CatalogImportOptions())
 
     assert source.detail_calls == ["grouse-mountain"]
+
+
+def test_ski_api_detail_fetch_failure_is_isolated_to_the_failing_record() -> None:
+    service, resort_repo, record_repo, _ = _build([], [])
+    service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+    grouse = next(
+        r for r in resort_repo.resorts if r.name == "Grouse Mountain" and r.country_code == "CA"
+    )
+    cypress = next(r for r in resort_repo.resorts if r.name == "Cypress Mountain")
+    source = FakeSkiApiSource(
+        entries=[
+            {
+                "slug": "grouse-mountain",
+                "name": "Grouse Mountain",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.3803, "longitude": -123.0815},
+            },
+            {
+                "slug": "cypress-mountain",
+                "name": "Cypress Mountain",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.396, "longitude": -123.204},
+            },
+        ],
+        details={
+            "cypress-mountain": {
+                "slug": "cypress-mountain",
+                "name": "Cypress Mountain",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.396, "longitude": -123.204},
+                "elevation": {"base_m": 900, "top_m": 1450},
+            },
+        },
+        fail_slugs=frozenset({"grouse-mountain"}),
+    )
+
+    summary = service.import_ski_api(source, CatalogImportOptions())
+
+    assert summary.linked_auto == 2  # the run completes normally despite the detail-fetch failure
+    assert sorted(source.detail_calls) == ["cypress-mountain", "grouse-mountain"]
+    assert resort_repo.commits >= 1  # the run completes and commits despite the failure
+    grouse_record = record_repo.get_by_source_and_external_id("ski_api", "grouse-mountain")
+    assert (
+        grouse_record is not None
+        and grouse_record.resort_id == grouse.id
+        and grouse_record.match_status == "linked"
+        and "detail" not in grouse_record.payload
+    )
+    cypress_record = record_repo.get_by_source_and_external_id("ski_api", "cypress-mountain")
+    assert (
+        cypress_record is not None
+        and cypress_record.resort_id == cypress.id
+        and "detail" in cypress_record.payload
+    )

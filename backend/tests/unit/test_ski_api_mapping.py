@@ -66,3 +66,22 @@ def test_raw_ski_api_payload_with_detail_prefers_detail_elevation_and_city() -> 
 
     assert (view.elevation_base_m, view.elevation_top_m) == (274, 1250)
     assert view.city == "North Vancouver"
+
+
+def test_raw_ski_api_payload_with_partial_detail_elevation_falls_back_per_field() -> None:
+    view = map_ski_api_view(
+        {
+            "slug": "grouse-mountain",
+            "name": "Grouse Mountain",
+            "country": "CA",
+            "region": "BC",
+            "location": {"latitude": 49.3803, "longitude": -123.0815},
+            "elevation": {"base_m": 100, "top_m": 900},
+            "detail": {
+                "elevation": {"base_m": 274},
+            },
+        }
+    )
+
+    assert view.elevation_base_m == 274  # from detail
+    assert view.elevation_top_m == 900  # detail lacked top_m; falls back to the list entry

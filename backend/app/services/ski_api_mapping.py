@@ -60,8 +60,10 @@ def map_ski_api_view(payload: Mapping[str, Any]) -> SourceResortView:
     if isinstance(detail, Mapping):
         detail_elevation = detail.get("elevation")
         if isinstance(detail_elevation, Mapping):
-            elevation_base_m = _int(detail_elevation.get("base_m"))
-            elevation_top_m = _int(detail_elevation.get("top_m"))
+            detail_base_m = _int(detail_elevation.get("base_m"))
+            detail_top_m = _int(detail_elevation.get("top_m"))
+            elevation_base_m = detail_base_m if detail_base_m is not None else elevation_base_m
+            elevation_top_m = detail_top_m if detail_top_m is not None else elevation_top_m
         detail_city = _text(detail.get("city"))
         if detail_city is not None:
             city = detail_city
