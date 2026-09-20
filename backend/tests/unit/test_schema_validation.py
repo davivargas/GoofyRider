@@ -5,8 +5,8 @@ import pytest
 
 from app.schemas.auth import RegisterRequest
 from app.schemas.session import SessionCompleteRequest
-from app.schemas.session import SessionPointInput
 from app.schemas.session import SessionPointsBatchRequest
+from app.schemas.session_point import SessionPointInput
 
 
 def test_register_request_normalizes_email_and_display_name() -> None:
