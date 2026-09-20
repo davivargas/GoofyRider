@@ -115,6 +115,9 @@ until then the script should be marked broken or removed.
 `session_point_analytics`, dropped in 0011. It would fail on first execution.
 Delete it.
 
+> **2026-09-20 update:** C2 is fixed. The script was deleted; nothing imported
+> it and it had no test coverage.
+
 **C3. Backend boot depends on a third-party API.**
 `docker-compose.yml` starts the backend with
 `alembic upgrade head && python -m app.scripts.import_resorts && uvicorn ...`.
