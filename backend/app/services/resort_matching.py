@@ -90,8 +90,10 @@ class MatchDecision:
 
 
 def normalize_name(name: str) -> str:
-    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
-    tokens = [t for t in _NON_WORD.split(folded.casefold()) if t and t not in _GENERIC_TOKENS]
+    folded = (
+        unicodedata.normalize("NFKD", name.casefold()).encode("ascii", "ignore").decode("ascii")
+    )
+    tokens = [t for t in _NON_WORD.split(folded) if t and t not in _GENERIC_TOKENS]
     return " ".join(tokens)
 
 

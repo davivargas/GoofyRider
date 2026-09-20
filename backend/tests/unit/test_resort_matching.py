@@ -68,6 +68,7 @@ def test_normalize_name_strips_case_accents_punctuation_and_generic_tokens() -> 
     assert normalize_name("Whistler Blackcomb Ski Resort") == "whistler blackcomb"
     assert normalize_name("Mont-Sainte-Anne (Station)") == "sainte anne"
     assert normalize_name("  Mt. Seymour ") == "seymour"
+    assert normalize_name("Skigebiet Straße") == normalize_name("Strasse") == "strasse"
 
 
 def test_name_similarity_bounds() -> None:
