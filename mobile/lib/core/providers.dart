@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -31,4 +32,13 @@ final driftLocalDatabaseProvider = Provider<DriftLocalDatabase>(
 final activeMapTileProviderConfigProvider = Provider<MapTileProviderConfig>(
   (ref) => throw UnimplementedError(
       'activeMapTileProviderConfigProvider must be overridden at app bootstrap'),
+);
+
+/// The [TileProvider] `FlutterMap` screens fetch tile images through.
+///
+/// Defaults to the real network provider; widget tests override this with a
+/// no-op provider (see `test/support/noop_tile_provider.dart`) so that
+/// rendering a `FlutterMap` never performs network I/O.
+final mapTileProviderProvider = Provider<TileProvider>(
+  (ref) => NetworkTileProvider(),
 );

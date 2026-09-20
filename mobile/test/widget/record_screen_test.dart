@@ -18,6 +18,8 @@ import 'package:fall_line_mobile/features/session/presentation/recording_control
 import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../support/noop_tile_provider.dart';
+
 class FakeLocationRepository implements LocationTrackingRepository {
   final StreamController<LocationSample> _positionController =
       StreamController<LocationSample>.broadcast();
@@ -230,6 +232,7 @@ void main() {
               .overrideWithValue(FakeLocationRepository()),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
@@ -259,6 +262,7 @@ void main() {
               .overrideWithValue(FakeLocationRepository()),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
@@ -303,6 +307,7 @@ void main() {
               .overrideWithValue(FakeLocationRepository()),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
@@ -367,6 +372,7 @@ void main() {
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),
@@ -424,6 +430,7 @@ void main() {
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(theme: AppTheme.dark(), home: const RecordScreen()),
       ),

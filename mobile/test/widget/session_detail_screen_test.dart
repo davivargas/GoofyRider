@@ -11,6 +11,8 @@ import 'package:fall_line_mobile/features/session/domain/session_repository.dart
 import 'package:fall_line_mobile/features/session/presentation/session_detail_screen.dart';
 import 'package:fall_line_mobile/features/session/presentation/session_providers.dart';
 
+import '../support/noop_tile_provider.dart';
+
 class FakeSessionRepository implements SessionRepository {
   FakeSessionRepository(
     this.detail, {
@@ -397,6 +399,7 @@ void main() {
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -428,6 +431,7 @@ void main() {
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -455,6 +459,7 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repository),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -490,6 +495,7 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repository),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -535,6 +541,7 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repository),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -578,6 +585,7 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repository),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -612,6 +620,7 @@ void main() {
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -639,6 +648,7 @@ void main() {
           ),
           activeMapTileProviderConfigProvider
               .overrideWithValue(MapTileProviderConfig.devFallback),
+          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),

@@ -10,6 +10,8 @@ import 'package:fall_line_mobile/features/resorts/presentation/resort_detail_scr
 import 'package:fall_line_mobile/features/resorts/presentation/resort_providers.dart';
 import 'package:fall_line_mobile/features/weather/presentation/weather_providers.dart';
 
+import '../support/noop_tile_provider.dart';
+
 class _FakeResortRepository implements ResortRepository {
   _FakeResortRepository({required this.initialResort});
 
@@ -77,6 +79,7 @@ void main() {
         ),
         activeMapTileProviderConfigProvider
             .overrideWithValue(MapTileProviderConfig.devFallback),
+        mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
       ],
       child: MaterialApp(
         theme: AppTheme.dark(),

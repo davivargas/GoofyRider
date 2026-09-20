@@ -82,6 +82,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
+    final tileProvider = ref.watch(mapTileProviderProvider);
     final t = context.tokens;
     // Distance to the visible tab bar's top edge (0 outside the shell).
     final barClearance = AppTabBar.bottomClearance(context);
@@ -158,6 +159,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
         subdomains: activeMapTileProviderConfig.subdomains,
         retinaMode: activeMapTileProviderConfig.retinaMode,
         userAgentPackageName: 'com.fallline.mobile',
+        tileProvider: tileProvider,
         errorTileCallback: (_, __, ___) {
           if (mounted && !_mapTileError) {
             setState(() => _mapTileError = true);

@@ -30,6 +30,7 @@ class ResortDetailScreen extends ConsumerWidget {
         ref.watch(resortDetailToggleInFlightProvider(resortId));
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
+    final tileProvider = ref.watch(mapTileProviderProvider);
     final t = context.tokens;
 
     return resortValue.when(
@@ -71,6 +72,7 @@ class ResortDetailScreen extends ConsumerWidget {
                           subdomains: activeMapTileProviderConfig.subdomains,
                           retinaMode: activeMapTileProviderConfig.retinaMode,
                           userAgentPackageName: 'com.fallline.mobile',
+                          tileProvider: tileProvider,
                         ),
                         MarkerLayer(
                           markers: <Marker>[

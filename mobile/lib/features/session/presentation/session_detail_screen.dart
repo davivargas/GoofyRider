@@ -42,6 +42,7 @@ class SessionDetailScreen extends ConsumerWidget {
     final distanceUnit = ref.watch(distanceUnitPreferenceProvider);
     final activeMapTileProviderConfig =
         ref.watch(activeMapTileProviderConfigProvider);
+    final tileProvider = ref.watch(mapTileProviderProvider);
     final showDebugDiagnostics = kDebugMode && AppConstants.isDebugDiagnostics;
     final t = context.tokens;
 
@@ -177,7 +178,8 @@ class SessionDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 20),
                 _timeSplit(context, data),
                 const SizedBox(height: 18),
-                _mapReplay(context, data, activeMapTileProviderConfig),
+                _mapReplay(
+                    context, data, activeMapTileProviderConfig, tileProvider),
                 const SizedBox(height: 20),
                 _timeline(context, data, distanceUnit, speedUnit),
                 if (session.localId > 0 &&
@@ -356,8 +358,11 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _mapReplay(BuildContext context, SessionDetail detail,
-      MapTileProviderConfig activeMapTileProviderConfig) {
+  Widget _mapReplay(
+      BuildContext context,
+      SessionDetail detail,
+      MapTileProviderConfig activeMapTileProviderConfig,
+      TileProvider tileProvider) {
     final t = context.tokens;
     final routePoints = detail.acceptedPoints.isNotEmpty
         ? detail.acceptedPoints
@@ -403,6 +408,7 @@ class SessionDetailScreen extends ConsumerWidget {
                   subdomains: activeMapTileProviderConfig.subdomains,
                   retinaMode: activeMapTileProviderConfig.retinaMode,
                   userAgentPackageName: 'com.fallline.mobile',
+                  tileProvider: tileProvider,
                 ),
                 PolylineLayer(polylines: polylines),
                 MarkerLayer(
