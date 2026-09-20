@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 import uuid
 
+from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import select
 
@@ -33,6 +34,11 @@ class SessionPointRepository(SqlAlchemyRepository):
             .order_by(SessionPoint.t_offset_ms.asc())
         )
         return list(self._db.scalars(stmt).all())
+
+    def delete_by_session(self, session_id: uuid.UUID) -> int:
+        result = self._db.execute(delete(SessionPoint).where(SessionPoint.session_id == session_id))
+        rowcount = getattr(result, "rowcount", None)
+        return int(rowcount or 0)
 
     def count_by_session(self, session_id: uuid.UUID) -> int:
         stmt = (

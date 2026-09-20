@@ -28,8 +28,9 @@ class ResortRepository(SqlAlchemyRepository):
         stmt = select(Resort).where(func.lower(Resort.name) == name.strip().lower())
         return self._db.scalars(stmt).first()
 
-    def flush(self) -> None:
-        self._db.flush()
+    def list_by_name(self, name: str) -> list[Resort]:
+        stmt = select(Resort).where(func.lower(Resort.name) == name.strip().lower())
+        return list(self._db.scalars(stmt).all())
 
     def list_all_for_matching(self) -> list[Resort]:
         return list(self._db.scalars(select(Resort).order_by(Resort.id.asc())).all())

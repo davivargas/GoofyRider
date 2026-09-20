@@ -12,16 +12,15 @@ import math
 import zipfile
 import xml.etree.ElementTree as ET
 
-from sqlalchemy import delete
-from sqlalchemy import func
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from app.models.resort import Resort
 from app.models.ride_session import RideSession
 from app.models.ride_session import RideSessionStatus
 from app.models.session_point import SessionPoint
 from app.models.user import User
+from app.repositories.protocols import ResortRepositoryProtocol
+from app.repositories.protocols import RideSessionRepositoryProtocol
+from app.repositories.protocols import SessionPointRepositoryProtocol
+from app.repositories.protocols import UserRepositoryProtocol
 
 _GPS_ENTRY_NAME = "GPS.csv"
 _METADATA_ENTRY_NAME = "Metadata.xml"
@@ -64,16 +63,18 @@ class ParsedSlopesPoint:
 
 @dataclass(frozen=True)
 class ParsedSlopesArchive:
+    """What a `.slopes` archive contributes to an import.
+
+    Only the session shell (resort, record window) and the raw GPS points are
+    kept. Per-session statistics are owned by `SessionAnalyzer`, which derives
+    them from the points after import; parsing Slopes' own totals here would
+    write numbers the next analysis run immediately overwrites.
+    """
+
     source_path: Path
     resort_name: str
     started_at: datetime
     ended_at: datetime
-    duration_s: int
-    distance_m: float | None
-    max_speed_mps: float | None
-    avg_speed_mps: float | None
-    elevation_gain_m: int | None
-    elevation_loss_m: int | None
     points: tuple[ParsedSlopesPoint, ...]
 
 
@@ -101,8 +102,28 @@ class SlopesImportSummary:
 
 
 class SlopesImportService:
-    def __init__(self, db: Session) -> None:
-        self._db = db
+    """Create ride-session shells and raw GPS points from Slopes archives.
+
+    The importer deliberately writes no per-session statistics: `SessionAnalyzer`
+    is the single source of truth for them (see CLAUDE.md, "Active migrations").
+    Imported and repaired sessions are left with `processed_by_version` unset so
+    that `python -m app.scripts.reanalyze_sessions` picks them up;
+    `python -m app.scripts.import_slopes_sessions` runs that analysis for them
+    directly at the end of a successful import.
+    """
+
+    def __init__(
+        self,
+        *,
+        user_repository: UserRepositoryProtocol,
+        resort_repository: ResortRepositoryProtocol,
+        ride_session_repository: RideSessionRepositoryProtocol,
+        session_point_repository: SessionPointRepositoryProtocol,
+    ) -> None:
+        self._user_repository = user_repository
+        self._resort_repository = resort_repository
+        self._ride_session_repository = ride_session_repository
+        self._session_point_repository = session_point_repository
 
     def import_directory(
         self,
@@ -162,7 +183,7 @@ class SlopesImportService:
                             parsed=parsed,
                         )
                     except Exception:
-                        self._db.rollback()
+                        self._ride_session_repository.rollback()
                         raise
 
                     repaired_files += 1
@@ -206,27 +227,24 @@ class SlopesImportService:
                 )
                 continue
 
+            # Statistics are intentionally omitted: the analyzer computes them.
             ride_session = RideSession(
                 user_id=user.id,
                 resort_id=resort.id,
                 started_at=parsed.started_at,
                 ended_at=parsed.ended_at,
-                duration_s=parsed.duration_s,
-                distance_m=parsed.distance_m,
-                max_speed_mps=parsed.max_speed_mps,
-                avg_speed_mps=parsed.avg_speed_mps,
-                elevation_gain_m=parsed.elevation_gain_m,
-                elevation_loss_m=parsed.elevation_loss_m,
                 status=RideSessionStatus.COMPLETED,
             )
 
             try:
-                self._db.add(ride_session)
-                self._db.flush()
-                self._db.add_all(build_session_points(ride_session.id, parsed.points))
-                self._db.commit()
+                self._ride_session_repository.add(ride_session)
+                self._ride_session_repository.flush()
+                self._session_point_repository.add_batch(
+                    build_session_points(ride_session.id, parsed.points)
+                )
+                self._ride_session_repository.commit()
             except Exception:
-                self._db.rollback()
+                self._ride_session_repository.rollback()
                 raise
 
             imported_files += 1
@@ -256,15 +274,15 @@ class SlopesImportService:
         )
 
     def _get_required_user(self, email: str) -> User:
-        stmt = select(User).where(func.lower(User.email) == email.strip().lower())
-        user = self._db.scalar(stmt)
+        # Registration normalizes e-mail to lower case, so a normalized lookup
+        # is the case-insensitive match operators expect from a CLI argument.
+        user = self._user_repository.get_by_email(email.strip().lower())
         if user is None:
             raise ValueError(f"User not found for email: {email}")
         return user
 
     def _get_required_resort_by_name(self, name: str) -> Resort:
-        stmt = select(Resort).where(func.lower(Resort.name) == name.strip().lower())
-        matches = list(self._db.scalars(stmt).all())
+        matches = self._resort_repository.list_by_name(name)
         if not matches:
             raise ValueError(f"Resort not found for exact name: {name}")
         if len(matches) > 1:
@@ -279,13 +297,12 @@ class SlopesImportService:
         started_at: datetime,
         ended_at: datetime,
     ) -> RideSession | None:
-        stmt = select(RideSession).where(
-            RideSession.user_id == user_id,
-            RideSession.resort_id == resort_id,
-            RideSession.started_at == started_at,
-            RideSession.ended_at == ended_at,
+        return self._ride_session_repository.find_by_user_resort_and_window(
+            user_id=user_id,
+            resort_id=resort_id,
+            started_at=started_at,
+            ended_at=ended_at,
         )
-        return self._db.scalar(stmt)
 
     def _repair_existing_session(
         self,
@@ -297,20 +314,19 @@ class SlopesImportService:
         ride_session.resort_id = resort_id
         ride_session.started_at = parsed.started_at
         ride_session.ended_at = parsed.ended_at
-        ride_session.duration_s = parsed.duration_s
-        ride_session.distance_m = parsed.distance_m
-        ride_session.max_speed_mps = parsed.max_speed_mps
-        ride_session.avg_speed_mps = parsed.avg_speed_mps
-        ride_session.elevation_gain_m = parsed.elevation_gain_m
-        ride_session.elevation_loss_m = parsed.elevation_loss_m
         ride_session.status = RideSessionStatus.COMPLETED
+        # The points are being replaced, so any statistics a previous analysis
+        # produced are stale. Clearing the marker makes the session eligible for
+        # `reanalyze_sessions` instead of leaving the old numbers in place.
+        ride_session.processed_by_version = None
+        ride_session.processed_at = None
 
-        self._db.execute(
-            delete(SessionPoint).where(SessionPoint.session_id == ride_session.id)
+        self._session_point_repository.delete_by_session(ride_session.id)
+        self._session_point_repository.flush()
+        self._session_point_repository.add_batch(
+            build_session_points(ride_session.id, parsed.points)
         )
-        self._db.flush()
-        self._db.add_all(build_session_points(ride_session.id, parsed.points))
-        self._db.commit()
+        self._ride_session_repository.commit()
 
 
 def parse_slopes_archive(source_path: Path) -> ParsedSlopesArchive:
@@ -338,13 +354,6 @@ def parse_slopes_payload(
     if ended_at < started_at:
         raise ValueError(f"recordEnd is earlier than recordStart in {source_path.name}")
 
-    duration_s = int((ended_at - started_at).total_seconds())
-    distance_m = _parse_optional_float(activity.attrib.get("distance"))
-    max_speed_mps = _parse_optional_float(activity.attrib.get("topSpeed"))
-    avg_speed_mps = None
-    if distance_m is not None and duration_s > 0:
-        avg_speed_mps = distance_m / duration_s
-
     override_segments = parse_override_segments(activity.attrib.get("overrides", ""))
     action_segments = parse_action_segments(activity.findall("./actions/Action"))
     motion_segments = _combine_motion_segments(
@@ -357,19 +366,11 @@ def parse_slopes_payload(
         record_end=ended_at,
         motion_segments=motion_segments,
     )
-    elevation_gain_m, elevation_loss_m = _compute_elevation_metrics(activity.findall("./actions/Action"))
-
     return ParsedSlopesArchive(
         source_path=source_path,
         resort_name=resort_name,
         started_at=started_at,
         ended_at=ended_at,
-        duration_s=duration_s,
-        distance_m=distance_m,
-        max_speed_mps=max_speed_mps,
-        avg_speed_mps=avg_speed_mps,
-        elevation_gain_m=elevation_gain_m,
-        elevation_loss_m=elevation_loss_m,
         points=tuple(points),
     )
 
@@ -632,23 +633,3 @@ def haversine_distance_meters(
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return earth_radius_m * c
-
-
-def _compute_elevation_metrics(actions: Iterable[ET.Element]) -> tuple[int | None, int | None]:
-    elevation_gain = 0.0
-    elevation_loss = 0.0
-
-    for action in actions:
-        vertical = _parse_optional_float(action.attrib.get("vertical"))
-        if vertical is None:
-            continue
-
-        action_type = action.attrib.get("type", "").strip().lower()
-        if action_type == "lift":
-            elevation_gain += abs(vertical)
-        elif action_type == "run":
-            elevation_loss += abs(vertical)
-
-    gain_value = round(elevation_gain) if elevation_gain > 0 else None
-    loss_value = round(elevation_loss) if elevation_loss > 0 else None
-    return gain_value, loss_value

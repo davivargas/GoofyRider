@@ -264,6 +264,28 @@ Attribution: the app shows "Data from OpenSkiData / OpenSkiMap.org,
 © Mapterhorn" on the resort and profile screens. Keep it when adding screens
 that show catalog data.
 
+### Slopes import
+
+Historic `.slopes` archives are imported as ride sessions. The importer writes
+only the session shell (owner, resort, record window) and the raw GPS points —
+`SessionAnalyzer` owns every per-session statistic — so the script runs analysis
+for the sessions it just imported before it exits:
+
+```bash
+python -m app.scripts.import_slopes_sessions --source-dir ~/slopes --user-email rider@example.com --dry-run
+python -m app.scripts.import_slopes_sessions --source-dir ~/slopes --user-email rider@example.com
+python -m app.scripts.import_slopes_sessions --source-dir ~/slopes --user-email rider@example.com --repair-existing
+```
+
+The resort is matched by exact name, so the catalog must be imported first, and
+the `--user-email` account must already exist. Archives that match an existing
+session are skipped unless `--repair-existing` is passed, which replaces their
+points and clears the stale analysis so they are re-analyzed.
+
+`--skip-analysis` imports without analyzing. Sessions left that way keep
+`processed_by_version` unset, so the re-analysis step below picks them up; their
+statistics stay at zero until it runs.
+
 ### Re-analysis
 
 When `SessionAnalyzer` changes (a new `session_analyzer_version`), stored

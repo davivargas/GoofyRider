@@ -134,6 +134,22 @@ class RideSessionRepository(SqlAlchemyRepository):
         )
         return self._db.scalar(stmt)
 
+    def find_by_user_resort_and_window(
+        self,
+        *,
+        user_id: uuid.UUID,
+        resort_id: uuid.UUID,
+        started_at: datetime,
+        ended_at: datetime,
+    ) -> RideSession | None:
+        stmt = select(RideSession).where(
+            RideSession.user_id == user_id,
+            RideSession.resort_id == resort_id,
+            RideSession.started_at == started_at,
+            RideSession.ended_at == ended_at,
+        )
+        return self._db.scalar(stmt)
+
     def list_needing_reanalysis(self, current_version: str, *, limit: int) -> list[RideSession]:
         stmt = (
             select(RideSession)

@@ -110,6 +110,22 @@ parsing. The same file also queries SQLAlchemy directly from a service, which
 breaks the repository rule. Plan Step 7 ("Slopes importer rewrite") is the fix;
 until then the script should be marked broken or removed.
 
+> **2026-09-20 update:** C1 is fixed, short of the Step 7 parity rewrite. The
+> importer no longer computes or stores any per-session statistic (including
+> `max_speed_mps`): it writes the session shell and the raw points, and
+> `SessionAnalyzer` produces the numbers.
+> `python -m app.scripts.import_slopes_sessions` now analyzes the sessions it
+> imported or repaired before exiting, and anything it misses stays eligible
+> for `python -m app.scripts.reanalyze_sessions`. `_compute_elevation_metrics`
+> and the statistics fields on `ParsedSlopesArchive` were deleted as dead code.
+> Database access moved behind `UserRepository`, `ResortRepository`,
+> `RideSessionRepository` and `SessionPointRepository`, with
+> `ResortRepository.list_by_name`,
+> `RideSessionRepository.find_by_user_resort_and_window` and
+> `SessionPointRepository.delete_by_session` declared in
+> `app/repositories/protocols.py`. The create and repair paths now have
+> database-backed tests. Step 7's Slopes-parity work is still outstanding.
+
 **C2. Dead backfill script targets a dropped table.**
 `backend/app/scripts/backfill_session_point_analytics.py` inserts into
 `session_point_analytics`, dropped in 0011. It would fail on first execution.

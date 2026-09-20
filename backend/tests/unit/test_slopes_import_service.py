@@ -1,10 +1,27 @@
+from collections.abc import Generator
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 import textwrap
 from uuid import UUID
+import zipfile
 
+import pytest
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.core.database import get_session_local
+from app.core.database_safety import assert_safe_test_database_name
+from app.models.resort import Resort
+from app.models.ride_session import RideSession
+from app.models.ride_session import RideSessionStatus
+from app.models.user import User
+from app.repositories.resort_repository import ResortRepository
+from app.repositories.ride_session_repository import RideSessionRepository
+from app.repositories.session_point_repository import SessionPointRepository
+from app.repositories.user_repository import UserRepository
 from app.services.slopes_import_service import ParsedSlopesPoint
+from app.services.slopes_import_service import SlopesImportService
 from app.services.slopes_import_service import build_session_points
 from app.services.slopes_import_service import parse_gps_points
 from app.services.slopes_import_service import parse_override_segments
@@ -117,10 +134,9 @@ def test_parse_slopes_payload_uses_record_window_and_action_verticals() -> None:
     assert parsed.resort_name == "Cypress Mountain"
     assert parsed.started_at == datetime(2025, 1, 3, 12, 0, 0, tzinfo=UTC)
     assert parsed.ended_at == datetime(2025, 1, 3, 12, 10, 0, tzinfo=UTC)
-    assert parsed.duration_s == 600
-    assert parsed.avg_speed_mps == 1.0
-    assert parsed.elevation_gain_m == 120
-    assert parsed.elevation_loss_m == 221
+    # No statistics are parsed: SessionAnalyzer owns them.
+    assert not hasattr(parsed, "duration_s")
+    assert not hasattr(parsed, "elevation_gain_m")
     assert [point.motion_state for point in parsed.points] == [
         "stopped_idle",
         "active_descent",
@@ -133,7 +149,7 @@ def test_parse_slopes_archive_reads_zip_entries() -> None:
     parsed = parse_slopes_archive(archive_path)
 
     assert parsed.resort_name == "Grouse Mountain"
-    assert parsed.duration_s > 0
+    assert parsed.ended_at > parsed.started_at
     assert len(parsed.points) > 0
 
 
@@ -147,3 +163,274 @@ def test_parse_slopes_archive_falls_back_to_actions_when_overrides_are_sparse() 
     assert any(point.motion_state == "lift_uphill" for point in parsed.points)
     assert any(point.motion_state == "active_descent" for point in parsed.points)
     assert all(point.motion_state is not None for point in parsed.points)
+
+
+# --- Database-backed coverage of the create and repair paths ------------------
+#
+# These need the test database:
+#   DATABASE_URL= POSTGRES_DB=goofyrider_test python -m pytest \
+#       tests/unit/test_slopes_import_service.py
+
+
+_TABLES_TO_TRUNCATE = [
+    "ride_session_actions",
+    "ride_session_overrides",
+    "session_points",
+    "ride_sessions",
+    "resorts",
+    "users",
+]
+
+
+def _truncate(session: Session) -> None:
+    session.rollback()
+    assert_safe_test_database_name(session.execute(text("SELECT current_database()")).scalar_one())
+    existing = set(
+        session.execute(
+            text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        ).scalars()
+    )
+    for table in _TABLES_TO_TRUNCATE:
+        if table in existing:
+            session.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
+    session.commit()
+
+
+@pytest.fixture
+def db() -> Generator[Session, None, None]:
+    session = get_session_local()()
+    try:
+        _truncate(session)
+        yield session
+    finally:
+        session.rollback()
+        _truncate(session)
+        session.close()
+
+
+@pytest.fixture
+def import_service(db: Session) -> SlopesImportService:
+    return SlopesImportService(
+        user_repository=UserRepository(db),
+        resort_repository=ResortRepository(db),
+        ride_session_repository=RideSessionRepository(db),
+        session_point_repository=SessionPointRepository(db),
+    )
+
+
+@pytest.fixture
+def imported_user(db: Session) -> User:
+    user = User(
+        email="slopes_importer@example.com",
+        password_hash="hash",
+        display_name="Slopes Importer",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture
+def grouse_resort(db: Session) -> Resort:
+    resort = Resort(
+        name="Grouse Mountain",
+        country="Canada",
+        region="British Columbia",
+        city="North Vancouver",
+        latitude=49.38,
+        longitude=-123.08,
+        elevation_base_m=290,
+        elevation_top_m=1231,
+    )
+    db.add(resort)
+    db.commit()
+    db.refresh(resort)
+    return resort
+
+
+@pytest.fixture
+def grouse_source_dir(tmp_path: Path) -> Path:
+    """A small synthetic archive.
+
+    Real `.slopes` fixtures carry thousands of points; parsing them is already
+    covered above, and inserting them makes every database test here slow.
+    """
+    metadata_xml = textwrap.dedent(
+        """
+        <Activity
+            locationName="Grouse Mountain"
+            recordStart="2026-01-18 09:00:00 -0800"
+            recordEnd="2026-01-18 09:00:04 -0800"
+            overrides="1768755600-1768755601:lift;1768755602-1768755604:run">
+            <actions>
+                <Action type="Lift" vertical="120.0" />
+                <Action type="Run" vertical="220.0" />
+            </actions>
+        </Activity>
+        """
+    ).strip()
+    gps_csv = textwrap.dedent(
+        """
+        1768755600.000000,49.380,-123.080,900.0,10.0,2.0,0.5,4.0
+        1768755601.000000,49.381,-123.081,950.0,20.0,3.0,0.5,4.0
+        1768755602.000000,49.382,-123.082,999.0,30.0,9.0,0.5,4.0
+        1768755603.000000,49.383,-123.083,940.0,40.0,8.0,0.5,4.0
+        1768755604.000000,49.384,-123.084,890.0,50.0,7.0,0.5,4.0
+        """
+    ).strip()
+
+    archive_path = tmp_path / "grouse_2026-01-18.slopes"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("Metadata.xml", metadata_xml)
+        archive.writestr("GPS.csv", gps_csv)
+    return tmp_path
+
+
+def test_import_directory_creates_session_and_points(
+    db: Session,
+    import_service: SlopesImportService,
+    imported_user: User,
+    grouse_resort: Resort,
+    grouse_source_dir: Path,
+) -> None:
+    summary = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+    )
+
+    assert summary.imported_files == 1
+    assert summary.total_points_imported > 0
+    session_id = summary.file_results[0].session_id
+    assert session_id is not None
+
+    stored = db.get(RideSession, session_id)
+    assert stored is not None
+    assert stored.user_id == imported_user.id
+    assert stored.resort_id == grouse_resort.id
+    assert stored.status is RideSessionStatus.COMPLETED
+    assert SessionPointRepository(db).count_by_session(session_id) == (
+        summary.total_points_imported
+    )
+
+
+def test_import_directory_leaves_statistics_to_the_analyzer(
+    db: Session,
+    import_service: SlopesImportService,
+    imported_user: User,
+    grouse_resort: Resort,
+    grouse_source_dir: Path,
+) -> None:
+    summary = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+    )
+    session_id = summary.file_results[0].session_id
+    assert session_id is not None
+
+    stored = db.get(RideSession, session_id)
+    assert stored is not None
+    # The importer writes no analyzer-owned statistic, including max_speed_mps.
+    assert stored.max_speed_mps is None
+    assert stored.total_duration_s == 0
+    assert stored.descent_distance_m == 0
+
+    # ...but it leaves the session on the reanalysis queue, so the statistics
+    # have a path to real values.
+    assert stored.processed_by_version is None
+    sessions_repo = RideSessionRepository(db)
+    queued = sessions_repo.list_needing_reanalysis("any-version", limit=10)
+    assert session_id in {queued_session.id for queued_session in queued}
+
+
+def test_import_directory_skips_an_existing_session_without_repair(
+    import_service: SlopesImportService,
+    imported_user: User,
+    grouse_resort: Resort,
+    grouse_source_dir: Path,
+) -> None:
+    first = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+    )
+    second = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+    )
+
+    assert second.imported_files == 0
+    assert second.skipped_files == 1
+    assert second.file_results[0].status == "skipped_existing"
+    assert second.file_results[0].session_id == first.file_results[0].session_id
+
+
+def test_repair_existing_replaces_points_and_requeues_analysis(
+    db: Session,
+    import_service: SlopesImportService,
+    imported_user: User,
+    grouse_resort: Resort,
+    grouse_source_dir: Path,
+) -> None:
+    first = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+    )
+    session_id = first.file_results[0].session_id
+    assert session_id is not None
+
+    # Simulate a session that a previous analyzer run has already processed and
+    # written statistics for.
+    stored = db.get(RideSession, session_id)
+    assert stored is not None
+    stored.processed_by_version = "stale-version"
+    stored.processed_at = datetime(2026, 1, 19, tzinfo=UTC)
+    stored.total_duration_s = 1234.0
+    stored.max_speed_mps = 99.0
+    db.commit()
+
+    repaired = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+        repair_existing=True,
+    )
+
+    assert repaired.repaired_files == 1
+    assert repaired.file_results[0].session_id == session_id
+
+    db.expire_all()
+    stored = db.get(RideSession, session_id)
+    assert stored is not None
+    # Stale analysis markers are cleared so `reanalyze_sessions` picks it up
+    # again instead of leaving the previous numbers next to new points.
+    assert stored.processed_by_version is None
+    assert stored.processed_at is None
+    assert SessionPointRepository(db).count_by_session(session_id) == (
+        repaired.total_points_imported
+    )
+
+
+def test_repair_existing_dry_run_changes_nothing(
+    db: Session,
+    import_service: SlopesImportService,
+    imported_user: User,
+    grouse_resort: Resort,
+    grouse_source_dir: Path,
+) -> None:
+    first = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+    )
+    session_id = first.file_results[0].session_id
+    assert session_id is not None
+    point_count_before = SessionPointRepository(db).count_by_session(session_id)
+
+    dry_run = import_service.import_directory(
+        source_dir=grouse_source_dir,
+        user_email=imported_user.email,
+        dry_run=True,
+        repair_existing=True,
+    )
+
+    assert dry_run.repaired_files == 0
+    assert dry_run.file_results[0].status == "dry_run_repair_ready"
+    assert SessionPointRepository(db).count_by_session(session_id) == point_count_before
