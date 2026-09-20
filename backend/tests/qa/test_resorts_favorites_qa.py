@@ -1,15 +1,22 @@
 from collections.abc import Callable
+from datetime import UTC
+from datetime import datetime
 import uuid
 
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy.orm import Session
 
 from app.models.resort import Resort
+from app.models.resort_source_record import ResortSourceRecord
 from app.repositories.resort_field_override_repository import ResortFieldOverrideRepository
 from app.repositories.resort_lift_repository import ResortLiftRepository
 from app.repositories.resort_repository import ResortRepository
 from app.repositories.resort_source_record_repository import ResortSourceRecordRepository
+from app.services.exceptions import ValidationError
+from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_merge_service import ResortMergeService
+from app.services.resort_review_service import ResortReviewService
 from tests.qa.catalog_helpers import run_fixture_import
 
 
@@ -183,3 +190,77 @@ def test_deactivated_resort_is_hidden_from_list_and_returns_404(
     listed = client.get("/v1/resorts", params={"query": "Cypress"}).json()["items"]
     assert listed == []
     assert client.get(f"/v1/resorts/{resort.id}").status_code == 404
+
+
+def test_ski_api_only_record_appears_after_operator_creates_it(
+    client: TestClient, db: Session
+) -> None:
+    run_fixture_import(db)
+    records = ResortSourceRecordRepository(db)
+    records.add(
+        ResortSourceRecord(
+            source="ski_api",
+            external_id="big-white",
+            payload={
+                "slug": "big-white",
+                "name": "Big White",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.72, "longitude": -118.93},
+            },
+            content_hash="h",
+            fetched_at=datetime.now(UTC),
+            match_status="pending_review",
+        )
+    )
+    records.commit()
+    assert client.get("/v1/resorts", params={"query": "Big White"}).json()["total"] == 0
+
+    lifts = ResortLiftRepository(db)
+    service = ResortReviewService(
+        resort_repository=ResortRepository(db),
+        record_repository=records,
+        merge_service=ResortMergeService(
+            ResortRepository(db), records, ResortFieldOverrideRepository(db), lifts
+        ),
+        lift_sync_service=ResortLiftSyncService(records, lifts),
+    )
+    new_id = service.create("ski_api", "big-white")
+
+    listed = client.get("/v1/resorts", params={"query": "Big White"}).json()
+    assert listed["total"] == 1 and listed["items"][0]["id"] == str(new_id)
+    assert (
+        listed["items"][0]["country"] == "Canada"
+        and listed["items"][0]["region"] == "British Columbia"
+    )
+
+
+def test_rejected_record_never_surfaces(client: TestClient, db: Session) -> None:
+    run_fixture_import(db)
+    records = ResortSourceRecordRepository(db)
+    records.add(
+        ResortSourceRecord(
+            source="ski_api",
+            external_id="ghost",
+            payload={"slug": "ghost", "name": "Ghost", "country": "CA", "region": "BC"},
+            content_hash="h",
+            fetched_at=datetime.now(UTC),
+            match_status="pending_review",
+        )
+    )
+    records.commit()
+    lifts = ResortLiftRepository(db)
+    service = ResortReviewService(
+        resort_repository=ResortRepository(db),
+        record_repository=records,
+        merge_service=ResortMergeService(
+            ResortRepository(db), records, ResortFieldOverrideRepository(db), lifts
+        ),
+        lift_sync_service=ResortLiftSyncService(records, lifts),
+    )
+
+    service.reject("ski_api", "ghost")
+
+    assert client.get("/v1/resorts", params={"query": "Ghost"}).json()["total"] == 0
+    with pytest.raises(ValidationError):
+        service.create("ski_api", "ghost")

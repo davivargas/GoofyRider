@@ -60,7 +60,8 @@ directly.
 - Sources write only `resort_source_records` (raw payload, sha256 hash,
   snapshot build time, `missing_since`, link to a resort with
   `match_status` / `match_method` / candidates). OpenSkiData is primary;
-  SkiAPI is Phase 2 enrichment.
+  SkiAPI is an enrichment source (list plus detail for linked records only;
+  no automatic resort creation).
 - `resort_matching.py` (pure) scores name similarity, distance or boundary
   containment, and country agreement; auto-links at ≥ 0.85 with a 0.15 margin
   and ≤ 5 km, queues ≥ 0.5 for review, never orphans a legacy row.

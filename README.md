@@ -259,8 +259,13 @@ Attribution: the app shows "Data from OpenSkiData / OpenSkiMap.org,
 © Mapterhorn" on the resort and profile screens. Keep it when adding screens
 that show catalog data.
 
-SkiAPI (RapidAPI) enrichment is Phase 2; `SKI_API_*` settings are optional
-until then.
+With a RapidAPI key in `SKI_API_KEY`, `python -m app.scripts.import_catalog
+--source ski_api` adds SkiAPI records as enrichment: they link to existing
+resorts by name and location, fill gaps (alias names, missing city or
+elevations that pass the lift-envelope check), and never create resorts on
+their own. SkiAPI-only records wait in `review_catalog_matches list` until an
+operator runs `create`. Conditions data in the raw payload is stored but not
+exposed.
 
 ### Re-analysis
 
