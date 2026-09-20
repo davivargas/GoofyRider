@@ -7,6 +7,7 @@ import pytest
 
 from app.models.resort import Resort
 from app.models.resort_source_record import ResortSourceRecord
+from app.services.catalog_types import ExternalSourceRecord
 from app.services.catalog_types import content_hash
 from app.services.resort_catalog_import_service import CatalogImportOptions
 from app.services.resort_catalog_import_service import ResortCatalogImportService
@@ -319,3 +320,95 @@ def test_rematch_of_an_auto_linked_record_relinks_the_same_resort() -> None:
     assert (auto, primary, pending) == (1, 0, 0)
     assert grouse_record.resort_id == grouse.id
     assert grouse_record.match_method == "auto"
+
+
+class FakeSkiApiSource:
+    def __init__(
+        self, entries: list[dict[str, object]], details: dict[str, dict[str, object]]
+    ) -> None:
+        self._entries = entries
+        self._details = details
+        self.detail_calls: list[str] = []
+
+    def iter_records(self):  # type: ignore[no-untyped-def]
+        for entry in self._entries:
+            yield ExternalSourceRecord(
+                "ski_api", str(entry["slug"]), dict(entry), content_hash(entry), None
+            )
+
+    def fetch_detail(self, slug: str) -> dict[str, object]:
+        self.detail_calls.append(slug)
+        return dict(self._details[slug])
+
+
+def test_ski_api_links_enriches_linked_only_and_never_creates() -> None:
+    service, resort_repo, record_repo, _ = _build([], [])
+    service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+    grouse = next(
+        r for r in resort_repo.resorts if r.name == "Grouse Mountain" and r.country_code == "CA"
+    )
+    source = FakeSkiApiSource(
+        entries=[
+            {
+                "slug": "grouse-mountain",
+                "name": "Grouse Mountain Resort",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.3803, "longitude": -123.0815},
+            },
+            {
+                "slug": "big-white",
+                "name": "Big White",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.72, "longitude": -118.93},
+            },
+        ],
+        details={
+            "grouse-mountain": {
+                "slug": "grouse-mountain",
+                "name": "Grouse Mountain Resort",
+                "country": "CA",
+                "region": "BC",
+                "location": {"latitude": 49.3803, "longitude": -123.0815},
+                "elevation": {"base_m": 274, "top_m": 1250},
+                "conditions": {"base": 120},
+            }
+        },
+    )
+
+    summary = service.import_ski_api(source, CatalogImportOptions())
+
+    assert summary.linked_auto == 1 and summary.linked_primary == 0 and summary.pending_review == 1
+    assert source.detail_calls == ["grouse-mountain"]
+    linked = record_repo.get_by_source_and_external_id("ski_api", "grouse-mountain")
+    assert linked is not None and linked.resort_id == grouse.id and "detail" in linked.payload
+    assert grouse.name == "Grouse Mountain" and grouse.name_aliases == ["Grouse Mountain Resort"]
+    assert (
+        grouse.field_provenance["elevation_top_m"] == "openskidata"
+    )  # OpenSkiData wins by precedence
+    unlinked = record_repo.get_by_source_and_external_id("ski_api", "big-white")
+    assert (
+        unlinked is not None
+        and unlinked.match_status == "pending_review"
+        and unlinked.resort_id is None
+    )
+    assert len(resort_repo.resorts) == 4
+
+
+def test_ski_api_detail_is_fetched_once() -> None:
+    service, _resort_repo, _, _ = _build([], [])
+    service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+    entry = {
+        "slug": "grouse-mountain",
+        "name": "Grouse Mountain",
+        "country": "CA",
+        "region": "BC",
+        "location": {"latitude": 49.3803, "longitude": -123.0815},
+    }
+    source = FakeSkiApiSource([entry], {"grouse-mountain": dict(entry)})
+
+    service.import_ski_api(source, CatalogImportOptions())
+    service.import_ski_api(source, CatalogImportOptions())
+
+    assert source.detail_calls == ["grouse-mountain"]

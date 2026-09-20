@@ -46,3 +46,23 @@ def test_raw_ski_api_payload_maps_to_view() -> None:
 def test_legacy_payload_with_unknown_country_has_no_code() -> None:
     view = map_ski_api_view({"legacy": True, "name": "X", "country": "Narnia", "region": "R"})
     assert view.country == "Narnia" and view.country_code is None
+
+
+def test_raw_ski_api_payload_with_detail_prefers_detail_elevation_and_city() -> None:
+    view = map_ski_api_view(
+        {
+            "slug": "grouse-mountain",
+            "name": "Grouse Mountain",
+            "country": "CA",
+            "region": "BC",
+            "location": {"latitude": 49.3803, "longitude": -123.0815},
+            "elevation": {"base_m": 100, "top_m": 900},
+            "detail": {
+                "elevation": {"base_m": 274, "top_m": 1250},
+                "city": "North Vancouver",
+            },
+        }
+    )
+
+    assert (view.elevation_base_m, view.elevation_top_m) == (274, 1250)
+    assert view.city == "North Vancouver"

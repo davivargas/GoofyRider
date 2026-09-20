@@ -27,6 +27,11 @@ class FakeResortRepository:
         self.commits = 0
         self.linked_records: list[ResortSourceRecord] = []  # shared with FakeRecordRepository
         self.dirty: set[uuid.UUID] = set()  # ids a test wants re-merged
+        # Snapshot of each resort's linked record ids as of its last merge, so that a later
+        # source linking a new record to an already-merged resort is picked up as stale too
+        # (real repo detects this via record.updated_at > resort.last_merged_at; the fake's
+        # frozen test clock can't, so it compares linkage membership instead).
+        self._merged_signature: dict[uuid.UUID, frozenset[uuid.UUID]] = {}
 
     def add(self, resort: Resort) -> None:
         if resort.id is None:
@@ -61,11 +66,23 @@ class FakeResortRepository:
         return [r for r in self.list_all_for_matching() if r.id not in linked]
 
     def list_stale_for_merge(self) -> list[Resort]:
-        stale = [
-            r
-            for r in self.list_all_for_matching()
-            if r.last_merged_at is None or r.id in self.dirty
-        ]
+        def linked_record_ids(resort_id: uuid.UUID) -> frozenset[uuid.UUID]:
+            return frozenset(
+                r.id
+                for r in self.linked_records
+                if r.resort_id == resort_id and r.match_status == "linked"
+            )
+
+        stale = []
+        for r in self.list_all_for_matching():
+            current = linked_record_ids(r.id)
+            if (
+                r.last_merged_at is None
+                or r.id in self.dirty
+                or self._merged_signature.get(r.id) != current
+            ):
+                stale.append(r)
+                self._merged_signature[r.id] = current
         self.dirty.clear()
         return stale
 

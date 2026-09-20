@@ -53,6 +53,19 @@ def map_ski_api_view(payload: Mapping[str, Any]) -> SourceResortView:
     record = map_ski_api_resort(dict(payload))
     raw_country = _text(payload.get("country"))
     country_code = raw_country.upper() if raw_country and len(raw_country) == 2 else None
+
+    elevation_base_m, elevation_top_m = record.elevation_base_m, record.elevation_top_m
+    city = record.city
+    detail = payload.get("detail")
+    if isinstance(detail, Mapping):
+        detail_elevation = detail.get("elevation")
+        if isinstance(detail_elevation, Mapping):
+            elevation_base_m = _int(detail_elevation.get("base_m"))
+            elevation_top_m = _int(detail_elevation.get("top_m"))
+        detail_city = _text(detail.get("city"))
+        if detail_city is not None:
+            city = detail_city
+
     return SourceResortView(
         source=SOURCE_SKI_API,
         name=record.name,
@@ -64,9 +77,9 @@ def map_ski_api_view(payload: Mapping[str, Any]) -> SourceResortView:
         country_code=country_code or COUNTRY_CODE_BY_NAME.get(record.country),
         region=record.region,
         region_code=None,
-        city=record.city,
-        elevation_base_m=record.elevation_base_m,
-        elevation_top_m=record.elevation_top_m,
+        city=city,
+        elevation_base_m=elevation_base_m,
+        elevation_top_m=elevation_top_m,
         lift_envelope=None,
         status=None,
         activities=(),

@@ -1,8 +1,10 @@
-"""Import the resort catalog from OpenSkiData (and SkiAPI in Phase 2).
+"""Import the resort catalog from OpenSkiData, SkiAPI, or both.
 
 Usage (from backend/):
     python -m app.scripts.import_catalog
     python -m app.scripts.import_catalog --path /data/openskidata --countries CA,US
+    python -m app.scripts.import_catalog --source ski_api
+    python -m app.scripts.import_catalog --source all
     python -m app.scripts.import_catalog --merge-only
 """
 
@@ -30,6 +32,7 @@ from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_source_record_service import RecordUpsertSummary
 from app.services.resort_source_record_service import ResortSourceRecordService
+from app.services.ski_api_resort_source import SkiApiResortSource
 
 
 def _countries(value: str) -> frozenset[str]:
@@ -59,7 +62,7 @@ def build_argument_parser() -> ArgumentParser:
     return parser
 
 
-def run(args: Namespace) -> CatalogImportSummary:
+def run(args: Namespace) -> list[tuple[str, CatalogImportSummary]]:
     settings = get_settings()
     db = get_session_local()()
     try:
@@ -84,64 +87,85 @@ def run(args: Namespace) -> CatalogImportSummary:
                 resorts.rollback()
             else:
                 resorts.commit()
-            return CatalogImportSummary(
-                RecordUpsertSummary(0, 0, 0, 0), 0, 0, 0, merge_summary, None
+            return [
+                (
+                    "merge",
+                    CatalogImportSummary(
+                        RecordUpsertSummary(0, 0, 0, 0), 0, 0, 0, merge_summary, None
+                    ),
+                )
+            ]
+        summaries: list[tuple[str, CatalogImportSummary]] = []
+        if args.source in ("openskidata", "all"):
+            with OpenSkiDataSource(
+                base_url=settings.openskidata_base_url,
+                timeout_seconds=settings.openskidata_timeout_seconds,
+                local_dir=args.path,
+                countries=args.countries,
+            ) as source:
+                summary = importer.import_openskidata(source, options)
+            if args.force_merge and not args.dry_run:
+                forced = merge.merge_stale(force=True)
+                resorts.commit()
+                summary = CatalogImportSummary(
+                    summary.records,
+                    summary.linked_auto,
+                    summary.linked_primary,
+                    summary.pending_review,
+                    forced,
+                    summary.lifts,
+                )
+            summaries.append(("openskidata", summary))
+        if args.source in ("ski_api", "all"):
+            ski_api = SkiApiResortSource(
+                base_url=settings.ski_api_base_url,
+                api_key=settings.ski_api_key,
+                api_host=settings.ski_api_host,
+                page_size=settings.ski_api_page_size,
+                timeout_seconds=settings.ski_api_timeout_seconds,
             )
-        with OpenSkiDataSource(
-            base_url=settings.openskidata_base_url,
-            timeout_seconds=settings.openskidata_timeout_seconds,
-            local_dir=args.path,
-            countries=args.countries,
-        ) as source:
-            summary = importer.import_openskidata(source, options)
-        if args.force_merge and not args.dry_run:
-            forced = merge.merge_stale(force=True)
-            resorts.commit()
-            summary = CatalogImportSummary(
-                summary.records,
-                summary.linked_auto,
-                summary.linked_primary,
-                summary.pending_review,
-                forced,
-                summary.lifts,
-            )
-        return summary
+            ski_summary = importer.import_ski_api(ski_api, options)
+            summaries.append(("ski_api", ski_summary))
+        return summaries
     finally:
         db.close()
 
 
-def _print_summary(summary: CatalogImportSummary) -> None:
+def _print_summary(name: str, summary: CatalogImportSummary) -> None:
     r = summary.records
     print(
-        "Records: "
+        f"[{name}] Records: "
         f"created={r.created} updated={r.updated} unchanged={r.unchanged} missing={r.marked_missing}"
     )
     print(
-        f"Links: auto={summary.linked_auto} primary={summary.linked_primary} "
+        f"[{name}] Links: auto={summary.linked_auto} primary={summary.linked_primary} "
         f"pending_review={summary.pending_review}"
     )
     m = summary.merge
     print(
-        f"Merge: merged={m.merged_count} changed={m.changed_count} deactivated={m.deactivated_count}"
+        f"[{name}] Merge: merged={m.merged_count} changed={m.changed_count} "
+        f"deactivated={m.deactivated_count}"
     )
     lifts: LiftSyncSummary | None = summary.lifts
     if lifts is not None:
         print(
-            f"Lifts: upserted={lifts.upserted} deleted={lifts.deleted} skipped_unlinked={lifts.skipped_unlinked}"
+            f"[{name}] Lifts: upserted={lifts.upserted} deleted={lifts.deleted} "
+            f"skipped_unlinked={lifts.skipped_unlinked}"
         )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
-    if args.source != "openskidata":
-        print("SkiAPI import lands in Phase 2; use --source openskidata.", file=sys.stderr)
+    if args.source in ("ski_api", "all") and not get_settings().ski_api_key:
+        print("SKI_API_KEY is not set; cannot import from SkiAPI.", file=sys.stderr)
         return 2
     try:
-        summary = run(args)
+        summaries = run(args)
     except ServiceError as exc:
         print(f"Catalog import failed: {exc}", file=sys.stderr)
         return 1
-    _print_summary(summary)
+    for name, summary in summaries:
+        _print_summary(name, summary)
     return 0
 
 

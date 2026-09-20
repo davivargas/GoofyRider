@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from collections.abc import Mapping
 from dataclasses import dataclass
 import re
@@ -7,6 +8,8 @@ from typing import cast
 
 import httpx
 
+from app.services.catalog_types import ExternalSourceRecord
+from app.services.catalog_types import content_hash
 from app.services.exceptions import ServiceUnavailableError
 from app.services.exceptions import ValidationError
 
@@ -132,11 +135,45 @@ class SkiApiResortSource:
 
         return resorts
 
+    def iter_records(self) -> Iterator[ExternalSourceRecord]:
+        next_page: int | None = 1
+        while next_page is not None:
+            payload = self._fetch_page(page=next_page)
+            raw_records = payload.get("data")
+            if not isinstance(raw_records, list):
+                raise ValidationError("Ski API resorts payload must include a data list.")
+            for raw in cast(list[object], raw_records):
+                entry = _require_object_payload(
+                    raw, error_message="Ski API resort entries must be objects."
+                )
+                slug = _require_text(entry.get("slug"), field_name="slug")
+                yield ExternalSourceRecord(
+                    source=SKI_API_EXTERNAL_SOURCE,
+                    external_id=slug,
+                    payload=entry,
+                    content_hash=content_hash(entry),
+                    snapshot_built_at=None,
+                )
+            next_page = _parse_next_page(payload.get("next_page"))
+
+    def fetch_detail(self, slug: str) -> dict[str, Any]:
+        payload = self._get_json(f"{self._base_url}/resort/{slug}", params=None)
+        data = payload.get("data", payload)
+        return _require_object_payload(
+            data, error_message="Ski API resort detail must be an object."
+        )
+
     def _fetch_page(self, page: int) -> dict[str, Any]:
         if self._page_fetcher is not None:
             payload = self._page_fetcher(page, self._page_size)
             return _require_object_payload(payload)
 
+        return self._get_json(
+            f"{self._base_url}/resort",
+            params={"page": page, "per_page": self._page_size},
+        )
+
+    def _get_json(self, url: str, params: dict[str, int] | None) -> dict[str, Any]:
         headers = _build_ski_api_headers(
             api_key=self._api_key,
             api_host=self._api_host,
@@ -144,20 +181,12 @@ class SkiApiResortSource:
 
         try:
             if self._client is not None:
-                response = self._client.get(
-                    f"{self._base_url}/resort",
-                    params={"page": page, "per_page": self._page_size},
-                    headers=headers,
-                )
+                response = self._client.get(url, params=params, headers=headers)
                 response.raise_for_status()
                 payload = response.json()
             else:
                 with httpx.Client(timeout=float(self._timeout_seconds)) as client:
-                    response = client.get(
-                        f"{self._base_url}/resort",
-                        params={"page": page, "per_page": self._page_size},
-                        headers=headers,
-                    )
+                    response = client.get(url, params=params, headers=headers)
                     response.raise_for_status()
                     payload = response.json()
         except httpx.HTTPError as exc:

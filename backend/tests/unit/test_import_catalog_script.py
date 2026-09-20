@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.scripts.import_catalog import build_argument_parser
+from app.scripts.import_catalog import main
 
 
 def test_defaults() -> None:
@@ -37,3 +38,9 @@ def test_flags_parse() -> None:
 def test_invalid_source_is_rejected() -> None:
     with pytest.raises(SystemExit):
         build_argument_parser().parse_args(["--source", "elsewhere"])
+
+
+def test_ski_api_source_without_key_exits_with_code_2(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SKI_API_KEY", raising=False)
+
+    assert main(["--source", "ski_api"]) == 2

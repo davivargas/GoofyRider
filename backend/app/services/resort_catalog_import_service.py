@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 import logging
+from typing import Any
 from typing import Protocol
 import uuid
 
@@ -18,9 +19,11 @@ from app.repositories.protocols import ResortLiftRepositoryProtocol
 from app.repositories.protocols import ResortRepositoryProtocol
 from app.repositories.protocols import ResortSourceRecordRepositoryProtocol
 from app.services.catalog_types import SOURCE_OPENSKIDATA
+from app.services.catalog_types import SOURCE_SKI_API
 from app.services.catalog_types import ExternalLiftRecord
 from app.services.catalog_types import ExternalSourceRecord
 from app.services.catalog_types import SourceResortView
+from app.services.catalog_types import content_hash
 from app.services.resort_lift_sync_service import LiftSyncSummary
 from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_matching import MatchKind
@@ -42,6 +45,12 @@ class OpenSkiDataSourceProtocol(Protocol):
     def iter_ski_areas(self) -> Iterator[ExternalSourceRecord]: ...
 
     def iter_lifts(self) -> Iterator[ExternalLiftRecord]: ...
+
+
+class SkiApiRecordSourceProtocol(Protocol):
+    def iter_records(self) -> Iterator[ExternalSourceRecord]: ...
+
+    def fetch_detail(self, slug: str) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -98,6 +107,31 @@ class ResortCatalogImportService:
         else:
             self._resorts.commit()
         return CatalogImportSummary(records, auto, primary, pending, merge, lifts)
+
+    def import_ski_api(
+        self, source: SkiApiRecordSourceProtocol, options: CatalogImportOptions
+    ) -> CatalogImportSummary:
+        run_started_at = self._clock()
+        records = self._record_service.upsert_records(
+            SOURCE_SKI_API, source.iter_records(), run_started_at
+        )
+        auto, primary, pending = self.link_records(SOURCE_SKI_API, options)
+        for record in self._records.list_by_source(SOURCE_SKI_API):
+            if record.match_status != "linked" or record.match_method == "legacy":
+                continue
+            if "detail" in record.payload:
+                continue
+            detail = source.fetch_detail(record.external_id)
+            record.payload = {**record.payload, "detail": detail}
+            record.content_hash = content_hash(record.payload)
+        self._records.flush()
+        merge = self._merge_service.merge_stale()
+        if options.dry_run:
+            self._records.rollback()
+            logger.info("Dry run: rolled back catalog import.")
+        else:
+            self._resorts.commit()
+        return CatalogImportSummary(records, auto, primary, pending, merge, None)
 
     def link_records(self, source: str, options: CatalogImportOptions) -> tuple[int, int, int]:
         """Link every matchable record of `source`. Candidate pool is built once per call."""
