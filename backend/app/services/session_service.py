@@ -23,8 +23,8 @@ from app.repositories.protocols import SessionOverrideRepositoryProtocol
 from app.repositories.protocols import SessionPointRepositoryProtocol
 from app.schemas.session import SessionCompleteRequest
 from app.schemas.session import SessionCreateRequest
-from app.schemas.session import SessionPointInput
 from app.schemas.session import SessionUpdateRequest
+from app.schemas.session_point import SessionPointInput
 from app.services.exceptions import ConflictError
 from app.services.exceptions import NotFoundError
 from app.services.exceptions import SessionNotYetCompletedError

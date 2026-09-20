@@ -11,12 +11,12 @@ from app.schemas.session import SessionCreateRequest
 from app.schemas.session import SessionDetailResponse
 from app.schemas.session import SessionListResponse
 from app.schemas.session import SessionOverrideRead
-from app.schemas.session import SessionPointInput
 from app.schemas.session import SessionPointPublic
 from app.schemas.session import SessionPointsBatchRequest
 from app.schemas.session import SessionPointsBatchResponse
 from app.schemas.session import SessionPointsListResponse
 from app.schemas.session import SessionSummary
+from app.schemas.session_point import SessionPointInput
 from app.schemas.user import UserPublic
 from app.schemas.weather import ResortWeatherResponse
 
