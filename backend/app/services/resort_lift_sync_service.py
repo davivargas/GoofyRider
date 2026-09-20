@@ -16,6 +16,7 @@ from app.services.catalog_types import LIFT_SOURCE_OPENSKIDATA
 from app.services.catalog_types import LIFT_SOURCE_OVERPASS
 from app.services.catalog_types import SOURCE_OPENSKIDATA
 from app.services.catalog_types import ExternalLiftRecord
+from app.services.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,20 @@ class ResortLiftSyncService:
             count, removed = self._write(record, by_area[area_id])
             upserted += count
             deleted += removed
+
+        # Areas that dropped to zero lifts in this snapshot never appear in `by_area`, so they
+        # would otherwise keep their stale openskidata rows forever. Records marked missing are
+        # skipped on purpose: a --countries run marks out-of-filter areas missing before the
+        # sync, so their lifts must survive.
+        for record in self._records.list_by_source(SOURCE_OPENSKIDATA):
+            if (
+                record.match_status == "linked"
+                and record.resort_id is not None
+                and record.missing_since is None
+                and record.external_id not in by_area
+            ):
+                _, removed = self._write(record, [])
+                deleted += removed
         return LiftSyncSummary(upserted=upserted, deleted=deleted, skipped_unlinked=skipped)
 
     def sync_for_record(
@@ -63,7 +78,8 @@ class ResortLiftSyncService:
     def _write(
         self, record: ResortSourceRecord, lifts: Sequence[ExternalLiftRecord]
     ) -> tuple[int, int]:
-        assert record.resort_id is not None
+        if record.resort_id is None:
+            raise ValidationError("Source record is not linked to a resort.")
         resort_id = record.resort_id
         rows = [
             ResortLift(

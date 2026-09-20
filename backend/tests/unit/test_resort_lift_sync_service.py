@@ -81,3 +81,37 @@ def test_sync_deletes_openskidata_lifts_missing_from_snapshot() -> None:
 
     assert summary.deleted == 1
     assert "osm:way:777" not in {lift.external_track_id for lift in lifts.lifts}
+
+
+def test_sync_removes_all_lifts_for_area_missing_entirely_from_snapshot() -> None:
+    grouse = Resort(id=uuid.uuid4(), name="Grouse Mountain", country="Canada", region="BC")
+    lift_a = ResortLift(
+        resort_id=grouse.id, name="A", external_track_id="osm:way:1001", source="openskidata"
+    )
+    lift_b = ResortLift(
+        resort_id=grouse.id, name="B", external_track_id="osm:way:1002", source="openskidata"
+    )
+    records = FakeRecordRepository([_linked("osd-grouse", grouse)])
+    lifts = FakeLiftRepository([lift_a, lift_b])
+
+    summary = ResortLiftSyncService(record_repository=records, lift_repository=lifts).sync([])
+
+    assert lifts.list_by_resort(grouse.id) == []
+    assert summary.upserted == 0
+    assert summary.deleted == 2
+
+
+def test_sync_keeps_lifts_for_area_marked_missing() -> None:
+    grouse = Resort(id=uuid.uuid4(), name="Grouse Mountain", country="Canada", region="BC")
+    lift_a = ResortLift(
+        resort_id=grouse.id, name="A", external_track_id="osm:way:1001", source="openskidata"
+    )
+    record = _linked("osd-grouse", grouse)
+    record.missing_since = NOW
+    records = FakeRecordRepository([record])
+    lifts = FakeLiftRepository([lift_a])
+
+    summary = ResortLiftSyncService(record_repository=records, lift_repository=lifts).sync([])
+
+    assert [lift.external_track_id for lift in lifts.list_by_resort(grouse.id)] == ["osm:way:1001"]
+    assert summary.deleted == 0

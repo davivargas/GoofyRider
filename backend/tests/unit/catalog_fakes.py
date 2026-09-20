@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from collections.abc import Iterator
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,7 @@ class FakeRecordRepository:
     ) -> None:
         self.records = records or []
         self.commits = 0
+        self.rollbacks = 0
         if resorts is not None:
             resorts.linked_records = self.records
 
@@ -135,7 +137,7 @@ class FakeRecordRepository:
         self.commits += 1
 
     def rollback(self) -> None:
-        pass
+        self.rollbacks += 1
 
 
 class FakeOverrideRepository:
@@ -180,9 +182,11 @@ class FakeLiftRepository:
     def match_track_id(self, track_id: str) -> ResortLift | None:
         return next((lift for lift in self.lifts if lift.external_track_id == track_id), None)
 
-    def upsert_by_external_track_id(self, resort_id: uuid.UUID, rows: list[ResortLift]) -> int:
+    def upsert_by_external_track_id(self, resort_id: uuid.UUID, rows: Sequence[ResortLift]) -> int:
         count = 0
         for row in rows:
+            if row.external_track_id is None:
+                continue
             existing = next(
                 (
                     lift
@@ -196,18 +200,16 @@ class FakeLiftRepository:
                 row.resort_id = resort_id
                 self.lifts.append(row)
             else:
-                for attr in (
-                    "name",
-                    "lift_type",
-                    "osm_aerialway",
-                    "polyline",
-                    "base_altitude_m",
-                    "top_altitude_m",
-                    "status",
-                    "source",
-                    "source_record_id",
-                ):
-                    setattr(existing, attr, getattr(row, attr))
+                existing.name = row.name
+                existing.lift_type = row.lift_type
+                existing.osm_aerialway = row.osm_aerialway
+                existing.polyline = row.polyline
+                existing.base_altitude_m = row.base_altitude_m
+                existing.top_altitude_m = row.top_altitude_m
+                existing.status = row.status
+                if row.source is not None:
+                    existing.source = row.source
+                existing.source_record_id = row.source_record_id
             count += 1
         return count
 

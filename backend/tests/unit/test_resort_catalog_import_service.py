@@ -1,14 +1,19 @@
 from datetime import UTC
 from datetime import datetime
+import json
 import uuid
+
+import pytest
 
 from app.models.resort import Resort
 from app.models.resort_source_record import ResortSourceRecord
+from app.services.catalog_types import content_hash
 from app.services.resort_catalog_import_service import CatalogImportOptions
 from app.services.resort_catalog_import_service import ResortCatalogImportService
 from app.services.resort_lift_sync_service import ResortLiftSyncService
 from app.services.resort_merge_service import ResortMergeService
 from app.services.resort_source_record_service import ResortSourceRecordService
+from tests.unit.catalog_fakes import FIXTURES
 from tests.unit.catalog_fakes import FakeLiftRepository
 from tests.unit.catalog_fakes import FakeOverrideRepository
 from tests.unit.catalog_fakes import FakeRecordRepository
@@ -198,8 +203,119 @@ def test_manual_and_rejected_records_are_never_rematched() -> None:
 
 
 def test_dry_run_does_not_commit() -> None:
-    service, resort_repo, _, _ = _build([], [])
+    service, resort_repo, record_repo, _ = _build([], [])
 
     service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions(dry_run=True))
 
     assert resort_repo.commits == 0
+    assert record_repo.rollbacks == 1
+
+
+def test_pending_review_when_close_but_not_auto_matching_legacy_resort() -> None:
+    grouse_legacy = Resort(
+        id=uuid.uuid4(),
+        name="Grouse Mountain",
+        country="Canada",
+        region="British Columbia",
+        latitude=49.45,
+        longitude=-123.081,
+        country_code="CA",
+        is_active=True,
+        name_aliases=[],
+        field_provenance={},
+    )
+    service, resort_repo, record_repo, _ = _build(
+        [grouse_legacy], [_legacy(grouse_legacy, "grouse-mountain")]
+    )
+
+    summary = service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+
+    osd_grouse = record_repo.get_by_source_and_external_id("openskidata", "osd-grouse")
+    assert osd_grouse is not None
+    assert osd_grouse.match_status == "pending_review"
+    assert osd_grouse.resort_id is None
+    assert osd_grouse.match_method is None
+    assert osd_grouse.match_candidates
+    first_candidate = osd_grouse.match_candidates[0]
+    assert first_candidate["resort_id"] == str(grouse_legacy.id)
+    assert first_candidate["score"] == pytest.approx(0.73, abs=0.02)
+    linked_to_legacy = [
+        r
+        for r in record_repo.records
+        if r.source == "openskidata"
+        and r.resort_id == grouse_legacy.id
+        and r.match_status == "linked"
+    ]
+    assert linked_to_legacy == []
+    assert summary.pending_review == 1
+    assert grouse_legacy.id in {r.id for r in resort_repo.resorts}
+
+
+def test_eligible_pool_excludes_resorts_that_already_hold_an_openskidata_record() -> None:
+    service, _resort_repo, record_repo, _ = _build([], [])
+    service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+    grouse_record = record_repo.get_by_source_and_external_id("openskidata", "osd-grouse")
+    assert grouse_record is not None
+    grouse_resort_id = grouse_record.resort_id
+    assert grouse_resort_id is not None
+
+    feature = json.loads((FIXTURES / "ski_areas.geojson").read_text(encoding="utf-8"))
+    grouse_feature = next(
+        f for f in feature["features"] if f["properties"].get("id") == "osd-grouse"
+    )
+    dup_payload = json.loads(json.dumps(grouse_feature))
+    dup_payload["properties"]["id"] = "osd-grouse-dup"
+    dup_record = ResortSourceRecord(
+        id=uuid.uuid4(),
+        source="openskidata",
+        external_id="osd-grouse-dup",
+        payload=dup_payload,
+        content_hash=content_hash(dup_payload),
+        fetched_at=NOW,
+        resort_id=None,
+        match_status="pending_review",
+        match_method=None,
+    )
+    record_repo.add(dup_record)
+
+    service.link_records("openskidata", CatalogImportOptions())
+
+    # Not auto-linked to Grouse: it either stayed pending or created a separate resort.
+    if dup_record.match_status == "linked":
+        assert dup_record.resort_id != grouse_resort_id
+    else:
+        assert dup_record.match_status == "pending_review"
+        assert dup_record.resort_id is None
+    still_linked_to_grouse = [
+        r
+        for r in record_repo.records
+        if r.source == "openskidata"
+        and r.resort_id == grouse_resort_id
+        and r.match_status == "linked"
+    ]
+    assert len(still_linked_to_grouse) == 1
+
+
+def test_rematch_of_an_auto_linked_record_relinks_the_same_resort() -> None:
+    grouse = Resort(
+        id=uuid.uuid4(),
+        name="Grouse Mountain",
+        country="Canada",
+        region="British Columbia",
+        latitude=49.380,
+        longitude=-123.081,
+        is_active=True,
+        name_aliases=[],
+        field_provenance={},
+    )
+    service, _resort_repo, record_repo, _ = _build([grouse], [_legacy(grouse, "grouse-mountain")])
+    service.import_openskidata(FixtureOpenSkiDataSource(), CatalogImportOptions())
+    grouse_record = record_repo.get_by_source_and_external_id("openskidata", "osd-grouse")
+    assert grouse_record is not None
+    assert grouse_record.match_method == "auto"
+
+    auto, primary, pending = service.link_records("openskidata", CatalogImportOptions(rematch=True))
+
+    assert (auto, primary, pending) == (1, 0, 0)
+    assert grouse_record.resort_id == grouse.id
+    assert grouse_record.match_method == "auto"

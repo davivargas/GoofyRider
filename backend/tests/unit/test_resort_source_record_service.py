@@ -1,9 +1,12 @@
 from datetime import UTC
 from datetime import datetime
 
+import pytest
+
 from app.models.resort_source_record import ResortSourceRecord
 from app.services.catalog_types import ExternalSourceRecord
 from app.services.catalog_types import content_hash
+from app.services.exceptions import ValidationError
 from app.services.resort_source_record_service import ResortSourceRecordService
 from tests.unit.catalog_fakes import FakeRecordRepository
 
@@ -88,3 +91,18 @@ def test_second_identical_run_changes_nothing() -> None:
         1,
         0,
     )
+
+
+def test_upsert_raises_validation_error_on_source_mismatch() -> None:
+    repo = FakeRecordRepository([])
+    service = ResortSourceRecordService(record_repository=repo, clock=lambda: RUN_AT)
+    mismatched = ExternalSourceRecord(
+        source="ski_api",
+        external_id="x",
+        payload={},
+        content_hash=content_hash({}),
+        snapshot_built_at=BUILT_AT,
+    )
+
+    with pytest.raises(ValidationError):
+        service.upsert_records("openskidata", [mismatched], run_started_at=RUN_AT)
