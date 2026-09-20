@@ -233,9 +233,6 @@ class FakeSessionRepository implements SessionRepository {
       session: session,
       points: _recoveryAcceptedPoints,
       acceptedPoints: _recoveryAcceptedPoints,
-      trackingDiagnostics: List<TrackingDiagnosticEvent>.from(
-        recordedDiagnostics,
-      ),
     );
   }
 
@@ -449,7 +446,6 @@ class FlakyPersistenceSessionRepository implements SessionRepository {
           _buildSession(id: localSessionId, state: LocalSessionState.recording),
       points: points,
       acceptedPoints: acceptedPoints,
-      trackingDiagnostics: const <TrackingDiagnosticEvent>[],
     );
   }
 

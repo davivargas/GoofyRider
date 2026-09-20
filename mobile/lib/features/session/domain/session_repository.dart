@@ -54,7 +54,6 @@ class SessionDetail {
     required this.session,
     required this.points,
     required this.acceptedPoints,
-    required this.trackingDiagnostics,
     this.stats = SessionStats.zero,
     this.timeline = const <SessionTimelineSegment>[],
     this.reclassifiedIdleDurationS = 0,
@@ -63,7 +62,6 @@ class SessionDetail {
   final LocalRideSession session;
   final List<LocalSessionPoint> points;
   final List<LocalSessionPoint> acceptedPoints;
-  final List<TrackingDiagnosticEvent> trackingDiagnostics;
   final SessionStats stats;
   final List<SessionTimelineSegment> timeline;
   final int reclassifiedIdleDurationS;

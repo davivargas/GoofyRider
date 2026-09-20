@@ -280,7 +280,6 @@ SessionDetail _buildSegmentedDetail() {
     session: session,
     points: points,
     acceptedPoints: points,
-    trackingDiagnostics: const <TrackingDiagnosticEvent>[],
     stats: stats,
     timeline: timeline,
   );
@@ -318,7 +317,6 @@ SessionDetail _buildDetailWithBreaks({
     session: session,
     points: const <LocalSessionPoint>[],
     acceptedPoints: const <LocalSessionPoint>[],
-    trackingDiagnostics: const <TrackingDiagnosticEvent>[],
     stats: SessionStats(
       durationS: session.activeDurationS,
       distanceM: session.distanceM,
@@ -337,7 +335,6 @@ SessionDetail _buildLegacyDetail() {
     session: session,
     points: const <LocalSessionPoint>[],
     acceptedPoints: const <LocalSessionPoint>[],
-    trackingDiagnostics: const <TrackingDiagnosticEvent>[],
     stats: SessionStats(
       durationS: session.activeDurationS,
       distanceM: session.distanceM,
@@ -376,7 +373,6 @@ SessionDetail _buildUnsyncedDetail() {
     session: session,
     points: const <LocalSessionPoint>[],
     acceptedPoints: const <LocalSessionPoint>[],
-    trackingDiagnostics: const <TrackingDiagnosticEvent>[],
     stats: SessionStats(
       durationS: session.activeDurationS,
       distanceM: session.distanceM,
@@ -609,7 +605,7 @@ void main() {
     );
   });
 
-  testWidgets('session detail screen shows break count and duration',
+  testWidgets('session detail screen does not show breaks or diagnostics',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -631,37 +627,12 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('BREAKS'), findsOneWidget);
-    final breaksBlock = tester.widget<StatBlock>(find.byWidgetPredicate(
-        (Widget w) => w is StatBlock && w.label == 'Breaks'));
-    expect(breaksBlock.value, '2 · 25m');
-  });
-
-  testWidgets('session detail screen shows zero breaks label when none',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          sessionRepositoryProvider.overrideWithValue(
-            FakeSessionRepository(
-                _buildDetailWithBreaks(breakCount: 0, breakDurationS: 0)),
-          ),
-          activeMapTileProviderConfigProvider
-              .overrideWithValue(MapTileProviderConfig.devFallback),
-          mapTileProviderProvider.overrideWithValue(NoopTileProvider()),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.dark(),
-          home: const SessionDetailScreen(localSessionId: 1),
-        ),
-      ),
+    expect(find.text('BREAKS'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+          (Widget w) => w is StatBlock && w.label == 'Breaks'),
+      findsNothing,
     );
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('BREAKS'), findsOneWidget);
-    final breaksBlock = tester.widget<StatBlock>(find.byWidgetPredicate(
-        (Widget w) => w is StatBlock && w.label == 'Breaks'));
-    expect(breaksBlock.value, '0');
+    expect(find.text('DIAGNOSTICS'), findsNothing);
   });
 }

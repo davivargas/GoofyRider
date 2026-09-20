@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,7 +59,6 @@ class SessionDetailScreen extends ConsumerWidget {
           ),
           data: (SessionDetail data) {
             final session = data.session;
-            final synced = session.state == LocalSessionState.synced;
             final runs = data.timeline
                 .where((SessionTimelineSegment s) =>
                     s.type == SessionActivityType.descent)
@@ -89,21 +87,19 @@ class SessionDetailScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(resortLabel ?? session.resortId ?? 'Session',
+                          Text(resortLabel ?? 'Session',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleMedium),
                           const SizedBox(height: 2),
                           MonoLabel(
                               '${session.startedAt.toDayLabel()} · ${session.startedAt.toTimeLabel()}',
-                              size: 8,
+                              size: 10,
                               tone: MonoTone.muted,
                               letterSpacing: 1.6),
                         ],
                       ),
                     ),
-                    StatusPill(synced ? '● Synced' : '○ Local only',
-                        variant: synced ? PillVariant.ice : PillVariant.muted),
                     PopupMenuButton<_SessionDetailAction>(
                       tooltip: 'Session actions',
                       icon: Icon(Icons.more_vert, color: t.textSecondary),
@@ -148,27 +144,17 @@ class SessionDetailScreen extends ConsumerWidget {
                         child: Wrap(
                           spacing: 18,
                           children: <Widget>[
-                            StatBlock(
-                                value: speedUnit
+                            _detailStat(
+                                speedUnit
                                     .convertFromMetersPerSecond(
                                         data.stats.maxSpeedMps)
                                     .toStringAsFixed(1),
-                                label: 'Max',
-                                size: StatSize.small),
-                            StatBlock(
-                                value: distanceUnit
+                                'Max'),
+                            _detailStat(
+                                distanceUnit
                                     .formatFromMeters(data.stats.distanceM),
-                                label: 'Dist',
-                                size: StatSize.small),
-                            StatBlock(
-                                value: '$runs',
-                                label: 'Runs',
-                                size: StatSize.small),
-                            StatBlock(
-                                value: _formatBreaks(
-                                    session.breakCount, session.breakDurationS),
-                                label: 'Breaks',
-                                size: StatSize.small),
+                                'Dist'),
+                            _detailStat('$runs', 'Runs'),
                           ],
                         ),
                       ),
@@ -200,37 +186,6 @@ class SessionDetailScreen extends ConsumerWidget {
                       ref.invalidate(historyProvider);
                       ref.invalidate(unsyncedSessionCountProvider);
                     },
-                  ),
-                ],
-                if (showDebugDiagnostics) ...<Widget>[
-                  const SizedBox(height: 18),
-                  SurfaceCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const MonoLabel('Diagnostics',
-                            size: 8, tone: MonoTone.muted, letterSpacing: 1.8),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Raw points: ${data.points.length}\n'
-                          'Filtered points: ${data.acceptedPoints.length}\n'
-                          'Upload state: ${session.state.wireValue}\n'
-                          'Last sync error: ${session.lastSyncError ?? 'None'}\n'
-                          'Origin: ${session.remoteId != null ? 'Local+Server' : 'Local only'}\n'
-                          'Tracking events: ${data.trackingDiagnostics.length}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        if (data.trackingDiagnostics.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 8),
-                          Text(
-                              data.trackingDiagnostics
-                                  .take(16)
-                                  .map(_diagnosticLine)
-                                  .join('\n'),
-                              style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ],
-                    ),
                   ),
                 ],
               ],
@@ -285,6 +240,15 @@ class SessionDetailScreen extends ConsumerWidget {
       }
     }
   }
+
+  Widget _detailStat(String value, String label) => StatBlock(
+        value: value,
+        label: label,
+        size: StatSize.large,
+        valueSize: 24,
+        labelSize: 11,
+        labelGap: 3,
+      );
 
   Widget _timeSplit(BuildContext context, SessionDetail data) {
     final t = context.tokens;
@@ -500,14 +464,6 @@ class SessionDetailScreen extends ConsumerWidget {
     );
   }
 
-  String _diagnosticLine(TrackingDiagnosticEvent event) {
-    final stamp =
-        event.occurredAt.toLocal().toIso8601String().substring(11, 19);
-    final details = event.details.isEmpty ? '' : ' ${event.details}';
-    final message = event.message == null ? '' : ' (${event.message})';
-    return '[$stamp] ${event.eventType}$message$details';
-  }
-
   Future<bool> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -538,9 +494,3 @@ class SessionDetailScreen extends ConsumerWidget {
 }
 
 enum _SessionDetailAction { delete }
-
-String _formatBreaks(int count, int durationS) {
-  if (count == 0) return '0';
-  final minutes = (durationS / 60).round();
-  return '$count · ${minutes}m';
-}

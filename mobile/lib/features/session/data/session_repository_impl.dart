@@ -328,8 +328,6 @@ class SessionRepositoryImpl implements SessionRepository {
     final accepted = points
         .where((LocalSessionPoint point) => point.acceptedForAnalytics)
         .toList(growable: false);
-    final diagnostics = await _localDatabase.trackingDiagnostics
-        .listTrackingDiagnostics(localSessionId);
     final effectiveDurationS = session.activeDurationS > 0
         ? session.activeDurationS
         : _computeActiveDurationSeconds(points);
@@ -347,7 +345,6 @@ class SessionRepositoryImpl implements SessionRepository {
       session: session,
       points: points,
       acceptedPoints: accepted,
-      trackingDiagnostics: diagnostics,
       stats: stats,
       timeline: analysis.segments,
       reclassifiedIdleDurationS: analysis.reclassifiedIdleDurationS,
