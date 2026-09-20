@@ -192,7 +192,7 @@ void main() {
       ),
       type: DioExceptionType.badResponse,
     );
-    final refreshPayload = TokenPairResponse(
+    final refreshPayload = const TokenPairResponse(
       accessToken: 'new-access-token',
       refreshToken: 'refresh-token',
     );

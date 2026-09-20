@@ -19,7 +19,7 @@ void main() {
       ),
     );
 
-    for (final String label in AppTabBar.labels) {
+    for (final label in AppTabBar.labels) {
       expect(find.text(label), findsOneWidget);
     }
     await tester.tap(find.text('SEASONS'));

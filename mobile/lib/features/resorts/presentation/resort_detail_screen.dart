@@ -330,8 +330,8 @@ class _WeatherTiles extends StatelessWidget {
           ],
         ),
         if (stale)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
             child: Align(
               alignment: Alignment.centerLeft,
               child: MonoLabel('Showing stale cached data.',

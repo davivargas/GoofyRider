@@ -42,7 +42,7 @@ class AppTabBar extends StatelessWidget {
   /// that anchor content above the bar want the visible bar's edge, so the
   /// transparent puck strip is subtracted. Outside the shell (no bar) this is 0.
   static double bottomClearance(BuildContext context) {
-    final double padding = MediaQuery.paddingOf(context).bottom;
+    final padding = MediaQuery.paddingOf(context).bottom;
     return padding <= 0
         ? 0
         : (padding - puckOverhang).clamp(0, double.infinity);

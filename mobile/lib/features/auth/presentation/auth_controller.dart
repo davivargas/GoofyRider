@@ -37,7 +37,7 @@ class AuthController extends StateNotifier<AuthState> {
         errorMessage: failure.message,
       );
     } catch (error) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.unauthenticated,
         errorMessage: 'An unexpected error occurred. Please try again.',
       );
@@ -60,7 +60,7 @@ class AuthController extends StateNotifier<AuthState> {
         errorMessage: failure.message,
       );
     } catch (error) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.unauthenticated,
         errorMessage: 'An unexpected error occurred. Please try again.',
       );

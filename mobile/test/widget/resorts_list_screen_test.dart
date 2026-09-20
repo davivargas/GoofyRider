@@ -30,10 +30,9 @@ class NoopResortRepository implements ResortRepository {
 
 class TestResortsController extends ResortsController {
   TestResortsController({
-    required Ref ref,
+    required super.ref,
     required AsyncValue<ResortListResult> initial,
   }) : super(
-          ref: ref,
           repository: NoopResortRepository(),
         ) {
     state = initial;

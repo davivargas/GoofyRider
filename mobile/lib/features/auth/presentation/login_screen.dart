@@ -131,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
 /// Shared backdrop for auth screens: radial glow plus a dashed volt line.
 class AuthBackdrop extends StatelessWidget {
-  const AuthBackdrop();
+  const AuthBackdrop({super.key});
 
   @override
   Widget build(BuildContext context) {

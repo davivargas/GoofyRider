@@ -68,7 +68,7 @@ ResortSummary _resort({required bool isFavorite}) {
 }
 
 void main() {
-  Widget _buildTestHost({required ResortRepository repository}) {
+  Widget buildTestHost({required ResortRepository repository}) {
     return ProviderScope(
       overrides: <Override>[
         resortRepositoryProvider.overrideWithValue(repository),
@@ -80,14 +80,14 @@ void main() {
       ],
       child: MaterialApp(
         theme: AppTheme.dark(),
-        home: MediaQuery(
-          data: const MediaQueryData(
+        home: const MediaQuery(
+          data: MediaQueryData(
             size: Size(390, 844),
             padding: EdgeInsets.zero,
             viewPadding: EdgeInsets.zero,
             viewInsets: EdgeInsets.zero,
           ),
-          child: const ResortDetailScreen(resortId: 'resort-1'),
+          child: ResortDetailScreen(resortId: 'resort-1'),
         ),
       ),
     );
@@ -98,7 +98,7 @@ void main() {
     final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));
 
-    await tester.pumpWidget(_buildTestHost(repository: repository));
+    await tester.pumpWidget(buildTestHost(repository: repository));
 
     await tester.pumpAndSettle();
 
@@ -120,7 +120,7 @@ void main() {
     final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));
 
-    await tester.pumpWidget(_buildTestHost(repository: repository));
+    await tester.pumpWidget(buildTestHost(repository: repository));
 
     await tester.pumpAndSettle();
 
@@ -139,7 +139,7 @@ void main() {
     final repository =
         _FakeResortRepository(initialResort: _resort(isFavorite: false));
 
-    await tester.pumpWidget(_buildTestHost(repository: repository));
+    await tester.pumpWidget(buildTestHost(repository: repository));
     await tester.pumpAndSettle();
 
     expect(find.text('Location'), findsNothing);
@@ -151,7 +151,7 @@ void main() {
   testWidgets('shows the OpenSkiData attribution footer',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      _buildTestHost(
+      buildTestHost(
         repository:
             _FakeResortRepository(initialResort: _resort(isFavorite: false)),
       ),

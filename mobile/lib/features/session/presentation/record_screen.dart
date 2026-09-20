@@ -84,8 +84,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen>
         ref.watch(activeMapTileProviderConfigProvider);
     final t = context.tokens;
     // Distance to the visible tab bar's top edge (0 outside the shell).
-    final double barClearance = AppTabBar.bottomClearance(context);
-    final double sheetAnchor = barClearance + 8;
+    final barClearance = AppTabBar.bottomClearance(context);
+    final sheetAnchor = barClearance + 8;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRecoveryPrompt(state);
